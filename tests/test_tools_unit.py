@@ -1005,5 +1005,30 @@ class TestEnscapeTools(unittest.TestCase):
         self.assertIn("Enscape", result["message"])
 
 
+# ---------------------------------------------------------------------------
+# visualarq.py tests
+# ---------------------------------------------------------------------------
+
+class TestVisualARQTools(unittest.TestCase):
+    @classmethod
+    def setUpClass(cls) -> None:
+        cls.tools = _register_module("rhmcp.tools.visualarq")
+
+    def test_create_wall_not_installed(self) -> None:
+        fn = self.tools["varq_create_wall"]
+        with patch("rhmcp.tools_helpers.plugin_client.send_command") as mock:
+            mock.return_value = {"result": {"plugins": []}}
+            result = fn(start_pt=[0,0,0], end_pt=[5,0,0])
+        self.assertFalse(result["success"])
+        self.assertIn("VisualARQ", result["message"])
+
+    def test_list_styles_not_installed(self) -> None:
+        fn = self.tools["varq_list_styles"]
+        with patch("rhmcp.tools_helpers.plugin_client.send_command") as mock:
+            mock.return_value = {"result": {"plugins": []}}
+            result = fn(object_type="wall")
+        self.assertFalse(result["success"])
+
+
 if __name__ == "__main__":
     unittest.main()
