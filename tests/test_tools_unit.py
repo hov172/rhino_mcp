@@ -1030,5 +1030,23 @@ class TestVisualARQTools(unittest.TestCase):
         self.assertFalse(result["success"])
 
 
+# ---------------------------------------------------------------------------
+# lands_design.py tests
+# ---------------------------------------------------------------------------
+
+class TestLandsDesignTools(unittest.TestCase):
+    @classmethod
+    def setUpClass(cls) -> None:
+        cls.tools = _register_module("rhmcp.tools.lands_design")
+
+    def test_place_plant_not_installed(self) -> None:
+        fn = self.tools["lands_place_plant"]
+        with patch("rhmcp.tools_helpers.plugin_client.send_command") as mock:
+            mock.return_value = {"result": {"plugins": []}}
+            result = fn(plant_name="Rosa", position=[0,0,0])
+        self.assertFalse(result["success"])
+        self.assertIn("Lands Design", result["message"])
+
+
 if __name__ == "__main__":
     unittest.main()
