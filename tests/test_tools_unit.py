@@ -890,5 +890,41 @@ class TestPufferfishTools(unittest.TestCase):
         self.assertIn("Pufferfish", result["message"])
 
 
+# ---------------------------------------------------------------------------
+# gh_weaverbird.py tests
+# ---------------------------------------------------------------------------
+
+class TestWeaverbirdTools(unittest.TestCase):
+    @classmethod
+    def setUpClass(cls) -> None:
+        cls.tools = _register_module("rhmcp.tools.gh_weaverbird")
+
+    def test_catmull_clark_not_installed(self) -> None:
+        fn = self.tools["gh_wb_catmull_clark"]
+        with patch("rhmcp.tools_helpers.backend.plugin_result") as mock:
+            mock.return_value = {"result": {"components": []}}
+            result = fn(mesh_instance_guid="m1")
+        self.assertFalse(result["success"])
+        self.assertIn("Weaverbird", result["message"])
+
+
+# ---------------------------------------------------------------------------
+# gh_lunchbox.py tests
+# ---------------------------------------------------------------------------
+
+class TestLunchboxTools(unittest.TestCase):
+    @classmethod
+    def setUpClass(cls) -> None:
+        cls.tools = _register_module("rhmcp.tools.gh_lunchbox")
+
+    def test_quad_panels_not_installed(self) -> None:
+        fn = self.tools["gh_lunchbox_quad_panels"]
+        with patch("rhmcp.tools_helpers.backend.plugin_result") as mock:
+            mock.return_value = {"result": {"components": []}}
+            result = fn(surface_instance_guid="s1")
+        self.assertFalse(result["success"])
+        self.assertIn("LunchBox", result["message"])
+
+
 if __name__ == "__main__":
     unittest.main()
