@@ -788,5 +788,38 @@ class TestGHSolutionTools(unittest.TestCase):
         self.assertFalse(result["ok"])
 
 
+# ---------------------------------------------------------------------------
+# plugins.py tests
+# ---------------------------------------------------------------------------
+
+class TestPluginsModule(unittest.TestCase):
+    @classmethod
+    def setUpClass(cls) -> None:
+        cls.tools = _register_module("rhmcp.tools.plugins")
+
+    def test_check_plugin_loaded_not_found(self) -> None:
+        fn = self.tools["check_plugin_loaded"]
+        with patch("rhmcp.tools_helpers.plugin_client.send_command") as mock:
+            mock.return_value = {"result": {"plugins": [{"name": "Other", "loaded": True}]}}
+            result = fn("NonExistentPlugin")
+        self.assertFalse(result["loaded"])
+        self.assertIn("not installed", result["message"])
+
+    def test_check_plugin_loaded_found_but_unloaded(self) -> None:
+        fn = self.tools["check_plugin_loaded"]
+        with patch("rhmcp.tools_helpers.plugin_client.send_command") as mock:
+            mock.return_value = {"result": {"plugins": [{"name": "V-Ray for Rhino", "loaded": False}]}}
+            result = fn("V-Ray")
+        self.assertFalse(result["loaded"])
+        self.assertIn("not loaded", result["message"])
+
+    def test_check_plugin_loaded_found(self) -> None:
+        fn = self.tools["check_plugin_loaded"]
+        with patch("rhmcp.tools_helpers.plugin_client.send_command") as mock:
+            mock.return_value = {"result": {"plugins": [{"name": "V-Ray for Rhino", "loaded": True}]}}
+            result = fn("V-Ray")
+        self.assertTrue(result["loaded"])
+
+
 if __name__ == "__main__":
     unittest.main()
