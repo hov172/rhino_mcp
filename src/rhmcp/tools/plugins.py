@@ -16,28 +16,25 @@ from mcp.types import ToolAnnotations
 
 from rhmcp.tools_helpers import plugin_client
 
-# Plugins available via Rhino Package Manager (key → package name)
-_PACKAGE_MANAGER_PLUGINS: dict[str, str] = {
-    "ladybug": "ladybug-grasshopper",
-    "honeybee": "honeybee-grasshopper-core",
+# Plugins installable via Yak (Rhino's package manager CLI) — confirmed package names
+_YAK_PLUGINS: dict[str, str] = {
     "pufferfish": "pufferfish",
     "elefront": "elefront",
-    "visualarq": "visualarq",
-    "lands design": "lands-design",
-    "lands": "lands-design",
-    "kangaroo": "kangaroo2",
+    "weaverbird": "weaverbird",
+    "anemone": "anemone",
+    "human": "human",
+    "lunchbox": "lunchbox",
 }
 
-# Plugins auto-downloadable from GitHub releases (key → (owner, repo, asset glob))
-# Only add entries here when the repo and release assets are confirmed to exist.
-_GITHUB_PLUGINS: dict[str, tuple[str, str, str]] = {}
-
-# Plugins that need a manual food4rhino download (login required)
-_FOOD4RHINO_PLUGINS: dict[str, str] = {
-    "weaverbird": "https://www.food4rhino.com/en/app/weaverbird",
-    "human": "https://www.food4rhino.com/en/app/human",
-    "anemone": "https://www.food4rhino.com/en/app/anemone",
-    "lunchbox": "https://www.food4rhino.com/en/app/lunchbox",
+# Plugins not in Yak — user must install manually via Rhino Package Manager UI or vendor
+# key → (friendly instructions, url)
+_MANUAL_PLUGINS: dict[str, tuple[str, str]] = {
+    "ladybug": ("Open Rhino Package Manager (_PackageManager), search 'Ladybug', install all Ladybug Tools components.", "https://www.food4rhino.com/en/app/ladybug-tools"),
+    "honeybee": ("Open Rhino Package Manager (_PackageManager), search 'Honeybee', install Honeybee components.", "https://www.food4rhino.com/en/app/ladybug-tools"),
+    "kangaroo": ("Kangaroo 2 is bundled with Rhino 8. Open Grasshopper — it should already be available.", "https://www.food4rhino.com/en/app/kangaroo-physics"),
+    "visualarq": ("Download and install from the VisualARQ website. Requires a license.", "https://www.visualarq.com/download/"),
+    "lands design": ("Download and install from the Lands Design website. Requires a license.", "https://www.lands-design.com/download/"),
+    "lands": ("Download and install from the Lands Design website. Requires a license.", "https://www.lands-design.com/download/"),
 }
 
 # Vendor-only paid plugins
@@ -46,6 +43,17 @@ _VENDOR_PLUGINS: dict[str, str] = {
     "vray": "https://www.chaos.com/vray/rhino",
     "enscape": "https://enscape3d.com",
 }
+
+
+def _yak_path() -> str | None:
+    """Return the Yak CLI path for the current platform, or None if not found."""
+    candidates = [
+        "/Applications/Rhino 8.app/Contents/Resources/bin/yak",
+        "/Applications/Rhino 7.app/Contents/Resources/bin/yak",
+        r"C:\Program Files\Rhino 8\System\yak.exe",
+        r"C:\Program Files\Rhino 7\System\yak.exe",
+    ]
+    return next((p for p in candidates if os.path.isfile(p)), None)
 
 
 def _gh_libraries_path() -> str:
@@ -192,17 +200,43 @@ def register(mcp: FastMCP) -> None:
 
             return {"success": False, "message": f"Unsupported file type '{ext}'. Expected .gha, .rhp, or .rhi."}
 
-        # --- Package Manager install ---
-        if key in _PACKAGE_MANAGER_PLUGINS:
-            package = _PACKAGE_MANAGER_PLUGINS[key]
+        # --- Yak silent install ---
+        if key in _YAK_PLUGINS:
+            package = _YAK_PLUGINS[key]
+            yak = _yak_path()
+            if not yak:
+                return {
+                    "success": False,
+                    "message": "Yak CLI not found. Open Rhino, type '_PackageManager', search for "
+                               f"'{package}', and click Install.",
+                }
+            proc = subprocess.run(
+                [yak, "install", package],
+                capture_output=True, text=True, timeout=120,
+            )
+            if proc.returncode != 0:
+                return {
+                    "success": False,
+                    "method": "yak",
+                    "package": package,
+                    "message": f"Yak install failed: {proc.stderr.strip() or proc.stdout.strip()}",
+                }
             return {
                 "success": True,
-                "method": "package_manager",
+                "method": "yak",
                 "package": package,
-                "message": (
-                    f"In Rhino, type '_PackageManager' in the command line and press Enter. "
-                    f"Search for '{package}', click Install, then restart Rhino to activate."
-                ),
+                "output": proc.stdout.strip(),
+                "message": f"'{plugin_name}' installed successfully. Restart Rhino to activate it.",
+            }
+
+        # --- Manual install (not in Yak) ---
+        if key in _MANUAL_PLUGINS:
+            instructions, url = _MANUAL_PLUGINS[key]
+            return {
+                "success": False,
+                "method": "manual_required",
+                "url": url,
+                "message": instructions,
             }
 
         # --- GitHub auto-download ---
@@ -229,19 +263,6 @@ def register(mcp: FastMCP) -> None:
                 "message": f"Downloaded and installed '{plugin_name}' from GitHub. Restart Grasshopper (or Rhino) to activate.",
             }
 
-        # --- food4rhino / vendor download required (login wall) ---
-        if key in _FOOD4RHINO_PLUGINS:
-            url = _FOOD4RHINO_PLUGINS[key]
-            return {
-                "success": False,
-                "method": "manual_download_required",
-                "download_url": url,
-                "message": (
-                    f"'{plugin_name}' requires a free food4rhino account to download. "
-                    f"Log in at {url}, download the .gha or .rhi file, "
-                    f"then call install_plugin(plugin_name='{plugin_name}', file_path='/path/to/file') to finish."
-                ),
-            }
 
         if key in _VENDOR_PLUGINS:
             url = _VENDOR_PLUGINS[key]
