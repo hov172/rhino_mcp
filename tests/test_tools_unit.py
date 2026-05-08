@@ -847,5 +847,48 @@ class TestKangarooTools(unittest.TestCase):
         self.assertIn("Unknown goal type", result["message"])
 
 
+# ---------------------------------------------------------------------------
+# gh_ladybug.py tests
+# ---------------------------------------------------------------------------
+
+class TestLadybugTools(unittest.TestCase):
+    @classmethod
+    def setUpClass(cls) -> None:
+        cls.tools = _register_module("rhmcp.tools.gh_ladybug")
+
+    def test_load_weather_not_installed(self) -> None:
+        fn = self.tools["gh_ladybug_load_weather"]
+        with patch("rhmcp.tools_helpers.backend.plugin_result") as mock:
+            mock.return_value = {"result": {"components": []}}
+            result = fn(epw_file_path="/path/to/file.epw")
+        self.assertFalse(result["success"])
+        self.assertIn("Ladybug", result["message"])
+
+    def test_honeybee_create_room_success(self) -> None:
+        fn = self.tools["gh_honeybee_create_room"]
+        with patch("rhmcp.tools_helpers.backend.plugin_result") as mock:
+            mock.return_value = {"result": {"components": [{"id": "hb-guid", "name": "HB Room from Solid"}], "instance_guid": "inst-123"}}
+            result = fn(geometry_component_id="geom-123", room_name="TestRoom")
+        self.assertTrue(result["success"])
+
+
+# ---------------------------------------------------------------------------
+# gh_pufferfish.py tests
+# ---------------------------------------------------------------------------
+
+class TestPufferfishTools(unittest.TestCase):
+    @classmethod
+    def setUpClass(cls) -> None:
+        cls.tools = _register_module("rhmcp.tools.gh_pufferfish")
+
+    def test_tween_curves_not_installed(self) -> None:
+        fn = self.tools["gh_pufferfish_tween_curves"]
+        with patch("rhmcp.tools_helpers.backend.plugin_result") as mock:
+            mock.return_value = {"result": {"components": []}}
+            result = fn(curve1_instance_guid="a", curve2_instance_guid="b", count=5)
+        self.assertFalse(result["success"])
+        self.assertIn("Pufferfish", result["message"])
+
+
 if __name__ == "__main__":
     unittest.main()
