@@ -2703,4 +2703,42 @@ public static class RhinoHandlers
                a.Min.Y <= b.Max.Y && a.Max.Y >= b.Min.Y &&
                a.Min.Z <= b.Max.Z && a.Max.Z >= b.Min.Z;
     }
+
+    public static object GetPluginCommands(Dictionary<string, JsonElement> p)
+    {
+        var pluginName = p.String("plugin_name");
+        var pluginIdStr = p.String("plugin_id");
+
+        Guid pluginGuid = Guid.Empty;
+        string resolvedName = "";
+
+        if (!string.IsNullOrWhiteSpace(pluginIdStr))
+            Guid.TryParse(pluginIdStr, out pluginGuid);
+
+        if (pluginGuid == Guid.Empty && !string.IsNullOrWhiteSpace(pluginName))
+        {
+            foreach (var kv in PlugIn.GetInstalledPlugIns())
+            {
+                if (kv.Value.IndexOf(pluginName, StringComparison.OrdinalIgnoreCase) >= 0)
+                {
+                    pluginGuid = kv.Key;
+                    resolvedName = kv.Value;
+                    break;
+                }
+            }
+        }
+
+        if (pluginGuid == Guid.Empty)
+            return new { success = false, message = $"Plugin not found: {pluginName ?? pluginIdStr}" };
+
+        var commandNames = PlugIn.GetEnglishCommandNames(pluginGuid);
+        var commands = commandNames
+            .Select(name => new {
+                name,
+                id = Rhino.Commands.Command.LookupCommandId(name, true).ToString()
+            })
+            .ToList();
+
+        return new { success = true, plugin_name = resolvedName, plugin_id = pluginGuid.ToString(), commands, count = commands.Count };
+    }
 }

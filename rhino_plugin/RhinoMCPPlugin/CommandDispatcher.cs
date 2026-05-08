@@ -28,7 +28,8 @@ public static class CommandDispatcher
             "gh_get_component_info" or
             "gh_get_output" or
             "gh_get_solution_errors" or
-            "gh_get_solution_state";
+            "gh_get_solution_state" or
+            "get_plugin_commands";
 
         var doc = Rhino.RhinoDoc.ActiveDoc;
         uint undoRecord = uint.MaxValue;
@@ -121,6 +122,7 @@ public static class CommandDispatcher
                 "gh_bake_component"     => McpResponse.Ok(GHSolutionHandlers.BakeComponent(p)),
                 "gh_bake_all"           => McpResponse.Ok(GHSolutionHandlers.BakeAll(p)),
                 "gh_enable_component"   => McpResponse.Ok(GHSolutionHandlers.EnableComponent(p)),
+                "get_plugin_commands" => McpResponse.Ok(RhinoHandlers.GetPluginCommands(p)),
                 _ => McpResponse.Error($"Unsupported command type: {request.Type}")
             };
             return result;
