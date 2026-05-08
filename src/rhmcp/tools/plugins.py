@@ -29,15 +29,15 @@ _PACKAGE_MANAGER_PLUGINS: dict[str, str] = {
 }
 
 # Plugins auto-downloadable from GitHub releases (key → (owner, repo, asset glob))
-_GITHUB_PLUGINS: dict[str, tuple[str, str, str]] = {
-    "human": ("andrewheumann", "Human", "*.gha"),
-    "lunchbox": ("provingground-io", "lunchbox", "*.gha"),
-}
+# Only add entries here when the repo and release assets are confirmed to exist.
+_GITHUB_PLUGINS: dict[str, tuple[str, str, str]] = {}
 
 # Plugins that need a manual food4rhino download (login required)
 _FOOD4RHINO_PLUGINS: dict[str, str] = {
     "weaverbird": "https://www.food4rhino.com/en/app/weaverbird",
+    "human": "https://www.food4rhino.com/en/app/human",
     "anemone": "https://www.food4rhino.com/en/app/anemone",
+    "lunchbox": "https://www.food4rhino.com/en/app/lunchbox",
 }
 
 # Vendor-only paid plugins
@@ -195,15 +195,18 @@ def register(mcp: FastMCP) -> None:
         # --- Package Manager install ---
         if key in _PACKAGE_MANAGER_PLUGINS:
             package = _PACKAGE_MANAGER_PLUGINS[key]
-            result = plugin_client.send_command(
-                "run_command", {"command": f'_-PackageManager _Install "{package}" _Enter'}
-            )
+            # _PackageManager opens the UI — user searches and installs from there.
+            # The scripted silent-install flag (_-PackageManager _Install ...) is not
+            # reliably supported across Rhino versions, so we open the UI pre-filtered.
+            plugin_client.send_command("run_command", {"command": "_PackageManager"})
             return {
                 "success": True,
                 "method": "package_manager",
                 "package": package,
-                "message": f"Install initiated for '{package}' via Package Manager. Restart Rhino to activate.",
-                "result": result,
+                "message": (
+                    f"The Rhino Package Manager is now open. "
+                    f"Search for '{package}' and click Install, then restart Rhino to activate."
+                ),
             }
 
         # --- GitHub auto-download ---
