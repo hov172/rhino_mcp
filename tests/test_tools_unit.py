@@ -926,5 +926,23 @@ class TestLunchboxTools(unittest.TestCase):
         self.assertIn("LunchBox", result["message"])
 
 
+# ---------------------------------------------------------------------------
+# gh_anemone.py tests
+# ---------------------------------------------------------------------------
+
+class TestAnemoneTools(unittest.TestCase):
+    @classmethod
+    def setUpClass(cls) -> None:
+        cls.tools = _register_module("rhmcp.tools.gh_anemone")
+
+    def test_setup_loop_not_installed(self) -> None:
+        fn = self.tools["gh_anemone_setup_loop"]
+        with patch("rhmcp.tools_helpers.backend.plugin_result") as mock:
+            mock.return_value = {"result": {"components": []}}
+            result = fn()
+        self.assertFalse(result["success"])
+        self.assertIn("Anemone", result["message"])
+
+
 if __name__ == "__main__":
     unittest.main()
