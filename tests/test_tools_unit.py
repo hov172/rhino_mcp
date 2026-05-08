@@ -927,6 +927,24 @@ class TestLunchboxTools(unittest.TestCase):
 
 
 # ---------------------------------------------------------------------------
+# gh_human_elefront.py tests
+# ---------------------------------------------------------------------------
+
+class TestHumanElefrontTools(unittest.TestCase):
+    @classmethod
+    def setUpClass(cls) -> None:
+        cls.tools = _register_module("rhmcp.tools.gh_human_elefront")
+
+    def test_bake_attributes_not_installed(self) -> None:
+        fn = self.tools["gh_elefront_bake_attributes"]
+        with patch("rhmcp.tools_helpers.backend.plugin_result") as mock:
+            mock.return_value = {"result": {"components": []}}
+            result = fn(component_instance_guid="c1", layer="Default")
+        self.assertFalse(result["success"])
+        self.assertIn("Elefront", result["message"])
+
+
+# ---------------------------------------------------------------------------
 # gh_anemone.py tests
 # ---------------------------------------------------------------------------
 
