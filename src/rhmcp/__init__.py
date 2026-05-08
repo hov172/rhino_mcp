@@ -72,6 +72,10 @@ def main() -> int:
         if hasattr(mod, "register"):
             mod.register(mcp)
 
+    # Install optional telemetry interceptor after all tools are registered.
+    from rhmcp import telemetry
+    telemetry.install(mcp)
+
     transport = args.transport
     if transport == "http":
         from mcp.server.fastmcp.server import TransportSecuritySettings

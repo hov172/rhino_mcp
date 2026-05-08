@@ -13,13 +13,17 @@ public sealed class RhinoMcpPlugin : PlugIn
         Instance = this;
     }
 
-    public bool StartServer(int port = 1999)
+    public bool StartServer(int port = 1999, string? bindHost = null)
     {
-        Server ??= new RhinoMcpServer(port);
+        if (Server is null)
+        {
+            // bindHost argument takes priority; fall back to env var (handled inside constructor).
+            Server = new RhinoMcpServer(port, bindHost);
+        }
         if (Server.IsRunning)
             return true;
         Server.Start();
-        RhinoApp.WriteLine($"Rhino MCP server started on 127.0.0.1:{port}");
+        RhinoApp.WriteLine($"Rhino MCP server started on {Server.BindAddress}:{Server.Port}");
         return true;
     }
 

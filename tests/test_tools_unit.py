@@ -1048,5 +1048,206 @@ class TestLandsDesignTools(unittest.TestCase):
         self.assertIn("Lands Design", result["message"])
 
 
+# ---------------------------------------------------------------------------
+# view.py — viewport capture returns image content
+# ---------------------------------------------------------------------------
+
+class TestViewCapture(unittest.TestCase):
+    """
+    capture_rhino_view must:
+      - Return [metadata_dict, Image] when Rhino responds with a b64 field.
+      - Return [raw_response] (no crash) when b64 is absent (e.g. Rhino error).
+      - Accept path=None (in-memory only capture).
+    """
+
+    @classmethod
+    def setUpClass(cls) -> None:
+        cls.tools = _register_module("rhmcp.tools.view")
+
+    def _fake_b64_response(self, b64: str, path: str | None = None) -> dict:
+        return {
+            "ok": True,
+            "result": {
+                "b64": b64,
+                "path": path,
+                "saved": path is not None,
+                "width": 1200,
+                "height": 900,
+            },
+        }
+
+    def test_returns_image_and_metadata_when_b64_present(self) -> None:
+        import base64
+        from mcp.server.fastmcp import Image
+
+        # Minimal valid 1×1 transparent PNG (67 bytes).
+        png_1x1 = (
+            b"\x89PNG\r\n\x1a\n\x00\x00\x00\rIHDR\x00\x00\x00\x01"
+            b"\x00\x00\x00\x01\x08\x06\x00\x00\x00\x1f\x15\xc4\x89"
+            b"\x00\x00\x00\nIDATx\x9cc\x00\x01\x00\x00\x05\x00\x01"
+            b"\r\n-\xb4\x00\x00\x00\x00IEND\xaeB`\x82"
+        )
+        b64 = base64.b64encode(png_1x1).decode()
+
+        fn = self.tools["capture_rhino_view"]
+        with patch("rhmcp.tools_helpers.backend.execute_python") as mock:
+            mock.return_value = self._fake_b64_response(b64, path=None)
+            result = fn(path=None, width=1200, height=900)
+
+        self.assertIsInstance(result, list)
+        self.assertEqual(len(result), 2)
+        meta, img = result
+        self.assertIsInstance(meta, dict)
+        self.assertIsInstance(img, Image)
+        self.assertFalse(meta["saved"])
+        self.assertIsNone(meta["path"])
+
+    def test_returns_image_with_path_when_path_given(self) -> None:
+        import base64
+        from mcp.server.fastmcp import Image
+
+        png_1x1 = (
+            b"\x89PNG\r\n\x1a\n\x00\x00\x00\rIHDR\x00\x00\x00\x01"
+            b"\x00\x00\x00\x01\x08\x06\x00\x00\x00\x1f\x15\xc4\x89"
+            b"\x00\x00\x00\nIDATx\x9cc\x00\x01\x00\x00\x05\x00\x01"
+            b"\r\n-\xb4\x00\x00\x00\x00IEND\xaeB`\x82"
+        )
+        b64 = base64.b64encode(png_1x1).decode()
+
+        fn = self.tools["capture_rhino_view"]
+        with patch("rhmcp.tools_helpers.backend.execute_python") as mock:
+            mock.return_value = self._fake_b64_response(b64, path="/tmp/view.png")
+            result = fn(path="/tmp/view.png")
+
+        meta, img = result
+        self.assertTrue(meta["saved"])
+        self.assertEqual(meta["path"], "/tmp/view.png")
+        self.assertIsInstance(img, Image)
+
+    def test_graceful_fallback_when_no_b64(self) -> None:
+        """If Rhino doesn't return b64 (error path), return [raw] without crashing."""
+        fn = self.tools["capture_rhino_view"]
+        raw = {"ok": False, "error": "No active view"}
+        with patch("rhmcp.tools_helpers.backend.execute_python") as mock:
+            mock.return_value = raw
+            result = fn()
+
+        self.assertIsInstance(result, list)
+        self.assertEqual(len(result), 1)
+        self.assertEqual(result[0], raw)
+
+
+# ---------------------------------------------------------------------------
+# telemetry.py — install() patches _tool_manager.call_tool
+# ---------------------------------------------------------------------------
+
+class TestTelemetry(unittest.TestCase):
+    """
+    telemetry.install() must:
+      - Do nothing when RHINO_MCP_TELEMETRY is not set.
+      - Replace _tool_manager.call_tool with an async wrapper when enabled.
+      - Write one JSONL event per tool invocation.
+      - Write ok=false + non-null error when the tool raises.
+      - Never raise even if the log file can't be written.
+    """
+
+    def _make_mcp(self) -> "FastMCP":
+        mcp = FastMCP("test-telemetry")
+        return mcp
+
+    def test_install_noop_when_disabled(self) -> None:
+        import inspect
+        import rhmcp.telemetry as tel
+
+        mcp = self._make_mcp()
+        original_func = mcp._tool_manager.call_tool.__func__
+
+        with patch.object(tel, "ENABLED", False):
+            tel.install(mcp)
+
+        # call_tool must still be the original bound method, not the async wrapper.
+        # Bound methods are re-created on each access so we compare __func__.
+        self.assertIs(mcp._tool_manager.call_tool.__func__, original_func)
+        # Extra guard: the wrapper is a plain async function, original is a coroutine method.
+        self.assertTrue(inspect.iscoroutinefunction(mcp._tool_manager.call_tool))
+
+    def test_install_replaces_call_tool_when_enabled(self) -> None:
+        import rhmcp.telemetry as tel
+
+        mcp = self._make_mcp()
+        original = mcp._tool_manager.call_tool
+
+        with patch.object(tel, "ENABLED", True):
+            tel.install(mcp)
+
+        self.assertIsNot(mcp._tool_manager.call_tool, original)
+
+    def test_event_written_on_success(self) -> None:
+        import asyncio
+        import json
+        import rhmcp.telemetry as tel
+
+        mcp = self._make_mcp()
+        written: list[dict] = []
+
+        async def _fake_call_tool(name, arguments, context=None, convert_result=False):
+            return "ok"
+
+        mcp._tool_manager.call_tool = _fake_call_tool
+
+        with patch.object(tel, "ENABLED", True), \
+             patch.object(tel, "_write", side_effect=written.append):
+            tel.install(mcp)
+            asyncio.run(mcp._tool_manager.call_tool("my_tool", {}))
+
+        self.assertEqual(len(written), 1)
+        evt = written[0]
+        self.assertEqual(evt["tool"], "my_tool")
+        self.assertTrue(evt["ok"])
+        self.assertIsNone(evt["error"])
+        self.assertIn("ts", evt)
+        self.assertIn("ms", evt)
+
+    def test_event_written_on_failure(self) -> None:
+        import asyncio
+        import rhmcp.telemetry as tel
+
+        mcp = self._make_mcp()
+        written: list[dict] = []
+
+        async def _raising_call_tool(name, arguments, context=None, convert_result=False):
+            raise ValueError("boom")
+
+        mcp._tool_manager.call_tool = _raising_call_tool
+
+        with patch.object(tel, "ENABLED", True), \
+             patch.object(tel, "_write", side_effect=written.append):
+            tel.install(mcp)
+            with self.assertRaises(ValueError):
+                asyncio.run(mcp._tool_manager.call_tool("bad_tool", {}))
+
+        self.assertEqual(len(written), 1)
+        evt = written[0]
+        self.assertFalse(evt["ok"])
+        self.assertIn("ValueError", evt["error"])
+        self.assertIn("boom", evt["error"])
+
+    def test_write_io_error_does_not_propagate(self) -> None:
+        """A broken log path must never crash a tool call."""
+        import rhmcp.telemetry as tel
+
+        # _write swallows all exceptions — call it directly with an unwritable path.
+        with patch.object(tel, "LOG_PATH", MagicMock(
+            parent=MagicMock(mkdir=MagicMock(side_effect=PermissionError("no"))),
+        )):
+            try:
+                tel._write({"ts": "x", "tool": "t", "ms": 1, "ok": True, "error": None})
+            except Exception as exc:  # noqa: BLE001
+                self.fail(f"_write raised unexpectedly: {exc}")
+
+
+import os  # noqa: E402 — needed for TestTelemetry
+
+
 if __name__ == "__main__":
     unittest.main()

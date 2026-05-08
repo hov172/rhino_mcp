@@ -32,9 +32,10 @@ public sealed class MCPStatusCommand : Command
     protected override Result RunCommand(RhinoDoc doc, RunMode mode)
     {
         var server = RhinoMcpPlugin.Instance.Server;
-        RhinoApp.WriteLine(server?.IsRunning == true
-            ? $"Rhino MCP server running on 127.0.0.1:{server.Port}"
-            : "Rhino MCP server is stopped.");
+        if (server?.IsRunning == true)
+            RhinoApp.WriteLine($"Rhino MCP server running on {server.BindAddress}:{server.Port}");
+        else
+            RhinoApp.WriteLine("Rhino MCP server is stopped.");
         return Result.Success;
     }
 }

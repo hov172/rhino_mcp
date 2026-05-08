@@ -9,3 +9,11 @@ rhino_plugin/RhinoMCPPlugin/bin/
 rhino_plugin/RhinoMCPPlugin/obj/
 rhino_plugin/package/RhinoMCPPlugin/
 rhino_plugin/package/*.yak
+
+# Temporary debugging/probe scripts
+yak_probe.py
+yak_results.txt
+test_install.py
+test_install_results.json
+test_live.py
+live_results.txt

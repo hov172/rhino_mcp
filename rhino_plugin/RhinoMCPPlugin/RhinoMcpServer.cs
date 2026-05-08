@@ -13,19 +13,43 @@ public sealed class RhinoMcpServer
     private Task? _acceptTask;
 
     public int Port { get; }
+    public IPAddress BindAddress { get; }
     public bool IsRunning => _listener is not null;
 
-    public RhinoMcpServer(int port)
+    /// <param name="port">TCP port to listen on.</param>
+    /// <param name="bindHost">
+    ///   Host/IP string to bind to.  Defaults to the value of the
+    ///   <c>RHINO_MCP_BIND_HOST</c> environment variable, or <c>127.0.0.1</c>
+    ///   (loopback-only) when the variable is absent.
+    ///   Pass <c>"0.0.0.0"</c> to accept connections from any network interface
+    ///   (required for remote AI clients on a different machine).
+    /// </param>
+    public RhinoMcpServer(int port, string? bindHost = null)
     {
         Port = port;
+        var host = bindHost ?? Environment.GetEnvironmentVariable("RHINO_MCP_BIND_HOST");
+        BindAddress = ParseAddress(host);
     }
+
+    /// <summary>
+    /// Parse a host string into an <see cref="IPAddress"/>.
+    /// Falls back to loopback for any unrecognised value.
+    /// </summary>
+    private static IPAddress ParseAddress(string? host) => host?.Trim() switch
+    {
+        null or "" or "localhost" or "127.0.0.1" => IPAddress.Loopback,
+        "0.0.0.0"                                => IPAddress.Any,
+        "::"                                     => IPAddress.IPv6Any,
+        var s when IPAddress.TryParse(s, out var addr) => addr,
+        _                                        => IPAddress.Loopback,
+    };
 
     public void Start()
     {
         if (_listener is not null)
             return;
         _cts = new CancellationTokenSource();
-        _listener = new TcpListener(IPAddress.Loopback, Port);
+        _listener = new TcpListener(BindAddress, Port);
         _listener.Start();
         _acceptTask = Task.Run(() => AcceptLoop(_cts.Token));
     }

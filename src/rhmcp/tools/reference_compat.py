@@ -253,7 +253,7 @@ def register(mcp: FastMCP) -> None:
 
     @mcp.tool(annotations=ToolAnnotations(title="Capture Viewport", readOnlyHint=True))
     def capture_viewport(
-        path: str = "/private/tmp/rhino_mcp_viewport.png",
+        path: str | None = None,
         viewport: str | None = None,
         width: int = 1200,
         height: int = 900,
@@ -262,11 +262,15 @@ def register(mcp: FastMCP) -> None:
         show_cplane_axes: bool | None = None,
         zoom_to_fit: bool = False,
         rhino_id: str | None = None,
-    ) -> dict[str, object]:
+    ) -> list[object]:
         """
         Reference-compatible alias for viewport capture.
+        Returns [metadata, Image] so the AI can see the scene inline.
+        path is optional; omit for in-memory capture only.
         """
+        import base64
         import json
+        from mcp.server.fastmcp import Image
         from rhmcp.tools.view import _CAPTURE_SCRIPT
 
         params = {
@@ -281,9 +285,19 @@ def register(mcp: FastMCP) -> None:
         }
         plugin = _try_plugin("capture_viewport", {key: value for key, value in params.items() if value is not None})
         if plugin:
-            return plugin
+            return [plugin]
+
         payload = {"path": path, "width": width, "height": height}
-        return rhino.execute_python("__mcp_capture = {!s}\n{}".format(json.dumps(payload), _CAPTURE_SCRIPT), rhino_id=rhino_id)
+        raw = rhino.execute_python(
+            "__mcp_capture = {!s}\n{}".format(json.dumps(payload), _CAPTURE_SCRIPT),
+            rhino_id=rhino_id,
+        )
+        r = raw.get("result") if isinstance(raw, dict) else None
+        b64 = r.get("b64") if isinstance(r, dict) else None
+        if not b64:
+            return [raw]
+        meta = {"path": r.get("path"), "saved": r.get("saved", False), "width": width, "height": height}
+        return [meta, Image(data=base64.b64decode(b64), format="png")]
 
     @mcp.tool(annotations=ToolAnnotations(title="Undo", destructiveHint=True))
     def undo(steps: int = 1, rhino_id: str | None = None) -> dict[str, object]:
