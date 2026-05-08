@@ -962,5 +962,48 @@ class TestAnemoneTools(unittest.TestCase):
         self.assertIn("Anemone", result["message"])
 
 
+# ---------------------------------------------------------------------------
+# vray.py tests
+# ---------------------------------------------------------------------------
+
+class TestVRayTools(unittest.TestCase):
+    @classmethod
+    def setUpClass(cls) -> None:
+        cls.tools = _register_module("rhmcp.tools.vray")
+
+    def test_render_not_installed(self) -> None:
+        fn = self.tools["vray_render"]
+        with patch("rhmcp.tools_helpers.plugin_client.send_command") as mock:
+            mock.return_value = {"result": {"plugins": []}}
+            result = fn(output_path="/tmp/out.png")
+        self.assertFalse(result["success"])
+        self.assertIn("V-Ray", result["message"])
+
+    def test_create_material_not_installed(self) -> None:
+        fn = self.tools["vray_create_material"]
+        with patch("rhmcp.tools_helpers.plugin_client.send_command") as mock:
+            mock.return_value = {"result": {"plugins": []}}
+            result = fn(name="TestMat")
+        self.assertFalse(result["success"])
+
+
+# ---------------------------------------------------------------------------
+# enscape.py tests
+# ---------------------------------------------------------------------------
+
+class TestEnscapeTools(unittest.TestCase):
+    @classmethod
+    def setUpClass(cls) -> None:
+        cls.tools = _register_module("rhmcp.tools.enscape")
+
+    def test_start_not_installed(self) -> None:
+        fn = self.tools["enscape_start"]
+        with patch("rhmcp.tools_helpers.plugin_client.send_command") as mock:
+            mock.return_value = {"result": {"plugins": []}}
+            result = fn()
+        self.assertFalse(result["success"])
+        self.assertIn("Enscape", result["message"])
+
+
 if __name__ == "__main__":
     unittest.main()
