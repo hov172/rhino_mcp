@@ -2,17 +2,21 @@
 
 from __future__ import annotations
 
+import fnmatch
+import json as _json
 import os
 import platform
 import shutil
 import subprocess
+import tempfile
+import urllib.request
 
 from mcp.server.fastmcp import FastMCP
 from mcp.types import ToolAnnotations
 
 from rhmcp.tools_helpers import plugin_client
 
-# Plugins available via Rhino Package Manager (search name → package name)
+# Plugins available via Rhino Package Manager (key → package name)
 _PACKAGE_MANAGER_PLUGINS: dict[str, str] = {
     "ladybug": "ladybug-grasshopper",
     "honeybee": "honeybee-grasshopper-core",
@@ -24,12 +28,16 @@ _PACKAGE_MANAGER_PLUGINS: dict[str, str] = {
     "kangaroo": "kangaroo2",
 }
 
-# Plugins only available from food4rhino or vendor (name → download page URL)
+# Plugins auto-downloadable from GitHub releases (key → (owner, repo, asset glob))
+_GITHUB_PLUGINS: dict[str, tuple[str, str, str]] = {
+    "human": ("andrewheumann", "Human", "*.gha"),
+    "lunchbox": ("provingground-io", "lunchbox", "*.gha"),
+}
+
+# Plugins that need a manual food4rhino download (login required)
 _FOOD4RHINO_PLUGINS: dict[str, str] = {
     "weaverbird": "https://www.food4rhino.com/en/app/weaverbird",
-    "human": "https://www.food4rhino.com/en/app/human",
     "anemone": "https://www.food4rhino.com/en/app/anemone",
-    "lunchbox": "https://www.food4rhino.com/en/app/lunchbox",
 }
 
 # Vendor-only paid plugins
@@ -39,6 +47,7 @@ _VENDOR_PLUGINS: dict[str, str] = {
     "enscape": "https://enscape3d.com",
 }
 
+
 def _gh_libraries_path() -> str:
     """Return the Grasshopper Libraries folder path for the current platform."""
     if platform.system() == "Darwin":
@@ -47,6 +56,26 @@ def _gh_libraries_path() -> str:
             "Grasshopper (b45a29b1-4343-4035-989e-044e8580d9cf)/Libraries"
         )
     return os.path.join(os.environ.get("APPDATA", ""), "Grasshopper", "Libraries")
+
+
+def _download_from_github(owner: str, repo: str, asset_glob: str) -> str:
+    """Download the latest GitHub release asset matching asset_glob to a temp file.
+    Returns the local file path. Raises RuntimeError on failure."""
+    api_url = f"https://api.github.com/repos/{owner}/{repo}/releases/latest"
+    req = urllib.request.Request(api_url, headers={"User-Agent": "rhino_mcp/1.0", "Accept": "application/vnd.github+json"})
+    with urllib.request.urlopen(req, timeout=15) as resp:
+        release = _json.loads(resp.read())
+    assets = release.get("assets", [])
+    match = next((a for a in assets if fnmatch.fnmatch(a["name"].lower(), asset_glob.lower())), None)
+    if not match:
+        names = [a["name"] for a in assets]
+        raise RuntimeError(f"No asset matching '{asset_glob}' in latest release. Available: {names}")
+    download_url = match["browser_download_url"]
+    suffix = os.path.splitext(match["name"])[1]
+    tmp = tempfile.NamedTemporaryFile(delete=False, suffix=suffix, prefix=f"{repo}_")
+    tmp.close()
+    urllib.request.urlretrieve(download_url, tmp.name)
+    return tmp.name
 
 
 def register(mcp: FastMCP) -> None:
@@ -115,9 +144,10 @@ def register(mcp: FastMCP) -> None:
         - .rhp  → loaded immediately via Rhino's _LoadPlugin command
         - .rhi  → opened with the Rhino Installer (Mac/Windows native handler)
 
-        If file_path is omitted, attempts to install via the Rhino Package Manager.
-        For plugins not in the Package Manager (food4rhino / vendor), returns the
-        download URL so you can download the file and re-call with file_path.
+        If file_path is omitted, the tool attempts to install automatically:
+        1. Rhino Package Manager — for most open-source plugins
+        2. GitHub auto-download — fetches the latest release asset and installs it
+        3. food4rhino / vendor — returns the download page URL (login required there)
         """
         key = plugin_name.lower().strip()
 
@@ -176,7 +206,31 @@ def register(mcp: FastMCP) -> None:
                 "result": result,
             }
 
-        # --- food4rhino / vendor download required ---
+        # --- GitHub auto-download ---
+        if key in _GITHUB_PLUGINS:
+            owner, repo, asset_glob = _GITHUB_PLUGINS[key]
+            try:
+                local_path = _download_from_github(owner, repo, asset_glob)
+            except Exception as exc:
+                return {
+                    "success": False,
+                    "method": "github_download_failed",
+                    "message": f"Auto-download from github.com/{owner}/{repo} failed: {exc}",
+                }
+            ext = os.path.splitext(local_path)[1].lower()
+            libs = _gh_libraries_path()
+            os.makedirs(libs, exist_ok=True)
+            dest = os.path.join(libs, f"{plugin_name}{ext}")
+            shutil.move(local_path, dest)
+            return {
+                "success": True,
+                "method": "github_auto_download",
+                "source": f"https://github.com/{owner}/{repo}/releases/latest",
+                "destination": dest,
+                "message": f"Downloaded and installed '{plugin_name}' from GitHub. Restart Grasshopper (or Rhino) to activate.",
+            }
+
+        # --- food4rhino / vendor download required (login wall) ---
         if key in _FOOD4RHINO_PLUGINS:
             url = _FOOD4RHINO_PLUGINS[key]
             return {
@@ -184,9 +238,9 @@ def register(mcp: FastMCP) -> None:
                 "method": "manual_download_required",
                 "download_url": url,
                 "message": (
-                    f"'{plugin_name}' is not in the Rhino Package Manager. "
-                    f"Download the .gha or .rhi file from: {url} — "
-                    f"then call install_plugin(plugin_name='{plugin_name}', file_path='/path/to/downloaded/file') to install."
+                    f"'{plugin_name}' requires a free food4rhino account to download. "
+                    f"Log in at {url}, download the .gha or .rhi file, "
+                    f"then call install_plugin(plugin_name='{plugin_name}', file_path='/path/to/file') to finish."
                 ),
             }
 
