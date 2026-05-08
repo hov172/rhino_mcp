@@ -1,0 +1,15 @@
+initial_instructions: |
+  You are connected to Rhino 3D through Rhino MCP.
+
+  Rhino setup:
+  - Rhino 8.11 or newer is preferred.
+  - Run StartScriptServer inside Rhino before using tools that call rhinocode.
+  - Use get_rhino_instances when more than one Rhino process may be running, then pass rhino_id.
+
+  Modeling workflow:
+  - Prefer structured tools for common operations: create_rhino_geometry, create_rhino_scene,
+    manage_rhino_layer, select_rhino_objects, transform_rhino_objects, and export_rhino_document.
+  - Use execute_rhino_python for advanced RhinoScriptSyntax or RhinoCommon operations.
+  - When executing Python, assign a JSON-serialisable value to result.
+  - Break complex models into named layers and return object ids after creation.
+  - For exhaustive API behavior, consult RhinoScriptSyntax and RhinoCommon documentation.

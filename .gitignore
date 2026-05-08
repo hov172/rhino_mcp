@@ -1,0 +1,11 @@
+.venv/
+__pycache__/
+*.py[cod]
+*.egg-info/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+rhino_plugin/RhinoMCPPlugin/bin/
+rhino_plugin/RhinoMCPPlugin/obj/
+rhino_plugin/package/RhinoMCPPlugin/
+rhino_plugin/package/*.yak
