@@ -195,23 +195,13 @@ def register(mcp: FastMCP) -> None:
         # --- Package Manager install ---
         if key in _PACKAGE_MANAGER_PLUGINS:
             package = _PACKAGE_MANAGER_PLUGINS[key]
-            # Run _PackageManager on a background thread so the MCP call returns
-            # immediately — the UI opens in Rhino without blocking the socket.
-            plugin_client.send_command("execute_rhinoscript_python_code", {"code": (
-                "import threading, Rhino\n"
-                "def _open(): Rhino.RhinoApp.RunScript('_PackageManager', False)\n"
-                "t = threading.Thread(target=_open)\n"
-                "t.start()\n"
-                f"result = {{\"package\": {package!r}, \"opened\": True}}"
-            )})
             return {
                 "success": True,
                 "method": "package_manager",
                 "package": package,
                 "message": (
-                    f"Package Manager opened in Rhino. "
-                    f"Search for '{package}', click Install, then restart Rhino to activate. "
-                    f"You do NOT need to cancel — just install and close normally."
+                    f"In Rhino, type '_PackageManager' in the command line and press Enter. "
+                    f"Search for '{package}', click Install, then restart Rhino to activate."
                 ),
             }
 
