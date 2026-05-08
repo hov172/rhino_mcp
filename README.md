@@ -1,6 +1,6 @@
 # Rhino MCP
 
-Control Rhino 3D from Claude, Cursor, Codex, and any other MCP-capable AI tool. Create geometry, manipulate objects, run Grasshopper definitions, manage layers and materials, bake results, generate AI 3D models, and more — all through natural language.
+Control Rhino 3D from Claude, Cursor, Codex, and any other MCP-capable AI tool. Create geometry, manipulate objects, run Grasshopper definitions, manage layers and materials, install plugins, bake results, generate AI 3D models, and more — all through natural language.
 
 ---
 
@@ -13,8 +13,6 @@ Control Rhino 3D from Claude, Cursor, Codex, and any other MCP-capable AI tool. 
   - [1. Install the Rhino Plugin](#1-install-the-rhino-plugin)
   - [2. Install the Python MCP Server](#2-install-the-python-mcp-server)
 - [Starting the Service](#starting-the-service)
-  - [Step 1 — Start Rhino and activate the plugin](#step-1--start-rhino-and-activate-the-plugin)
-  - [Step 2 — Start the MCP server](#step-2--start-the-mcp-server)
 - [Connecting AI Clients](#connecting-ai-clients)
   - [Claude Desktop](#claude-desktop)
   - [Claude Code (CLI)](#claude-code-cli)
@@ -22,16 +20,33 @@ Control Rhino 3D from Claude, Cursor, Codex, and any other MCP-capable AI tool. 
   - [Codex CLI](#codex-cli)
 - [Backend Selection](#backend-selection)
 - [Environment Variables](#environment-variables)
-- [All 114 Tools](#all-114-tools)
+- [Remote Host Support](#remote-host-support)
+- [Telemetry](#telemetry)
+- [Third-Party Plugin Support](#third-party-plugin-support)
+  - [Automatic Installation via Yak](#automatic-installation-via-yak)
+  - [Manual Installation](#manual-installation)
+  - [File-based Installation](#file-based-installation)
+  - [Checking Plugin Status](#checking-plugin-status)
+- [All 189 Tools](#all-189-tools)
+  - [Plugin Management](#plugin-management)
   - [Grasshopper — Canvas](#grasshopper--canvas)
   - [Grasshopper — Parameters](#grasshopper--parameters)
   - [Grasshopper — Solution & Baking](#grasshopper--solution--baking)
   - [Grasshopper — Definition Management](#grasshopper--definition-management)
+  - [Grasshopper — Pufferfish (Geometry Morphing)](#grasshopper--pufferfish-geometry-morphing)
+  - [Grasshopper — Weaverbird (Mesh Subdivision)](#grasshopper--weaverbird-mesh-subdivision)
+  - [Grasshopper — LunchBox (Paneling)](#grasshopper--lunchbox-paneling)
+  - [Grasshopper — Anemone (Looping)](#grasshopper--anemone-looping)
+  - [Grasshopper — Human & Elefront (Attributes)](#grasshopper--human--elefront-attributes)
+  - [Grasshopper — Kangaroo Physics](#grasshopper--kangaroo-physics)
+  - [Grasshopper — Ladybug Tools & Honeybee](#grasshopper--ladybug-tools--honeybee)
   - [Geometry Creation](#geometry-creation)
   - [Object Editing & Selection](#object-editing--selection)
   - [Layers](#layers)
   - [Materials](#materials)
   - [PBR Materials & Rendering](#pbr-materials--rendering)
+  - [V-Ray Rendering](#v-ray-rendering)
+  - [Enscape Real-Time Rendering](#enscape-real-time-rendering)
   - [Views & Viewport](#views--viewport)
   - [Document & File I/O](#document--file-io)
   - [Scripting](#scripting)
@@ -39,9 +54,12 @@ Control Rhino 3D from Claude, Cursor, Codex, and any other MCP-capable AI tool. 
   - [Curve Operations](#curve-operations)
   - [AI Generation](#ai-generation)
   - [Asset Libraries (Poly Haven & Sketchfab)](#asset-libraries-poly-haven--sketchfab)
+  - [VisualARQ (Architectural BIM)](#visualarq-architectural-bim)
+  - [Lands Design (Landscape)](#lands-design-landscape)
   - [Reference-Compatible Aliases](#reference-compatible-aliases)
 - [Building the Plugin from Source](#building-the-plugin-from-source)
 - [Running Tests](#running-tests)
+- [References](#references)
 
 ---
 
@@ -49,17 +67,31 @@ Control Rhino 3D from Claude, Cursor, Codex, and any other MCP-capable AI tool. 
 
 | Category | Examples |
 |---|---|
+| **Plugin Management** | Check if a plugin is installed, automatically install via Yak, install from `.gha`/`.rhp`/`.rhi` files, list all loaded plugins, introspect any plugin's commands |
 | **Grasshopper** | Place components, draw wires, set sliders/panels, run solutions, bake geometry to Rhino doc, add script components |
+| **GH — Pufferfish** | Tween curves, morph geometry between surfaces, blend surfaces, twist and bend objects |
+| **GH — Weaverbird** | Catmull-Clark / Loop / Butterfly subdivision, mesh frame, mesh thickening, face extrusion |
+| **GH — LunchBox** | Quad, triangle, diamond, and hexagonal paneling on surfaces; space frame generation |
+| **GH — Anemone** | Set up iterative feedback loops (Loop Start + Loop End), configure max iterations |
+| **GH — Human & Elefront** | Bake with full attribute control (layer, name, user text), reference objects by filter, set/get user text on Rhino objects |
+| **GH — Kangaroo** | Set up physics solvers, add and wire physics goals (Length, Angle, Anchor, Spring, Pressure, Load, Hinge, etc.), run simulations |
+| **GH — Ladybug / Honeybee** | Load EPW weather data, sun path, radiation analysis, wind rose, UTCI comfort; create Honeybee rooms, add windows, run energy simulations |
 | **Geometry** | Create boxes, spheres, cylinders, cones, tori, curves, surfaces, meshes, text, arcs, ellipses, planes, and more |
 | **Modeling** | Boolean union/difference/intersection, loft, extrude, sweep, offset, pipe, project/intersect/split curves |
 | **Objects** | Select, move, rotate, scale, rename, change layer/color, delete, undo/redo |
 | **Layers** | List, create, delete, set current, change color/visibility/lock |
 | **Materials** | Create, assign, and delete standard and PBR materials; set environment maps; configure render settings |
-| **Views** | Set named views, capture viewport images, set camera position |
+| **V-Ray** | Start/stop IPR, render to file, create and apply V-Ray materials, add lights (Rectangle/Sphere/IES/Dome/Sun), set HDRI environment, configure GI presets, export `.vrscene` |
+| **Enscape** | Launch Enscape window, capture screenshots, export 360° panoramas, export standalone executables, set time of day and atmosphere, save named views |
+| **Views** | Capture the active viewport — **Claude receives the image and can see the scene**; set named views, camera position, target, and lens length; save PNG to disk |
 | **Files** | Save and export to `.3dm`, `.obj`, `.stl`, `.fbx`, `.step`, `.iges`, `.dwg` |
 | **Scripting** | Run arbitrary Rhino Python (RhinoScriptSyntax / RhinoCommon) or C# (Roslyn) directly |
 | **AI Generation** | Generate 3D models from text or images via Hunyuan3D, import results into Rhino |
 | **Asset Libraries** | Search and import Poly Haven textures/HDRIs, download Sketchfab models |
+| **VisualARQ (BIM)** | Create walls, doors, windows, slabs, columns, stairs, railings, levels; query BIM properties; export IFC |
+| **Lands Design** | Place plants and trees from species library, generate terrain from contours, create paths and water features, export plant schedules |
+| **Remote host** | Run Rhino on a separate workstation or VM — set `RHINO_MCP_BIND_HOST=0.0.0.0` on the Rhino machine and point the MCP client at its IP |
+| **Telemetry** | Optional per-call usage log (JSONL on disk, opt-in, never leaves the machine) for debugging slow tools and measuring usage patterns |
 
 ---
 
@@ -88,7 +120,7 @@ A `rhinocode` fallback path (Rhino 8.11+ only) is also available for most non-Gr
 
 | Component | Minimum version |
 |---|---|
-| Rhino 3D | **Rhino 7** (Rhino 8 recommended; script components require Rhino 8) |
+| Rhino 3D | **Rhino 7** (Rhino 8 recommended; script components and Kangaroo require Rhino 8) |
 | Python | 3.10 or later |
 | uv | any recent version (`pip install uv`) |
 | .NET SDK | 8.0+ (only needed if building the plugin from source) |
@@ -312,17 +344,346 @@ Use `get_rhino_backend_status` from any AI client to check which backends are cu
 
 ## Environment Variables
 
+### Python MCP Server
+
 | Variable | Default | Description |
 |---|---|---|
 | `RHINO_MCP_BACKEND` | `auto` | Backend mode: `plugin`, `rhinocode`, or `auto` |
-| `RHINO_MCP_HOST` | `127.0.0.1` | Plugin socket host |
+| `RHINO_MCP_HOST` | `127.0.0.1` | IP/hostname of the machine running Rhino (used by the Python side to connect) |
 | `RHINO_MCP_PORT` | `1999` | Plugin socket port |
 | `RHINO_MCP_SOCKET_TIMEOUT` | `15.0` | Socket timeout in seconds |
 | `RHINOCODE` | *(auto-detected)* | Path to rhinocode binary if not on `PATH` |
+| `RHINO_MCP_TELEMETRY` | *(unset)* | Set to `1`, `true`, or `yes` to enable usage telemetry |
+| `RHINO_MCP_TELEMETRY_LOG` | `~/.rhino_mcp_telemetry.jsonl` | Path for the telemetry log file (JSONL format) |
+
+### Rhino Plugin (C# side)
+
+| Variable | Default | Description |
+|---|---|---|
+| `RHINO_MCP_BIND_HOST` | `127.0.0.1` | IP address the Rhino plugin binds its TCP listener to. Set to `0.0.0.0` to accept connections from any network interface (required for remote AI clients). Must be set in Rhino's environment before `MCPStart` is run. |
 
 ---
 
-## All 114 Tools
+## Remote Host Support
+
+The Python MCP server and the Rhino plugin communicate over TCP. By default both sides use `127.0.0.1` (loopback), so Rhino and the AI client must be on the same machine. Setting `RHINO_MCP_BIND_HOST` lets the plugin accept connections from any address, enabling Claude (or any MCP client) to drive Rhino on a dedicated render workstation, a cloud VM, or across a local network.
+
+> **Prerequisite:** Remote host support requires the C# plugin to be rebuilt from source. Run `./scripts/build-plugin.sh` and restart Rhino before following the steps below. The pre-built `.rhp` in the repo binds to loopback only.
+
+---
+
+### Bind address values
+
+| `RHINO_MCP_BIND_HOST` value | Effect |
+|---|---|
+| *(not set)* or `127.0.0.1` | Loopback only — local connections, most secure (default) |
+| `0.0.0.0` | All IPv4 interfaces — accepts connections from any machine on the network |
+| `192.168.x.x` (specific IP) | Only the named interface — useful on multi-homed machines |
+| `::` | All IPv6 interfaces |
+
+---
+
+### Step 1 — Set the bind address on the Rhino machine
+
+The env var must be present in the environment that launches the Rhino process. Setting it in a terminal after Rhino is already open has no effect.
+
+**macOS — temporary (current terminal session only):**
+```bash
+export RHINO_MCP_BIND_HOST=0.0.0.0
+open -a "Rhino 8"
+```
+
+**macOS — persistent (survives reboots, affects all Rhino launches):**
+```bash
+# Write a launchd environment variable
+launchctl setenv RHINO_MCP_BIND_HOST 0.0.0.0
+# Takes effect for new processes — restart Rhino if it's already running.
+# To remove later:
+launchctl unsetenv RHINO_MCP_BIND_HOST
+```
+
+**Windows — temporary (current PowerShell session):**
+```powershell
+$env:RHINO_MCP_BIND_HOST = "0.0.0.0"
+& "C:\Program Files\Rhino 8\System\Rhino.exe"
+```
+
+**Windows — persistent (user-level, survives reboots):**
+```powershell
+[System.Environment]::SetEnvironmentVariable(
+    "RHINO_MCP_BIND_HOST", "0.0.0.0", "User")
+# Restart Rhino after setting.
+# To remove:
+[System.Environment]::SetEnvironmentVariable(
+    "RHINO_MCP_BIND_HOST", $null, "User")
+```
+
+Then in Rhino: run `MCPStart`. The confirmation message shows the actual bind address:
+```
+Rhino MCP server started on 0.0.0.0:1999
+```
+
+Run `MCPStatus` at any time to confirm:
+```
+Rhino MCP server running on 0.0.0.0:1999
+```
+
+---
+
+### Step 2 — Open the firewall port on the Rhino machine
+
+```bash
+# macOS Application Firewall — allow Rhino to accept incoming connections
+sudo /usr/libexec/ApplicationFirewall/socketfilterfw \
+     --add "/Applications/Rhino 8.app/Contents/MacOS/Rhino"
+sudo /usr/libexec/ApplicationFirewall/socketfilterfw \
+     --unblockapp "/Applications/Rhino 8.app/Contents/MacOS/Rhino"
+```
+
+```powershell
+# Windows Defender Firewall — open port 1999 inbound
+netsh advfirewall firewall add rule `
+    name="RhinoMCP" protocol=TCP dir=in `
+    localport=1999 action=allow
+```
+
+---
+
+### Step 3 — Configure the MCP client
+
+Set `RHINO_MCP_HOST` to the IP address of the Rhino machine. The Python MCP server (which runs on the client machine) connects to that IP on port 1999.
+
+```json
+{
+  "mcpServers": {
+    "rhino": {
+      "command": "uv",
+      "args": ["run", "--directory", "/path/to/rhino-mcp", "python", "-m", "rhmcp"],
+      "env": {
+        "RHINO_MCP_BACKEND": "plugin",
+        "RHINO_MCP_HOST": "192.168.1.50",
+        "RHINO_MCP_PORT": "1999"
+      }
+    }
+  }
+}
+```
+
+---
+
+### Step 4 — Verify connectivity
+
+From the client machine, before involving the AI client at all:
+
+```bash
+# macOS / Linux — check that port 1999 is open and responding
+nc -zv 192.168.1.50 1999
+# Expected: Connection to 192.168.1.50 port 1999 [tcp/*] succeeded!
+
+# Windows
+Test-NetConnection -ComputerName 192.168.1.50 -Port 1999
+# Expected: TcpTestSucceeded : True
+```
+
+If the connection is refused, recheck the bind address in `MCPStatus` and confirm the firewall rule is active.
+
+---
+
+> **Security note:** Port 1999 accepts unauthenticated JSON commands that can execute arbitrary Python inside Rhino. Only expose it on trusted private networks. Never open it to the public internet. If you need remote access over the internet, tunnel through SSH (`ssh -L 1999:localhost:1999 user@rhino-host`) rather than exposing the port directly.
+
+---
+
+## Telemetry
+
+Telemetry is **opt-in** and **disabled by default**. No data leaves your machine — events are written to a local JSONL file only. When disabled (the default), the interceptor is never installed and adds zero overhead to tool calls.
+
+### Enable / disable
+
+```bash
+# Enable
+export RHINO_MCP_TELEMETRY=1        # also accepts: true, yes
+
+# Disable (unset or set to anything else)
+unset RHINO_MCP_TELEMETRY
+```
+
+The env var is read once at server startup. Changing it while the MCP server is running has no effect — restart the server to pick up the new value.
+
+### Log file location
+
+```bash
+# Default
+~/.rhino_mcp_telemetry.jsonl
+
+# Override
+export RHINO_MCP_TELEMETRY_LOG=/path/to/rhino_mcp_usage.jsonl
+```
+
+The parent directory is created automatically if it does not exist.
+
+### Event format
+
+Each line is a complete, self-contained JSON object:
+
+```json
+{"ts":"2026-05-08T18:30:00.123456+00:00","tool":"capture_rhino_view","ms":142,"ok":true,"error":null}
+{"ts":"2026-05-08T18:30:05.001234+00:00","tool":"gh_run_solution","ms":3201,"ok":true,"error":null}
+{"ts":"2026-05-08T18:30:08.999999+00:00","tool":"vray_render","ms":87,"ok":false,"error":"RuntimeError: V-Ray for Rhino is not installed or not loaded."}
+```
+
+| Field | Type | Description |
+|---|---|---|
+| `ts` | ISO-8601 UTC string | Timestamp of invocation start |
+| `tool` | string | MCP tool name exactly as registered |
+| `ms` | integer | Wall-clock duration in milliseconds (includes Rhino round-trip time for plugin-backend calls) |
+| `ok` | boolean | `true` if the tool returned normally; `false` if it raised an exception |
+| `error` | string \| null | `"ExceptionClass: message"` when `ok` is `false`; `null` otherwise |
+
+> `ms` measures total time from when the MCP client called the tool to when the Python server returned the result. For plugin-backend tools this includes the full TCP round-trip to Rhino plus any Rhino-side computation. It is a useful proxy for "how long did the user wait."
+
+### Querying the log
+
+```bash
+# Tail live events as they come in
+tail -f ~/.rhino_mcp_telemetry.jsonl | jq .
+
+# All failed calls today
+jq 'select(.ok == false)' ~/.rhino_mcp_telemetry.jsonl
+
+# Average duration by tool (requires jq 1.6+)
+jq -s 'group_by(.tool)[] | {tool: .[0].tool, avg_ms: (map(.ms) | add / length)}' \
+   ~/.rhino_mcp_telemetry.jsonl
+
+# Top 10 slowest calls
+jq -s 'sort_by(-.ms) | .[:10] | .[] | {tool, ms, ok}' \
+   ~/.rhino_mcp_telemetry.jsonl
+
+# Count calls per tool, descending
+jq -s 'group_by(.tool)[] | {tool: .[0].tool, count: length}' \
+   ~/.rhino_mcp_telemetry.jsonl | jq -s 'sort_by(-.count)[]'
+
+# All errors in the last 100 lines
+tail -100 ~/.rhino_mcp_telemetry.jsonl | jq 'select(.ok == false) | {tool, ms, error}'
+```
+
+### Implementation notes
+
+The interceptor is installed at the `ToolManager.call_tool` level inside FastMCP, so it wraps every tool regardless of which module it lives in — no per-tool changes needed. Any I/O failure in the log-write path (permission error, disk full, etc.) is caught and silently discarded so a broken log never surfaces to the user or the AI client.
+
+---
+
+## Third-Party Plugin Support
+
+Rhino MCP can install, check, and introspect third-party Grasshopper and Rhino plugins. The `install_plugin` tool supports three methods depending on the plugin:
+
+### Automatic Installation via Yak
+
+The following plugins are in Rhino's official Yak package registry and can be installed silently with no UI interaction:
+
+| Plugin | Yak package name | Notes |
+|---|---|---|
+| Pufferfish | `pufferfish` | Geometry morphing and tweening |
+| Elefront | `elefront` | Object attribute management |
+| Weaverbird | `weaverbird` | Mesh subdivision |
+| Anemone | `anemone` | Iterative loops |
+| Human | `human` | GH↔Rhino attribute bridge |
+| LunchBox | `lunchbox` | Parametric paneling |
+
+When the AI client calls `install_plugin(plugin_name="Pufferfish")`, the server locates the Yak CLI at the standard Rhino installation path, calls `yak install pufferfish`, and returns status. Rhino must be restarted after a Yak install for the plugin to activate.
+
+> **Known Yak behaviour:** Yak prompts interactively if the package is already installed. The server detects this case and returns a clear message rather than hanging.
+
+**Yak CLI locations searched:**
+
+| Platform | Path |
+|---|---|
+| macOS (Rhino 8) | `/Applications/Rhino 8.app/Contents/Resources/bin/yak` |
+| macOS (Rhino 7) | `/Applications/Rhino 7.app/Contents/Resources/bin/yak` |
+| Windows (Rhino 8) | `C:\Program Files\Rhino 8\System\yak.exe` |
+| Windows (Rhino 7) | `C:\Program Files\Rhino 7\System\yak.exe` |
+
+If Yak is not found at those locations, the tool returns instructions to use `_PackageManager` manually.
+
+### Manual Installation
+
+Plugins not available in Yak require a manual install step. The tool returns actionable instructions with the exact steps and a download URL:
+
+| Plugin | Install method | Download |
+|---|---|---|
+| Ladybug Tools | Rhino Package Manager UI | [food4rhino.com](https://www.food4rhino.com/en/app/ladybug-tools) |
+| Honeybee | Rhino Package Manager UI | [food4rhino.com](https://www.food4rhino.com/en/app/ladybug-tools) |
+| Kangaroo 2 | Built into Rhino 8; open Grasshopper | [food4rhino.com](https://www.food4rhino.com/en/app/kangaroo-physics) |
+| VisualARQ | Vendor installer (license required) | [visualarq.com](https://www.visualarq.com/download/) |
+| Lands Design | Vendor installer (license required) | [lands-design.com](https://www.lands-design.com/download/) |
+
+Vendor-only paid plugins (V-Ray, Enscape) return a download URL with a message explaining that a license and vendor installer are required.
+
+### File-based Installation
+
+If you have already downloaded a plugin file, pass the `file_path` parameter to `install_plugin`:
+
+| File type | Behaviour |
+|---|---|
+| `.gha` | Copied directly into the Grasshopper Libraries folder. Restart Grasshopper to activate. |
+| `.rhp` | Loaded immediately via Rhino's `_LoadPlugin` command. No restart required. |
+| `.rhi` | Opened with the Rhino Installer (OS-native handler). Follow the installer prompts, then restart Rhino. |
+
+**Example:**
+```
+install_plugin(plugin_name="MyPlugin", file_path="/Downloads/MyPlugin.gha")
+```
+
+**Grasshopper Libraries folder locations:**
+
+| Platform | Path |
+|---|---|
+| macOS | `~/Library/Application Support/McNeel/Rhinoceros/8.0/Plug-ins/Grasshopper (b45a29b1-4343-4035-989e-044e8580d9cf)/Libraries/` |
+| Windows | `%APPDATA%\Grasshopper\Libraries\` |
+
+> Note: Yak-installed packages go to a separate location (`~/Library/Application Support/McNeel/Rhinoceros/packages/8.0/` on macOS) and are not visible in the Libraries folder. This is expected.
+
+### Checking Plugin Status
+
+Before running plugin-specific tools (V-Ray, Enscape, VisualARQ, Lands Design, and all GH plugin tools), each module checks that the required plugin is loaded. If it is not, the tool returns `{"success": false, "message": "..."}` with install instructions rather than raising an unhandled error.
+
+You can also call `check_plugin_loaded(plugin_name="V-Ray")` directly to test whether a plugin is active before attempting to use it.
+
+---
+
+## All 189 Tools
+
+---
+
+### Plugin Management
+
+Tools for discovering, installing, and running commands from any Rhino or Grasshopper plugin. These tools work with both first-party and third-party plugins and do not require the plugin-specific modules below.
+
+| Tool | Description |
+|---|---|
+| `list_installed_plugins` | Return all installed Rhino plugins with their name, GUID, loaded state, and file path. Useful for discovering what is available before calling plugin-specific tools. |
+| `get_plugin_commands` | List all Rhino commands registered by a specific plugin. Provide `plugin_name` (partial, case-insensitive) or `plugin_id` (GUID). Returns the full command list with command names. |
+| `run_plugin_command` | Run any Rhino command string, including commands from third-party plugins. `options_string` is appended after the command name (e.g. `"_Enter"` to confirm prompts). |
+| `check_plugin_loaded` | Check whether a named plugin is installed and loaded. Returns `{loaded: bool, message: str, plugin: {...}}`. Call this before using plugin-specific tools to get a clear diagnostic. |
+| `install_plugin` | Install a Rhino or Grasshopper plugin. See [Third-Party Plugin Support](#third-party-plugin-support) for full details. `file_path` triggers a local file install; omitting it triggers Yak or returns manual instructions depending on the plugin. |
+
+**`install_plugin` parameters:**
+
+| Parameter | Type | Description |
+|---|---|---|
+| `plugin_name` | `str` | Plugin name (case-insensitive). Used to look up the Yak package name or return manual instructions. |
+| `file_path` | `str \| None` | Path to a `.gha`, `.rhp`, or `.rhi` file. When provided, skips the Yak/manual lookup and installs from the file directly. |
+
+**`install_plugin` return values:**
+
+| Key | Description |
+|---|---|
+| `success` | `true` if the install completed without errors. |
+| `method` | `"yak"`, `"gha_copy"`, `"load_plugin"`, `"rhi_installer"`, `"manual_required"`, or `"vendor_installer_required"`. |
+| `message` | Human-readable result or instructions. |
+| `output` | (Yak only) Raw stdout from the Yak CLI, including the installed version. |
+| `destination` | (`.gha` only) Destination path in the Grasshopper Libraries folder. |
+
+---
 
 ### Grasshopper — Canvas
 
@@ -330,7 +691,7 @@ Requires the plugin backend and Grasshopper to be open in Rhino.
 
 | Tool | Description |
 |---|---|
-| `gh_search_components` | Search the Grasshopper component library by name, category, or description. Returns component GUIDs needed for `gh_add_component`. |
+| `gh_search_components` | Search the Grasshopper component library by name, category, or description. Returns component GUIDs needed for `gh_add_component`. Always search first — do not guess component GUIDs. |
 | `gh_list_components` | List all objects currently on the active Grasshopper canvas with their instance GUIDs and canvas positions. |
 | `gh_get_canvas` | Get a full snapshot of the canvas: all components, wire connections, and groups. |
 | `gh_get_component_info` | Get detailed info about one component: input/output params, lock state, and runtime state. |
@@ -381,6 +742,146 @@ Requires the plugin backend and Grasshopper to be open in Rhino.
 | `gh_open_definition` | Open a `.gh` or `.ghx` file from disk. |
 | `gh_save_definition` | Save the active definition. Optionally specify a file path; if omitted, saves to the current path. |
 | `gh_close_definition` | Close the active definition. |
+
+---
+
+### Grasshopper — Pufferfish (Geometry Morphing)
+
+Requires [Pufferfish](https://www.food4rhino.com/en/app/pufferfish) to be installed. Install automatically: `install_plugin("Pufferfish")`.
+
+All Pufferfish tools place the component on the canvas and wire inputs automatically. The `canvas_x` / `canvas_y` parameters control where the component is placed on the GH canvas (in canvas units).
+
+| Tool | Parameters | Description |
+|---|---|---|
+| `gh_pufferfish_tween_curves` | `curve1_instance_guid`, `curve2_instance_guid`, `count=5`, `canvas_x`, `canvas_y` | Place a **Tween Curves** component and connect two curve sources. Generates `count` intermediate curves interpolated between Curve A and Curve B. |
+| `gh_pufferfish_morph_surface` | `geometry_instance_guid`, `source_surface_instance_guid`, `target_surface_instance_guid`, `canvas_x`, `canvas_y` | Place a **Surface Morph** component and connect geometry, source surface, and target surface. Remaps geometry from the UV space of the source surface to the target surface. |
+| `gh_pufferfish_blend_surfaces` | `surface1_instance_guid`, `surface2_instance_guid`, `count=5`, `canvas_x`, `canvas_y` | Place a **Tween Surfaces** component and connect two surface sources. Generates `count` intermediate surface states. |
+| `gh_pufferfish_twist` | `geometry_instance_guid`, `axis_instance_guid`, `angle_degrees=45.0`, `canvas_x`, `canvas_y` | Place a **Twist Object** component, connect geometry and axis line, and set the twist angle in degrees. |
+| `gh_pufferfish_bend` | `geometry_instance_guid`, `axis_instance_guid`, `angle_degrees=45.0`, `canvas_x`, `canvas_y` | Place a **Bend Object** component, connect geometry and axis line, and set the bend angle in degrees. |
+
+---
+
+### Grasshopper — Weaverbird (Mesh Subdivision)
+
+Requires [Weaverbird](https://www.food4rhino.com/en/app/weaverbird) to be installed. Install automatically: `install_plugin("Weaverbird")`.
+
+All Weaverbird tools wire the `Mesh` input automatically from `mesh_instance_guid`.
+
+| Tool | Parameters | Description |
+|---|---|---|
+| `gh_wb_catmull_clark` | `mesh_instance_guid`, `iterations=1`, `canvas_x`, `canvas_y` | Place a **Catmull-Clark Subdivision** component. Produces smooth, quad-dominant subdivisions. Each iteration quadruples the face count. |
+| `gh_wb_loop` | `mesh_instance_guid`, `iterations=1`, `canvas_x`, `canvas_y` | Place a **Loop Subdivision** component. Optimised for triangle meshes; produces C2-continuous surfaces. |
+| `gh_wb_butterfly` | `mesh_instance_guid`, `iterations=1`, `canvas_x`, `canvas_y` | Place a **Butterfly Subdivision** component. Interpolating scheme — original vertices are preserved exactly. |
+| `gh_wb_frame` | `mesh_instance_guid`, `offset=0.1`, `canvas_x`, `canvas_y` | Place a **Mesh Frame** component. Shrinks each face inward by `offset`, leaving a frame of faces at each edge. Useful for generating mesh apertures. |
+| `gh_wb_thicken` | `mesh_instance_guid`, `thickness=0.1`, `canvas_x`, `canvas_y` | Place a **Mesh Thickening** component. Offsets the mesh by `thickness` in the face normal direction, producing a closed solid shell. |
+| `gh_wb_extrude_face` | `mesh_instance_guid`, `distance=0.5`, `canvas_x`, `canvas_y` | Place an **Extrude Face** component. Extrudes each face outward by `distance`. |
+
+---
+
+### Grasshopper — LunchBox (Paneling)
+
+Requires [LunchBox](https://www.food4rhino.com/en/app/lunchbox) to be installed. Install automatically: `install_plugin("LunchBox")`.
+
+All LunchBox panel tools wire a surface input from `surface_instance_guid` and set UV count parameters.
+
+| Tool | Parameters | Description |
+|---|---|---|
+| `gh_lunchbox_quad_panels` | `surface_instance_guid`, `u_count=10`, `v_count=10`, `canvas_x`, `canvas_y` | Place a **Quad Panels** component. Divides the surface into a rectangular grid of quad panels. |
+| `gh_lunchbox_tri_panels` | `surface_instance_guid`, `u_count=10`, `v_count=10`, `canvas_x`, `canvas_y` | Place a **Triangle Panels A** component. Generates triangulated panels from a surface grid. |
+| `gh_lunchbox_diamond_panels` | `surface_instance_guid`, `u_count=10`, `v_count=10`, `canvas_x`, `canvas_y` | Place a **Diamond Panels** component. Generates rotated diamond-shaped panels across the surface. |
+| `gh_lunchbox_hex_panels` | `surface_instance_guid`, `u_count=10`, `v_count=10`, `canvas_x`, `canvas_y` | Place a **Hexagonal Panels** component. Generates a hexagonal tiling across the surface. |
+| `gh_lunchbox_space_frame` | `surface_instance_guid`, `depth=1.0`, `canvas_x`, `canvas_y` | Place a **Space Frame** component and set the frame depth. Generates a structural space frame from the surface grid — top chord, bottom chord, and diagonal members. |
+
+---
+
+### Grasshopper — Anemone (Looping)
+
+Requires [Anemone](https://www.food4rhino.com/en/app/anemone) to be installed. Install automatically: `install_plugin("Anemone")`.
+
+Anemone enables iterative feedback loops in Grasshopper — the output of one solution pass feeds back as input for the next.
+
+| Tool | Parameters | Description |
+|---|---|---|
+| `gh_anemone_setup_loop` | `max_loops=100`, `canvas_x`, `canvas_y` | Place **Loop Start** and **Loop End** components side-by-side (400 canvas units apart). Sets `Max Loops` on the Loop Start component. Returns both instance GUIDs — connect your iterative logic between them. |
+| `gh_anemone_set_max_loops` | `loop_start_instance_guid`, `max_loops=100` | Update the `Max Loops` count on an existing Loop Start component without replacing it. |
+
+**Workflow pattern:**
+1. Call `gh_anemone_setup_loop` to place the bookend components.
+2. Place your logic components between the returned `loop_start_instance_guid` and `loop_end_instance_guid`.
+3. Wire outputs from Loop Start to your logic, and wire your logic outputs into Loop End.
+4. Call `gh_run_solution` to execute the loop up to `max_loops` iterations.
+
+---
+
+### Grasshopper — Human & Elefront (Attributes)
+
+Requires [Human](https://www.food4rhino.com/en/app/human) and/or [Elefront](https://www.food4rhino.com/en/app/elefront). Install automatically: `install_plugin("Human")` / `install_plugin("Elefront")`.
+
+These plugins expose Rhino object attributes (layer, name, user text) inside Grasshopper, enabling attribute-driven workflows and controlled baking.
+
+**Elefront tools:**
+
+| Tool | Parameters | Description |
+|---|---|---|
+| `gh_elefront_bake_attributes` | `component_instance_guid`, `layer="Default"`, `name=""`, `user_text={key: value}`, `canvas_x`, `canvas_y` | Place an **Elefront Bake Objects** component, wire geometry from `component_instance_guid`, and configure layer, name, and user text key-value pairs. Unlike the standard GH bake, Elefront baking preserves all attribute metadata on the Rhino object. |
+| `gh_elefront_reference_by_filter` | `layer=None`, `name_filter=None`, `user_text_key=None`, `canvas_x`, `canvas_y` | Place a **Reference by Filter** component. Filters Rhino document objects by layer, name pattern, or user text key. Returns geometry matching all specified criteria. |
+| `gh_elefront_set_user_text` | `component_instance_guid`, `key`, `value`, `canvas_x`, `canvas_y` | Place a **Set User Text** component, wire geometry, and set a single key-value pair. Writes user text to Rhino objects after baking. |
+
+**Human tools:**
+
+| Tool | Parameters | Description |
+|---|---|---|
+| `gh_human_get_attributes` | `rhino_object_id`, `canvas_x`, `canvas_y` | Place a **Get Object Attributes** component and set the object ID. Exposes the object's layer, name, color, linetype, render material, and all user text keys as separate outputs. |
+| `gh_human_set_user_text` | `component_instance_guid`, `key`, `value_component_instance_guid`, `canvas_x`, `canvas_y` | Place a **Set User Text** component, wire objects from `component_instance_guid`, wire the value from `value_component_instance_guid`, and set the key name. Writes user text to live Rhino objects without requiring a bake. |
+
+---
+
+### Grasshopper — Kangaroo Physics
+
+Kangaroo 2 is **built into Rhino 8** — no separate install required. In Rhino 7, install from [food4rhino.com](https://www.food4rhino.com/en/app/kangaroo-physics). Grasshopper must be open with a document loaded.
+
+| Tool | Parameters | Description |
+|---|---|---|
+| `gh_kangaroo_setup_solver` | `canvas_x`, `canvas_y`, `iterations=100`, `threshold=1e-9` | Place a **Kangaroo2 Solver** component on the canvas. Returns `instance_guid` of the placed solver. |
+| `gh_kangaroo_add_goal` | `goal_type`, `canvas_x`, `canvas_y` | Place a Kangaroo goal component. `goal_type` must be one of: `Length`, `Angle`, `Anchor`, `OnMesh`, `Spring`, `Pressure`, `Load`, `Hinge`, `Laplacian`. Returns the placed component's `instance_guid`. |
+| `gh_kangaroo_connect_goal` | `solver_instance_guid`, `goal_instance_guid` | Wire a goal component's output (`G`) into the solver's `Goals` input. Call once per goal component. |
+| `gh_kangaroo_configure_solver` | `solver_instance_guid`, `iterations=100`, `threshold=1e-9` | Set `Iterations` and `Threshold` on an existing solver without replacing it. Lower `threshold` (e.g. `1e-15`) gives a more converged result; higher `iterations` allows longer simulations. |
+| `gh_kangaroo_run_physics` | `solver_instance_guid` | Trigger a Grasshopper solution to advance the physics simulation. Equivalent to manually clicking "Solve" or changing a slider. |
+
+**Workflow pattern:**
+1. `gh_kangaroo_setup_solver` → get `solver_guid`
+2. `gh_kangaroo_add_goal(goal_type="Anchor", ...)` → get `anchor_guid`
+3. `gh_kangaroo_add_goal(goal_type="Length", ...)` → get `length_guid`
+4. Connect geometry to goal inputs via `gh_connect_params`
+5. `gh_kangaroo_connect_goal(solver_guid, anchor_guid)`
+6. `gh_kangaroo_connect_goal(solver_guid, length_guid)`
+7. `gh_kangaroo_run_physics(solver_guid)`
+
+---
+
+### Grasshopper — Ladybug Tools & Honeybee
+
+Requires [Ladybug Tools](https://www.food4rhino.com/en/app/ladybug-tools) to be installed via the Rhino Package Manager. Install instructions: `install_plugin("Ladybug")`.
+
+Ladybug handles climate visualisation (weather data, sun, wind, radiation). Honeybee handles building energy modelling. Both are installed together as part of the Ladybug Tools suite.
+
+**Ladybug tools:**
+
+| Tool | Parameters | Description |
+|---|---|---|
+| `gh_ladybug_load_weather` | `epw_file_path`, `canvas_x`, `canvas_y` | Place an **Import EPW** component and set the EPW file path. The EPW output provides location, dry-bulb temperature, humidity, solar radiation, and wind data for all downstream Ladybug components. |
+| `gh_ladybug_sun_path` | `location_instance_guid`, `north_angle=0.0`, `canvas_x`, `canvas_y` | Place a **Sun Path** component and connect a location output. Generates a 3D sun path diagram showing solar position throughout the year. |
+| `gh_ladybug_radiation_analysis` | `geometry_instance_guid`, `location_instance_guid`, `canvas_x`, `canvas_y` | Place a **Radiation Analysis** component and connect analysis geometry and location. Computes cumulative solar radiation on surfaces (kWh/m²). |
+| `gh_ladybug_wind_rose` | `location_instance_guid`, `canvas_x`, `canvas_y` | Place a **Wind Rose** component connected to a location. Visualises wind speed and direction frequency distribution. |
+| `gh_ladybug_utci_comfort` | `location_instance_guid`, `geometry_instance_guid`, `canvas_x`, `canvas_y` | Place a **UTCI Comfort** component for outdoor thermal comfort analysis. UTCI (Universal Thermal Climate Index) maps comfort zones across the geometry mesh. |
+
+**Honeybee tools:**
+
+| Tool | Parameters | Description |
+|---|---|---|
+| `gh_honeybee_create_room` | `geometry_component_id`, `room_name="HBRoom"`, `canvas_x`, `canvas_y` | Place an **HB Room from Solid** component and connect a closed Brep geometry. Creates a Honeybee Room object representing a thermal zone. |
+| `gh_honeybee_add_window` | `room_instance_guid`, `ratio=0.4`, `canvas_x`, `canvas_y` | Place **HB Add Subface** and connect a room. `ratio` is the window-to-wall ratio (0.0–1.0). Adds glazing to all exterior faces at the specified ratio. |
+| `gh_honeybee_run_energy` | `model_instance_guid`, `canvas_x`, `canvas_y` | Place **HB Model to IDF** and connect a Honeybee Model. Exports the model to EnergyPlus IDF format for energy simulation. Run `gh_run_solution` after to trigger the simulation. |
 
 ---
 
@@ -445,12 +946,46 @@ Requires the plugin backend and Grasshopper to be open in Rhino.
 
 ---
 
+### V-Ray Rendering
+
+Requires [V-Ray for Rhino](https://www.chaos.com/vray/rhino) to be installed and licensed. Each tool checks that V-Ray is loaded and returns `{"success": false, "message": "..."}` if it is not.
+
+| Tool | Parameters | Description |
+|---|---|---|
+| `vray_start_ipr` | — | Start V-Ray **Interactive Production Rendering** in the active viewport. IPR updates the render bucket live as you modify the scene. |
+| `vray_stop_ipr` | — | Stop the running IPR session. |
+| `vray_render` | `output_path`, `width=1920`, `height=1080`, `quality_preset="medium"` | Trigger a full V-Ray render and save the result to `output_path`. `quality_preset`: `low` \| `medium` \| `high` \| `ultra`. |
+| `vray_create_material` | `name`, `diffuse_color=[r,g,b]`, `roughness=0.5`, `metalness=0.0`, `ior=1.5`, `opacity=1.0` | Create a V-Ray material via RhinoCommon. `diffuse_color` values are 0–255. |
+| `vray_apply_material` | `object_ids=[...]`, `material_name` | Assign a named V-Ray material to a list of Rhino objects by GUID. |
+| `vray_add_light` | `light_type="Rectangle"`, `position=[x,y,z]`, `target=[x,y,z]`, `intensity=1.0`, `color=[r,g,b]` | Add a V-Ray light. `light_type`: `Rectangle` \| `Sphere` \| `IES` \| `Dome` \| `Sun`. |
+| `vray_set_environment` | `hdri_path`, `intensity=1.0`, `rotation_degrees=0.0` | Set the V-Ray dome/environment light to an HDRI file. Opens the V-Ray Options dialog — `hdri_path`, `intensity`, and `rotation_degrees` are returned for reference. |
+| `vray_set_render_settings` | `width=1920`, `height=1080`, `aa_subdivs=4`, `gi_preset="interior"`, `time_limit_seconds=0` | Configure render resolution, AA subdivisions, and GI preset. `gi_preset`: `interior` \| `exterior` \| `studio`. `time_limit_seconds=0` disables the time limit. |
+| `vray_export_vrscene` | `output_path`, `compressed=False` | Export the current scene as a `.vrscene` file for V-Ray Standalone or distributed rendering. |
+
+---
+
+### Enscape Real-Time Rendering
+
+Requires [Enscape](https://enscape3d.com) to be installed and licensed. Each tool checks that Enscape is loaded and returns `{"success": false, "message": "..."}` if it is not.
+
+| Tool | Parameters | Description |
+|---|---|---|
+| `enscape_start` | — | Launch the Enscape real-time rendering window from the current Rhino viewport. |
+| `enscape_screenshot` | `output_path`, `width=1920`, `height=1080` | Capture a high-resolution screenshot from the current Enscape view and save it to `output_path`. |
+| `enscape_export_panorama` | `output_path`, `resolution="4K"` | Export a 360° equirectangular panorama. `resolution`: `2K` \| `4K` \| `8K`. |
+| `enscape_export_standalone` | `output_path` | Export the scene as a self-contained Enscape standalone executable (`.exe`) for sharing without requiring an Enscape license on the viewer's machine. |
+| `enscape_set_time_of_day` | `hour=12`, `minute=0` | Set the sun position by time of day. `hour`: 0–23, `minute`: 0–59. |
+| `enscape_set_atmosphere` | `cloud_density=0.3`, `wind_speed=0.0`, `precipitation_type="none"` | Configure atmosphere. `cloud_density`: 0.0–1.0. `precipitation_type`: `none` \| `rain` \| `snow`. Opens Visual Settings — values are passed for reference. |
+| `enscape_create_view` | `name` | Save the current Enscape camera position as a named view that can be recalled later. |
+
+---
+
 ### Views & Viewport
 
-| Tool | Description |
-|---|---|
-| `set_rhino_view` | Activate a named view or set camera position, target, and lens length. |
-| `capture_rhino_view` | Capture the active viewport to a PNG file. Returns the file path and optional base-64 string. |
+| Tool | Parameters | Description |
+|---|---|---|
+| `set_rhino_view` | `view="Perspective"`, `camera=[x,y,z]`, `target=[x,y,z]`, `lens=None` | Activate a named view or set camera position, target, and lens length. Common view names: `Perspective`, `Top`, `Front`, `Right`. |
+| `capture_rhino_view` | `path=None`, `width=1200`, `height=900` | **Capture the active viewport and return it as a visual image the AI can see.** `path` is optional — omit it for in-memory capture only. When `path` is provided the PNG is also saved to disk. Returns `[{metadata}, Image]` so the AI client renders the image inline. |
 
 ---
 
@@ -530,6 +1065,46 @@ Requires the plugin backend and Grasshopper to be open in Rhino.
 
 ---
 
+### VisualARQ (Architectural BIM)
+
+Requires [VisualARQ](https://www.visualarq.com) to be installed and licensed. Each tool checks that VisualARQ is loaded. Install instructions: `install_plugin("VisualARQ")`.
+
+VisualARQ adds parametric BIM objects (walls, slabs, columns, stairs, etc.) directly inside Rhino. All VisualARQ objects are standard Rhino objects with embedded BIM data — no separate file format required.
+
+| Tool | Parameters | Description |
+|---|---|---|
+| `varq_create_wall` | `start_pt=[x,y,z]`, `end_pt=[x,y,z]`, `height=3.0`, `style_name="Basic Wall"`, `layer=None` | Create a VisualARQ wall between two 3D points. `height` is in document units. The wall uses the named style from the VisualARQ style library. |
+| `varq_add_opening` | `wall_id`, `opening_type="window"`, `position_along_wall=0.5`, `width=1.0`, `height=2.0`, `style_name=None` | Add a window or door to an existing wall. `opening_type`: `window` \| `door`. `position_along_wall` is a 0.0–1.0 fraction of the wall's length from the start point. |
+| `varq_create_slab` | `boundary_curve_ids=[...]`, `thickness=0.3`, `style_name="Basic Slab"`, `layer=None` | Create a VisualARQ floor or ceiling slab from one or more closed boundary curves. |
+| `varq_create_column` | `position=[x,y,z]`, `height=3.0`, `style_name="Basic Column"`, `layer=None` | Create a structural column at a 3D point with the specified height. |
+| `varq_create_stair` | `start_pt=[x,y,z]`, `direction=[x,y,z]`, `width=1.2`, `rise=0.175`, `run=0.28`, `story_count=1`, `style_name="Basic Stair"` | Create a stair. `rise` is the vertical step height (m), `run` is the horizontal tread depth (m), `direction` is a unit vector for stair direction. |
+| `varq_create_railing` | `path_curve_id`, `height=1.0`, `style_name="Basic Railing"` | Create a railing along a curve path. The curve can be straight, curved, or follow a stair profile. |
+| `varq_set_level` | `name`, `elevation=0.0` | Create or update a VisualARQ building level (floor/storey). Levels control visibility, object assignment, and IFC storey export. |
+| `varq_export_ifc` | `output_path`, `ifc_version="IFC4"` | Export the entire model to IFC format. `ifc_version`: `IFC2x3` \| `IFC4`. VisualARQ objects export with full IFC type mappings (IfcWall, IfcSlab, IfcColumn, etc.). |
+| `varq_get_object_properties` | `object_id` | Get VisualARQ type, style, level assignment, and IFC properties for any object by GUID. Returns `{"type": "...", "style": "...", "level": "..."}`. |
+| `varq_list_styles` | `object_type="wall"` | List available VisualARQ styles for a given object type. `object_type`: `wall` \| `door` \| `window` \| `slab` \| `column` \| `stair` \| `railing`. |
+
+---
+
+### Lands Design (Landscape)
+
+Requires [Lands Design](https://www.lands-design.com) to be installed and licensed. Each tool checks that Lands Design is loaded. Install instructions: `install_plugin("Lands Design")`.
+
+Lands Design adds landscape-specific objects (plants, terrain, paths, water) directly inside Rhino, with a built-in plant species database and seasonal display.
+
+| Tool | Parameters | Description |
+|---|---|---|
+| `lands_place_plant` | `plant_name`, `position=[x,y,z]`, `rotation_degrees=0.0`, `scale=1.0` | Place a plant from the Lands Design library at a position. `plant_name` must match a name from the Lands Design plant database. |
+| `lands_place_tree` | `species_name`, `position=[x,y,z]`, `trunk_height=2.0`, `canopy_radius=3.0` | Place a tree from the Lands Design species library. `trunk_height` and `canopy_radius` are in document units. |
+| `lands_create_terrain` | `boundary_curve_id`, `source_type="contours"`, `source_id=None` | Generate a terrain surface from existing geometry. `source_type`: `contours` (interpolates from contour curves) \| `points` (from a point cloud). `source_id` is the GUID of the source geometry. |
+| `lands_create_path` | `centerline_curve_id`, `width=2.0`, `surface_type="Asphalt"` | Create a path or road surface along a curve. `surface_type` controls the material display (e.g. `Asphalt`, `Gravel`, `Grass`, `Paving`). |
+| `lands_create_water` | `boundary_curve_id`, `water_level_z=0.0` | Create a Lands Design water surface within a closed boundary curve. `water_level_z` sets the elevation of the water plane. |
+| `lands_get_plant_database` | `search_query=""`, `category=""` | Browse the Lands Design plant species database. Filter by search term and/or category (e.g. `"Trees"`, `"Shrubs"`, `"Groundcovers"`). Use this to find exact plant names before calling `lands_place_plant`. |
+| `lands_set_season` | `season="summer"` | Set the display season for all Lands Design plants and trees in the scene. `season`: `spring` \| `summer` \| `autumn` \| `winter`. Affects 3D representation and texture. |
+| `lands_export_plant_list` | `output_path`, `format="csv"` | Export a plant schedule (quantity takeoff) from the current model. `format`: `csv` \| `xlsx`. The schedule includes species name, count, size parameters, and location data. |
+
+---
+
 ### Reference-Compatible Aliases
 
 These tools use the public RhinoMCP wire protocol names so agents trained on other MCP servers work without prompting:
@@ -583,3 +1158,16 @@ The integration tests auto-skip cleanly if the plugin socket is not reachable.
 - [Grasshopper SDK](https://developer.rhino3d.com/api/grasshopper/html/723c01da-9986-4db2-8f53-6f3a7494df75.htm)
 - [RhinoCode CLI](https://developer.rhino3d.com/guides/scripting/advanced-cli/)
 - [Model Context Protocol](https://modelcontextprotocol.io/)
+- [Yak Package Manager](https://developer.rhino3d.com/guides/yak/)
+- [Pufferfish](https://www.food4rhino.com/en/app/pufferfish)
+- [Weaverbird](https://www.food4rhino.com/en/app/weaverbird)
+- [LunchBox](https://www.food4rhino.com/en/app/lunchbox)
+- [Anemone](https://www.food4rhino.com/en/app/anemone)
+- [Human](https://www.food4rhino.com/en/app/human)
+- [Elefront](https://www.food4rhino.com/en/app/elefront)
+- [Kangaroo Physics](https://www.food4rhino.com/en/app/kangaroo-physics)
+- [Ladybug Tools](https://www.ladybug.tools/)
+- [V-Ray for Rhino](https://www.chaos.com/vray/rhino)
+- [Enscape](https://enscape3d.com)
+- [VisualARQ](https://www.visualarq.com)
+- [Lands Design](https://www.lands-design.com)
