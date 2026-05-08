@@ -2712,8 +2712,8 @@ public static class RhinoHandlers
         Guid pluginGuid = Guid.Empty;
         string resolvedName = "";
 
-        if (!string.IsNullOrWhiteSpace(pluginIdStr))
-            Guid.TryParse(pluginIdStr, out pluginGuid);
+        if (!string.IsNullOrWhiteSpace(pluginIdStr) && !Guid.TryParse(pluginIdStr, out pluginGuid))
+            return new { success = false, message = $"Invalid plugin_id format: '{pluginIdStr}'" };
 
         if (pluginGuid == Guid.Empty && !string.IsNullOrWhiteSpace(pluginName))
         {
@@ -2728,6 +2728,9 @@ public static class RhinoHandlers
             }
         }
 
+        if (pluginGuid != Guid.Empty && string.IsNullOrEmpty(resolvedName))
+            PlugIn.GetInstalledPlugIns().TryGetValue(pluginGuid, out resolvedName);
+
         if (pluginGuid == Guid.Empty)
             return new { success = false, message = $"Plugin not found: {pluginName ?? pluginIdStr}" };
 
@@ -2735,8 +2738,10 @@ public static class RhinoHandlers
         var commands = commandNames
             .Select(name => new {
                 name,
-                id = Rhino.Commands.Command.LookupCommandId(name, true).ToString()
+                id = Rhino.Commands.Command.LookupCommandId(name, true)
             })
+            .Where(c => c.id != Guid.Empty)
+            .Select(c => new { c.name, id = c.id.ToString() })
             .ToList();
 
         return new { success = true, plugin_name = resolvedName, plugin_id = pluginGuid.ToString(), commands, count = commands.Count };
