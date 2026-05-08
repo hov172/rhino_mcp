@@ -821,5 +821,31 @@ class TestPluginsModule(unittest.TestCase):
         self.assertTrue(result["loaded"])
 
 
+# ---------------------------------------------------------------------------
+# gh_kangaroo.py tests
+# ---------------------------------------------------------------------------
+
+class TestKangarooTools(unittest.TestCase):
+    @classmethod
+    def setUpClass(cls) -> None:
+        cls.tools = _register_module("rhmcp.tools.gh_kangaroo")
+
+    def test_setup_solver_unavailable(self) -> None:
+        fn = self.tools["gh_kangaroo_setup_solver"]
+        with patch("rhmcp.tools_helpers.backend.plugin_result") as mock:
+            mock.return_value = {"result": {"components": []}}
+            result = fn()
+        self.assertFalse(result["success"])
+        self.assertIn("Kangaroo", result["message"])
+
+    def test_add_goal_unknown_type(self) -> None:
+        fn = self.tools["gh_kangaroo_add_goal"]
+        with patch("rhmcp.tools_helpers.backend.plugin_result") as mock:
+            mock.return_value = {"result": {"components": [{"id": "abc", "name": "K2 Solver"}]}}
+            result = fn(goal_type="InvalidGoal", canvas_x=0.0, canvas_y=0.0)
+        self.assertFalse(result["success"])
+        self.assertIn("Unknown goal type", result["message"])
+
+
 if __name__ == "__main__":
     unittest.main()
