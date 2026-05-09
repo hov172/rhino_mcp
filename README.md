@@ -465,13 +465,21 @@ Copy-Item rhino-mcp.rhp `
 
 Then restart Rhino. The plugin loads automatically on startup.
 
-#### Option B — Install via Yak (Rhino's package manager)
+#### Option B — Install via Yak CLI
 
-1. Download [`rhino-mcp-0.3.0-rh8_30-any.yak`](https://github.com/hov172/rhino_mcp/releases/download/v0.3.0/rhino-mcp-0.3.0-rh8_30-any.yak) from the latest release.
-2. Open Rhino.
-3. Run the command `_PackageManager` in the Rhino command line.
-4. Click **Install from file…** and select the downloaded `.yak` file.
-5. Restart Rhino when prompted.
+Download [`rhino-mcp-0.3.0-rh8_30-any.yak`](https://github.com/hov172/rhino_mcp/releases/download/v0.3.0/rhino-mcp-0.3.0-rh8_30-any.yak) from the latest release, then run:
+
+```bash
+# macOS
+"/Applications/Rhino 8.app/Contents/Resources/bin/yak" install --source ~/Downloads/rhino-mcp-0.3.0-rh8_30-any.yak
+```
+
+```powershell
+# Windows
+& "C:\Program Files\Rhino 8\System\yak.exe" install --source "$env:USERPROFILE\Downloads\rhino-mcp-0.3.0-rh8_30-any.yak"
+```
+
+Restart Rhino after the install completes.
 
 #### Option C — Build from source
 
