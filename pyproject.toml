@@ -4,8 +4,8 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "rhino-mcp"
-version = "0.6.0"
-description = "Control Rhino 3D from Claude, Cursor, Codex — 321 tools: geometry, Grasshopper, V-Ray, Enscape, BIM, AI generation"
+version = "0.7.0"
+description = "Control Rhino 3D from Claude, Cursor, Codex — 320 tools: geometry, Grasshopper, V-Ray, Enscape, BIM, AI generation"
 readme = "README.md"
 license = { text = "MIT" }
 authors = [{ name = "Rhino MCP Contributors" }]

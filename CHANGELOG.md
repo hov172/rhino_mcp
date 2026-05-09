@@ -5,6 +5,45 @@ Versioning follows [Semantic Versioning](https://semver.org/).
 
 ---
 
+## [0.7.0] — 2026-05-09
+
+### Fixed
+- **C1** — `execute_python` now promotes inner `ok: false` script results to the outer response so callers see failures correctly
+- **H1** — Added GUID/guid_list validation to all tools in `advanced_geometry.py` and `mesh_ops.py`
+- **H2** — `_run()` helpers in `boolean_operations`, `curve_operations`, and `advanced_geometry` now strip the `err` key from locals() before sending payload to Rhino
+- **H4** — Boolean intersection loop variables renamed to `current_results`/`next_obj` for clarity
+- **H5** — `measure_area` now correctly handles mesh objects via `rs.MeshArea()`
+- **M1** — Removed `.strip()` from `validate.guid()` — whitespace-padded GUIDs now correctly fail validation
+- **M2** — `manage_rhino_layer` validates `action` against the allowed set (`list`, `create`, `update`, `delete`, `current`) and returns `INVALID_VALUE` early
+- **M3** — `get_rhino_objects` validates `limit > 0` and `offset >= 0`
+- **M4** — `_wrap_with_revert` calls `expandtabs(4)` before indenting so tab-indented user code is handled correctly
+- **M5** — `create_patch` validates `u_spans` and `v_spans` are positive integers
+- **M6** — Removed unreachable dead-code block in `run_plugin_or_python`
+- **M7** — Removed redundant `import time` inside `health_check` (already imported at module level)
+- **M8** — `extrude_curve` result dict now includes `"capped": bool`
+- **M9** — Plugin `OSError` during auto-mode fallback is captured as `plugin_error` in the rhinocode response
+- **L1** — Distance op uses `rs.Distance()` instead of manual `math.sqrt`
+- **L4** — `set_object_material` validates the object GUID; `set_rhino_view` validates `camera`/`target` coordinates
+- **L5** — Bounding box failure response now includes `"error_code": "COMPUTATION_FAILED"`
+
+### Changed
+- Tool count corrected to **320** (was documented as 321)
+
+---
+
+## [0.6.0] — 2026-05-09
+
+### Added
+- **Script syntax tests** — `test_script_syntax.py` AST-validates every `_SCRIPT` block across all tool modules at CI time
+- **Integration test scaffold** — `test_integration.py` with 13 live tests (auto-skip when no Rhino reachable); covers health check, Python execution, sphere/box/line CRUD, layer CRUD, move, user text, group, distance, bounding box
+- **GitHub Actions CI** — `.github/workflows/ci.yml` runs unit + smoke + script-syntax tests on Python 3.10/3.11/3.12 on every push/PR; separate ruff lint job
+- **One-command installers** — `scripts/install.sh` (macOS/Linux) and `scripts/install.ps1` (Windows PowerShell)
+
+### Fixed
+- Ruff lint violations across 8 tool modules (unused imports, bare except clauses, f-strings without placeholders, trailing semicolons)
+
+---
+
 ## [0.5.0] — 2026-05-09
 
 ### Added
