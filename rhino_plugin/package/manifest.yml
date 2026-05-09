@@ -1,8 +1,13 @@
 name: rhino-mcp
-version: 0.1.0
+version: 0.2.0
 authors:
   - Rhino MCP Contributors
-description: MCP socket server plug-in for Rhino 7/8.
+description: >
+  MCP socket server plug-in for Rhino 7/8. Exposes 216 tools covering
+  geometry creation, Grasshopper automation, layers, materials, rendering,
+  BIM (VisualARQ/Lands Design), AI 3D generation, and the UrbanAgent Studio
+  Pipeline (design language, AI renders, solar analysis, PDF report export).
+  Works with Claude Desktop, Claude Code, Cursor, Codex, and any MCP client.
 url: https://github.com/local/rhino_mcp
 keywords:
   - mcp
@@ -10,4 +15,8 @@ keywords:
   - automation
   - scripting
   - rhino
-platform: any
+  - grasshopper
+  - urban-design
+  - studio-pipeline
+  - claude
+  - llm
