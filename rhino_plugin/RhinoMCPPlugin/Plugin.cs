@@ -21,9 +21,12 @@ public sealed class RhinoMcpPlugin : PlugIn
             Server = new RhinoMcpServer(port, bindHost);
         }
         if (Server.IsRunning)
+        {
+            RhinoApp.WriteLine($"Rhino MCP already listening on {Server.BindAddress}:{Server.Port}");
             return true;
+        }
         Server.Start();
-        RhinoApp.WriteLine($"Rhino MCP server started on {Server.BindAddress}:{Server.Port}");
+        RhinoApp.WriteLine($"Rhino MCP listening on {Server.BindAddress}:{Server.Port}");
         return true;
     }
 
@@ -36,7 +39,15 @@ public sealed class RhinoMcpPlugin : PlugIn
 
     protected override LoadReturnCode OnLoad(ref string errorMessage)
     {
-        RhinoApp.WriteLine("Rhino MCP plug-in loaded. Run MCPStart to start the socket server.");
+        try
+        {
+            StartServer();
+        }
+        catch (Exception ex)
+        {
+            // Non-fatal: log and let Rhino finish loading. User can retry with MCPStart.
+            RhinoApp.WriteLine($"Rhino MCP: auto-start failed ({ex.Message}). Run MCPStart manually.");
+        }
         return LoadReturnCode.Success;
     }
 

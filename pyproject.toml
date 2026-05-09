@@ -5,7 +5,23 @@ build-backend = "setuptools.build_meta"
 [project]
 name = "rhino-mcp"
 version = "0.4.0"
-description = "MCP server for Rhino 3D"
+description = "Control Rhino 3D from Claude, Cursor, Codex — 318 tools: geometry, Grasshopper, V-Ray, Enscape, BIM, AI generation"
+readme = "README.md"
+license = { text = "MIT" }
+authors = [{ name = "Rhino MCP Contributors" }]
+keywords = ["rhino", "grasshopper", "mcp", "model-context-protocol", "3d", "cad", "ai", "claude", "automation"]
+classifiers = [
+    "Development Status :: 4 - Beta",
+    "Intended Audience :: Developers",
+    "Topic :: Scientific/Engineering :: Visualization",
+    "Topic :: Multimedia :: Graphics :: 3D Modeling",
+    "License :: OSI Approved :: MIT License",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
+]
 requires-python = ">=3.10"
 dependencies = [
     "mcp[cli]>=1.2.0",
@@ -21,6 +37,12 @@ dependencies = [
     "python-docx>=1.1.0",
     "cairosvg>=2.7.0",
 ]
+
+[project.urls]
+Homepage = "https://github.com/hov172/rhino_mcp"
+Repository = "https://github.com/hov172/rhino_mcp"
+"Bug Tracker" = "https://github.com/hov172/rhino_mcp/issues"
+Changelog = "https://github.com/hov172/rhino_mcp/releases"
 
 [project.scripts]
 rhino-mcp = "rhmcp:main"

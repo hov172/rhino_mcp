@@ -9,6 +9,7 @@ import os
 from typing import Any
 
 from rhmcp.tools_helpers import plugin_client, rhinocode
+from rhmcp.tools_helpers.errors import normalize
 
 BACKEND_AUTO = "auto"
 BACKEND_RHINOCODE = "rhinocode"
@@ -54,10 +55,15 @@ def list_instances() -> dict[str, Any]:
 def plugin_result(command_type: str, params: dict[str, Any] | None = None) -> dict[str, Any]:
     response = plugin_client.send_command(command_type, params)
     if response.get("status") == "error":
-        return {"ok": False, "backend": BACKEND_PLUGIN, **response}
+        return normalize({"ok": False, "backend": BACKEND_PLUGIN, **response})
     if "result" in response:
-        return {"ok": True, "backend": BACKEND_PLUGIN, "result": response.get("result"), "raw": response}
-    return {"ok": True, "backend": BACKEND_PLUGIN, "result": response, "raw": response}
+        out = {"ok": True, "backend": BACKEND_PLUGIN, "result": response.get("result"), "raw": response}
+        # Promote script_result from nested result when present.
+        inner = response.get("result") or {}
+        if isinstance(inner, dict) and "script_result" in response:
+            out["script_result"] = response["script_result"]
+        return normalize(out)
+    return normalize({"ok": True, "backend": BACKEND_PLUGIN, "result": response, "raw": response})
 
 
 _RESULT_SENTINEL = "__MCP_RESULT__:"
@@ -143,11 +149,11 @@ def run_plugin_or_python(
             return plugin_result(command_type, params)
         except OSError as ex:
             if mode == BACKEND_PLUGIN:
-                return {"ok": False, "backend": BACKEND_PLUGIN, "message": str(ex)}
+                return normalize({"ok": False, "backend": BACKEND_PLUGIN, "error": str(ex), "error_code": "SOCKET_UNAVAILABLE"})
     if mode == BACKEND_PLUGIN:
-        return {"ok": False, "backend": BACKEND_PLUGIN, "message": "Plug-in backend unavailable."}
+        return normalize({"ok": False, "backend": BACKEND_PLUGIN, "error": "Plug-in backend unavailable.", "error_code": "SOCKET_UNAVAILABLE"})
     result = rhinocode.execute_python(python_code, rhino_id=rhino_id)
-    return {"backend": BACKEND_RHINOCODE, **result}
+    return normalize({"backend": BACKEND_RHINOCODE, **result})
 
 
 def run_plugin_or_csharp(
@@ -163,11 +169,11 @@ def run_plugin_or_csharp(
             return plugin_result(command_type, params)
         except OSError as ex:
             if mode == BACKEND_PLUGIN:
-                return {"ok": False, "backend": BACKEND_PLUGIN, "message": str(ex)}
+                return normalize({"ok": False, "backend": BACKEND_PLUGIN, "error": str(ex), "error_code": "SOCKET_UNAVAILABLE"})
     if mode == BACKEND_PLUGIN:
-        return {"ok": False, "backend": BACKEND_PLUGIN, "message": "Plug-in backend unavailable."}
+        return normalize({"ok": False, "backend": BACKEND_PLUGIN, "error": "Plug-in backend unavailable.", "error_code": "SOCKET_UNAVAILABLE"})
     result = rhinocode.execute_script(csharp_code, ".cs", rhino_id=rhino_id)
-    return {"backend": BACKEND_RHINOCODE, **result}
+    return normalize({"backend": BACKEND_RHINOCODE, **result})
 
 
 def run_command(command: str, echo: bool = False, rhino_id: str | None = None, backend_name: str | None = None) -> dict[str, Any]:
@@ -178,9 +184,9 @@ def run_command(command: str, echo: bool = False, rhino_id: str | None = None, b
     mode = preferred_backend(backend_name)
     if mode in {BACKEND_AUTO, BACKEND_PLUGIN}:
         try:
-            return plugin_result("run_command", {"command": command, "echo": echo}, rhino_id=rhino_id)
+            return plugin_result("run_command", {"command": command, "echo": echo})
         except OSError:
             if mode == BACKEND_PLUGIN:
-                return {"ok": False, "backend": BACKEND_PLUGIN, "message": "Plugin socket unavailable."}
+                return normalize({"ok": False, "backend": BACKEND_PLUGIN, "error": "Plugin socket unavailable.", "error_code": "SOCKET_UNAVAILABLE"})
     result = rhinocode.run_command(command, rhino_id=rhino_id)
-    return {"backend": BACKEND_RHINOCODE, **result}
+    return normalize({"backend": BACKEND_RHINOCODE, **result})

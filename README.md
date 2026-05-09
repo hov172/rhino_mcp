@@ -39,7 +39,7 @@ Control Rhino 3D from Claude, Cursor, Codex, and any other MCP-capable AI tool. 
   - [Manual Installation](#manual-installation)
   - [File-based Installation](#file-based-installation)
   - [Checking Plugin Status](#checking-plugin-status)
-- [All 318 Tools](#all-318-tools)
+- [All 319 Tools](#all-319-tools)
   - [Plugin Management](#plugin-management)
   - [Grasshopper — Canvas](#grasshopper--canvas)
   - [Grasshopper — Parameters](#grasshopper--parameters)
@@ -170,18 +170,15 @@ The `command` + `args` lines are literally the shell command Claude Desktop runs
 
 > **Minimum required:** only `RHINO_MCP_BACKEND`, `RHINO_MCP_HOST`, and `RHINO_MCP_PORT` are needed for basic Rhino tools. Add `ANTHROPIC_API_KEY` for design language generation and `FAL_KEY` for AI renders. Leave others blank or omit them.
 
-#### Step 4 — Start Rhino and activate the plugin
+#### Step 4 — Start Rhino
 
 1. Open Rhino 3D.
-2. In the Rhino command line, type `MCPStart` and press Enter.
-3. You should see: `RhinoMCP: Listening on 127.0.0.1:1999`
-
-> **Tip:** Add `MCPStart` to Rhino's startup commands so it activates automatically:  
-> *Rhino Options → General → Command Lists → startup commands*
+2. The plugin starts its socket server automatically — you should see `Rhino MCP listening on 127.0.0.1:1999` in the command history.
+3. If the auto-start message doesn't appear, type `MCPStart` manually. Use `MCPStatus` to verify at any time.
 
 #### Step 5 — Restart Claude Desktop and start using it
 
-Fully quit Claude Desktop (don't just close the window) and reopen it. Claude Desktop reads the config on launch, spawns the MCP server in the background, and the 318 Rhino tools become available automatically.
+Fully quit Claude Desktop (don't just close the window) and reopen it. Claude Desktop reads the config on launch, spawns the MCP server in the background, and the 319 Rhino tools become available automatically.
 
 Test it by typing in Claude:
 
@@ -266,11 +263,11 @@ No `command`, no `args`, no `env` — the API keys were set when you ran the con
 
 #### Step 4 — Start Rhino and activate the plugin
 
-Same as Path A Step 4. Type `MCPStart` in Rhino and confirm it shows `Listening on 127.0.0.1:1999`.
+Same as Path A Step 4. Open Rhino — the plugin auto-starts and prints `Rhino MCP listening on 127.0.0.1:1999`. Run `MCPStatus` to confirm.
 
 #### Step 5 — Restart Claude Desktop and start using it
 
-Fully quit and reopen Claude Desktop. It connects to the running container and the 318 tools appear.
+Fully quit and reopen Claude Desktop. It connects to the running container and the 319 tools appear.
 
 **Connection flow:**
 ```
@@ -1287,7 +1284,7 @@ You can also call `check_plugin_loaded(plugin_name="V-Ray")` directly to test wh
 
 ---
 
-## All 318 Tools
+## All 319 Tools
 
 ---
 
@@ -1681,6 +1678,7 @@ Read external design files — floor plans, specifications, spreadsheets, and re
 | `execute_rhino_csharp` | Run arbitrary C# code inside Rhino via Roslyn scripting. Returns stdout output or document changes. Requires RhinoCode C# support (Rhino 8). |
 | `get_rhino_commands` | List all available Rhino command names, optionally filtered by substring (`filter="circle"`). `loaded_only=true` (default) limits to loaded plugins. Call this before `run_rhino_command` to discover exact spellings. |
 | `run_rhino_command` | Execute a Rhino command macro string (e.g. `_Box 0,0,0 1,1,1`). `echo=true` echoes the command to Rhino's history. Returns `output` with captured command-window text so the AI can read results. Requires `MCPStart` in Rhino. |
+| `list_tool_categories` | **Start here for complex tasks.** Returns all 319 tool categories with counts. Use `include_tool_names=true` to list every tool name per category without loading all 319 descriptions into context. |
 | `search_rhino_docs` | Full-text search of bundled Rhino scripting notes. |
 | `get_rhinoscript_docs` | Look up RhinoScriptSyntax module-level documentation. Pass a module name (`"curve"`, `"surface"`, `"object"`, etc.) to list its functions. |
 | `search_rhinoscript_functions` | Search RhinoScriptSyntax function reference by name or keyword. **Always call this before writing Python scripts** to avoid hallucinated function names. |
