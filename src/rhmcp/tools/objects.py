@@ -10,6 +10,7 @@ from mcp.server.fastmcp import FastMCP
 from mcp.types import ToolAnnotations
 
 from rhmcp.tools_helpers import backend as rhino
+from rhmcp.tools_helpers import validate
 
 
 def register(mcp: FastMCP) -> None:
@@ -57,6 +58,10 @@ def register(mcp: FastMCP) -> None:
         Pass ``object_id`` to look up by GUID, or ``name`` to look up by exact
         object name (returns the first match when names are not unique).
         """
+        if object_id is not None:
+            err = validate.guid(object_id, "object_id")
+            if err:
+                return err
         payload = {"object_id": object_id, "name": name}
         code = "__mcp_object_info = {!r}\n{}".format(payload, _OBJECT_INFO_SCRIPT)
         return rhino.execute_python(code, rhino_id=rhino_id)
@@ -120,6 +125,26 @@ def register(mcp: FastMCP) -> None:
         """
         Move, rotate, or scale objects by ids or the current selection.
         """
+        if ids is not None:
+            err = validate.guid_list(ids, "ids")
+            if err:
+                return err
+        if move is not None:
+            err = validate.coordinate(move, "move")
+            if err:
+                return err
+        if rotate_axis is not None:
+            err = validate.coordinate(rotate_axis, "rotate_axis")
+            if err:
+                return err
+        if rotate_center is not None:
+            err = validate.coordinate(rotate_center, "rotate_center")
+            if err:
+                return err
+        if scale_origin is not None:
+            err = validate.coordinate(scale_origin, "scale_origin")
+            if err:
+                return err
         payload = {
             "ids": ids,
             "selected": selected,
@@ -152,6 +177,14 @@ def register(mcp: FastMCP) -> None:
         When ``apply_to_all`` is ``True``, the tool targets ALL objects in the
         document regardless of ``ids`` or ``selected``.
         """
+        if ids is not None:
+            err = validate.guid_list(ids, "ids")
+            if err:
+                return err
+        if color is not None:
+            err = validate.color(color, "color")
+            if err:
+                return err
         payload = {"ids": ids, "selected": selected, "apply_to_all": apply_to_all, "name": name, "layer": layer, "color": color, "visible": visible}
         code = "__mcp_attrs = {!r}\n{}".format(payload, _ATTR_SCRIPT)
         return rhino.execute_python(code, rhino_id=rhino_id)
@@ -169,6 +202,10 @@ def register(mcp: FastMCP) -> None:
         ``delete_all=True`` clears the entire document regardless of ``ids`` or
         ``selected`` — use with care.
         """
+        if ids is not None:
+            err = validate.guid_list(ids, "ids")
+            if err:
+                return err
         payload = {"ids": ids, "selected": selected, "delete_all": delete_all}
         code = "__mcp_delete = {!r}\n{}".format(payload, _DELETE_SCRIPT)
         return rhino.execute_python(code, rhino_id=rhino_id)

@@ -1249,5 +1249,322 @@ class TestTelemetry(unittest.TestCase):
 import os  # noqa: E402 — needed for TestTelemetry
 
 
+# ---------------------------------------------------------------------------
+# validate.py tests
+# ---------------------------------------------------------------------------
+
+class TestValidateGuid(unittest.TestCase):
+    def test_valid_guid(self) -> None:
+        from rhmcp.tools_helpers import validate
+        self.assertIsNone(validate.guid("550e8400-e29b-41d4-a716-446655440000"))
+
+    def test_valid_guid_uppercase(self) -> None:
+        from rhmcp.tools_helpers import validate
+        self.assertIsNone(validate.guid("550E8400-E29B-41D4-A716-446655440000"))
+
+    def test_invalid_guid_too_short(self) -> None:
+        from rhmcp.tools_helpers import validate
+        err = validate.guid("not-a-guid")
+        self.assertIsNotNone(err)
+        self.assertFalse(err["ok"])
+        self.assertEqual(err["error_code"], "INVALID_GUID")
+
+    def test_invalid_guid_none(self) -> None:
+        from rhmcp.tools_helpers import validate
+        err = validate.guid(None)
+        self.assertIsNotNone(err)
+        self.assertFalse(err["ok"])
+
+    def test_invalid_guid_integer(self) -> None:
+        from rhmcp.tools_helpers import validate
+        err = validate.guid(12345)
+        self.assertIsNotNone(err)
+        self.assertEqual(err["error_code"], "INVALID_GUID")
+
+    def test_custom_field_name_in_message(self) -> None:
+        from rhmcp.tools_helpers import validate
+        err = validate.guid("bad", field="object_id")
+        self.assertIn("object_id", err["error"])
+
+
+class TestValidateColor(unittest.TestCase):
+    def test_valid_rgb(self) -> None:
+        from rhmcp.tools_helpers import validate
+        self.assertIsNone(validate.color([255, 128, 0]))
+
+    def test_valid_rgba(self) -> None:
+        from rhmcp.tools_helpers import validate
+        self.assertIsNone(validate.color([0, 0, 0, 255]))
+
+    def test_none_is_valid(self) -> None:
+        from rhmcp.tools_helpers import validate
+        self.assertIsNone(validate.color(None))
+
+    def test_too_few_elements(self) -> None:
+        from rhmcp.tools_helpers import validate
+        err = validate.color([255, 0])
+        self.assertIsNotNone(err)
+        self.assertEqual(err["error_code"], "INVALID_COLOR")
+
+    def test_too_many_elements(self) -> None:
+        from rhmcp.tools_helpers import validate
+        err = validate.color([255, 0, 0, 255, 128])
+        self.assertIsNotNone(err)
+        self.assertEqual(err["error_code"], "INVALID_COLOR")
+
+    def test_out_of_range_value(self) -> None:
+        from rhmcp.tools_helpers import validate
+        err = validate.color([256, 0, 0])
+        self.assertIsNotNone(err)
+        self.assertEqual(err["error_code"], "INVALID_COLOR")
+
+    def test_negative_value(self) -> None:
+        from rhmcp.tools_helpers import validate
+        err = validate.color([-1, 0, 0])
+        self.assertIsNotNone(err)
+        self.assertEqual(err["error_code"], "INVALID_COLOR")
+
+    def test_float_values_rejected(self) -> None:
+        from rhmcp.tools_helpers import validate
+        err = validate.color([1.0, 0.0, 0.0])
+        self.assertIsNotNone(err)
+        self.assertEqual(err["error_code"], "INVALID_COLOR")
+
+
+class TestValidateCoordinate(unittest.TestCase):
+    def test_valid_int_coords(self) -> None:
+        from rhmcp.tools_helpers import validate
+        self.assertIsNone(validate.coordinate([0, 0, 0]))
+
+    def test_valid_float_coords(self) -> None:
+        from rhmcp.tools_helpers import validate
+        self.assertIsNone(validate.coordinate([1.5, -2.0, 0.0]))
+
+    def test_wrong_length_2d(self) -> None:
+        from rhmcp.tools_helpers import validate
+        err = validate.coordinate([0, 0])
+        self.assertIsNotNone(err)
+        self.assertEqual(err["error_code"], "INVALID_COORDINATE")
+
+    def test_wrong_length_4d(self) -> None:
+        from rhmcp.tools_helpers import validate
+        err = validate.coordinate([0, 0, 0, 0])
+        self.assertIsNotNone(err)
+        self.assertEqual(err["error_code"], "INVALID_COORDINATE")
+
+    def test_string_elements(self) -> None:
+        from rhmcp.tools_helpers import validate
+        err = validate.coordinate(["x", "y", "z"])
+        self.assertIsNotNone(err)
+        self.assertEqual(err["error_code"], "INVALID_COORDINATE")
+
+    def test_not_a_list(self) -> None:
+        from rhmcp.tools_helpers import validate
+        err = validate.coordinate("0,0,0")
+        self.assertIsNotNone(err)
+        self.assertEqual(err["error_code"], "INVALID_COORDINATE")
+
+
+class TestValidateLayerName(unittest.TestCase):
+    def test_valid_name(self) -> None:
+        from rhmcp.tools_helpers import validate
+        self.assertIsNone(validate.layer_name("Default"))
+
+    def test_empty_string(self) -> None:
+        from rhmcp.tools_helpers import validate
+        err = validate.layer_name("")
+        self.assertIsNotNone(err)
+        self.assertEqual(err["error_code"], "INVALID_LAYER_NAME")
+
+    def test_whitespace_only(self) -> None:
+        from rhmcp.tools_helpers import validate
+        err = validate.layer_name("   ")
+        self.assertIsNotNone(err)
+        self.assertEqual(err["error_code"], "INVALID_LAYER_NAME")
+
+    def test_none(self) -> None:
+        from rhmcp.tools_helpers import validate
+        err = validate.layer_name(None)
+        self.assertIsNotNone(err)
+        self.assertEqual(err["error_code"], "INVALID_LAYER_NAME")
+
+
+class TestValidatePositive(unittest.TestCase):
+    def test_valid(self) -> None:
+        from rhmcp.tools_helpers import validate
+        self.assertIsNone(validate.positive(1.0))
+        self.assertIsNone(validate.positive(0.001))
+
+    def test_zero_rejected(self) -> None:
+        from rhmcp.tools_helpers import validate
+        err = validate.positive(0)
+        self.assertIsNotNone(err)
+        self.assertEqual(err["error_code"], "INVALID_VALUE")
+
+    def test_negative_rejected(self) -> None:
+        from rhmcp.tools_helpers import validate
+        err = validate.positive(-5)
+        self.assertIsNotNone(err)
+        self.assertEqual(err["error_code"], "INVALID_VALUE")
+
+
+class TestValidateGuidList(unittest.TestCase):
+    def test_valid_list(self) -> None:
+        from rhmcp.tools_helpers import validate
+        self.assertIsNone(validate.guid_list(["550e8400-e29b-41d4-a716-446655440000"]))
+
+    def test_empty_list(self) -> None:
+        from rhmcp.tools_helpers import validate
+        err = validate.guid_list([])
+        self.assertIsNotNone(err)
+        self.assertEqual(err["error_code"], "INVALID_GUID_LIST")
+
+    def test_invalid_item(self) -> None:
+        from rhmcp.tools_helpers import validate
+        err = validate.guid_list(["550e8400-e29b-41d4-a716-446655440000", "not-a-guid"])
+        self.assertIsNotNone(err)
+        self.assertEqual(err["error_code"], "INVALID_GUID")
+        self.assertIn("[1]", err["error"])
+
+
+# ---------------------------------------------------------------------------
+# plugin_client retry tests
+# ---------------------------------------------------------------------------
+
+class TestPluginClientRetry(unittest.TestCase):
+    def test_succeeds_on_first_attempt(self) -> None:
+        from rhmcp.tools_helpers import plugin_client
+        good = {"status": "ok", "result": {}}
+        with patch.object(plugin_client, "_attempt", return_value=good) as mock_attempt:
+            result = plugin_client.send_command("ping", {}, retries=2)
+        self.assertEqual(result, good)
+        self.assertEqual(mock_attempt.call_count, 1)
+
+    def test_retries_on_oserror_then_succeeds(self) -> None:
+        from rhmcp.tools_helpers import plugin_client
+        good = {"status": "ok"}
+        with patch.object(plugin_client, "_attempt", side_effect=[OSError("refused"), good]) as mock_attempt:
+            with patch.object(plugin_client.time, "sleep"):
+                result = plugin_client.send_command("ping", {}, retries=2)
+        self.assertEqual(result, good)
+        self.assertEqual(mock_attempt.call_count, 2)
+
+    def test_raises_after_all_retries_exhausted(self) -> None:
+        from rhmcp.tools_helpers import plugin_client
+        with patch.object(plugin_client, "_attempt", side_effect=OSError("refused")):
+            with patch.object(plugin_client.time, "sleep"):
+                with self.assertRaises(OSError):
+                    plugin_client.send_command("ping", {}, retries=2)
+
+    def test_zero_retries_raises_immediately(self) -> None:
+        from rhmcp.tools_helpers import plugin_client
+        with patch.object(plugin_client, "_attempt", side_effect=OSError("refused")) as mock_attempt:
+            with self.assertRaises(OSError):
+                plugin_client.send_command("ping", {}, retries=0)
+        self.assertEqual(mock_attempt.call_count, 1)
+
+    def test_exponential_backoff_delays(self) -> None:
+        from rhmcp.tools_helpers import plugin_client
+        delays: list[float] = []
+        with patch.object(plugin_client, "_attempt", side_effect=[OSError(), OSError(), {"ok": True}]):
+            with patch.object(plugin_client.time, "sleep", side_effect=lambda d: delays.append(d)):
+                plugin_client.send_command("ping", {}, retries=2)
+        self.assertEqual(len(delays), 2)
+        self.assertAlmostEqual(delays[1], delays[0] * 2)
+
+
+# ---------------------------------------------------------------------------
+# objects.py validation integration tests
+# ---------------------------------------------------------------------------
+
+class TestObjectsValidation(unittest.TestCase):
+    @classmethod
+    def setUpClass(cls) -> None:
+        with patch("rhmcp.tools_helpers.backend.preferred_backend", return_value="rhinocode"):
+            cls.tools = _register_module("rhmcp.tools.objects")
+
+    def test_get_rhino_object_info_invalid_guid(self) -> None:
+        fn = self.tools["get_rhino_object_info"]
+        result = fn(object_id="not-a-guid")
+        self.assertFalse(result["ok"])
+        self.assertEqual(result["error_code"], "INVALID_GUID")
+
+    def test_get_rhino_object_info_no_id_allowed(self) -> None:
+        fn = self.tools["get_rhino_object_info"]
+        with patch("rhmcp.tools_helpers.backend.execute_python", return_value={"ok": True}):
+            result = fn(object_id=None, name="MyObj")
+        self.assertTrue(result.get("ok", True))
+
+    def test_delete_rhino_objects_invalid_guid_in_list(self) -> None:
+        fn = self.tools["delete_rhino_objects"]
+        result = fn(ids=["550e8400-e29b-41d4-a716-446655440000", "bad-guid"], selected=False)
+        self.assertFalse(result["ok"])
+        self.assertEqual(result["error_code"], "INVALID_GUID")
+
+    def test_transform_rhino_objects_invalid_move_vector(self) -> None:
+        fn = self.tools["transform_rhino_objects"]
+        result = fn(move=[1, 2])  # 2D instead of 3D
+        self.assertFalse(result["ok"])
+        self.assertEqual(result["error_code"], "INVALID_COORDINATE")
+
+    def test_edit_attributes_invalid_color(self) -> None:
+        fn = self.tools["edit_rhino_object_attributes"]
+        result = fn(color=[300, 0, 0])
+        self.assertFalse(result["ok"])
+        self.assertEqual(result["error_code"], "INVALID_COLOR")
+
+
+# ---------------------------------------------------------------------------
+# layers.py validation integration tests
+# ---------------------------------------------------------------------------
+
+class TestLayersValidation(unittest.TestCase):
+    @classmethod
+    def setUpClass(cls) -> None:
+        with patch("rhmcp.tools_helpers.backend.preferred_backend", return_value="rhinocode"):
+            cls.tools = _register_module("rhmcp.tools.layers")
+
+    def test_manage_layer_empty_name_rejected(self) -> None:
+        fn = self.tools["manage_rhino_layer"]
+        result = fn(action="create", name="")
+        self.assertFalse(result["ok"])
+        self.assertEqual(result["error_code"], "INVALID_LAYER_NAME")
+
+    def test_manage_layer_invalid_color(self) -> None:
+        fn = self.tools["manage_rhino_layer"]
+        result = fn(action="create", name="MyLayer", color=[255, 0])
+        self.assertFalse(result["ok"])
+        self.assertEqual(result["error_code"], "INVALID_COLOR")
+
+    def test_create_layer_invalid_color(self) -> None:
+        fn = self.tools["create_layer"]
+        result = fn(name="Test", color=[999, 0, 0])
+        self.assertFalse(result["ok"])
+        self.assertEqual(result["error_code"], "INVALID_COLOR")
+
+
+# ---------------------------------------------------------------------------
+# geometry.py validation integration tests
+# ---------------------------------------------------------------------------
+
+class TestGeometryValidation(unittest.TestCase):
+    @classmethod
+    def setUpClass(cls) -> None:
+        with patch("rhmcp.tools_helpers.backend.preferred_backend", return_value="rhinocode"):
+            cls.tools = _register_module("rhmcp.tools.geometry")
+
+    def test_create_rhino_geometry_invalid_color(self) -> None:
+        fn = self.tools["create_rhino_geometry"]
+        result = fn(geometry_type="sphere", params={"center": [0, 0, 0], "radius": 1}, color=[0, 0])
+        self.assertFalse(result["ok"])
+        self.assertEqual(result["error_code"], "INVALID_COLOR")
+
+    def test_create_rhino_geometry_valid_color_passes_through(self) -> None:
+        fn = self.tools["create_rhino_geometry"]
+        with patch("rhmcp.tools_helpers.backend.execute_python", return_value={"ok": True}):
+            result = fn(geometry_type="sphere", params={"center": [0, 0, 0], "radius": 1}, color=[255, 0, 0])
+        self.assertTrue(result.get("ok", True))
+
+
 if __name__ == "__main__":
     unittest.main()

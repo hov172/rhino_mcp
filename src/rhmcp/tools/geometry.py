@@ -11,6 +11,7 @@ from mcp.server.fastmcp import FastMCP
 from mcp.types import ToolAnnotations
 
 from rhmcp.tools_helpers import backend as rhino
+from rhmcp.tools_helpers import validate
 
 
 _GEOMETRY_SCRIPT = r'''
@@ -477,6 +478,10 @@ def register(mcp: FastMCP) -> None:
           ``u_degree=<int, default 3>``, ``v_degree=<int, default 3>``,
           ``u_closed=<bool>``, ``v_closed=<bool>``
         """
+        if color is not None:
+            err = validate.color(color, "color")
+            if err:
+                return err
         item = {
             "type": geometry_type,
             "params": params,

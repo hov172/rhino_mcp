@@ -10,6 +10,7 @@ from mcp.server.fastmcp import FastMCP
 from mcp.types import ToolAnnotations
 
 from rhmcp.tools_helpers import backend as rhino
+from rhmcp.tools_helpers import validate
 
 
 def register(mcp: FastMCP) -> None:
@@ -28,6 +29,14 @@ def register(mcp: FastMCP) -> None:
 
         ``action`` is one of: list, create, update, delete, current.
         """
+        if action in ("create", "update", "delete", "current") and name is not None:
+            err = validate.layer_name(name, "name")
+            if err:
+                return err
+        if color is not None:
+            err = validate.color(color, "color")
+            if err:
+                return err
         payload = {
             "action": action,
             "name": name,
@@ -51,6 +60,9 @@ def register(mcp: FastMCP) -> None:
         """
         Reference-compatible layer creation tool.
         """
+        err = validate.layer_name(name, "name") or (validate.color(color, "color") if color is not None else None)
+        if err:
+            return err
         params = {"name": name, "color": color, "visible": visible, "locked": locked, "current": current}
         plugin = _try_plugin("create_layer", {key: value for key, value in params.items() if value is not None})
         if plugin:
