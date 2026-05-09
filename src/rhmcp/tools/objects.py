@@ -173,6 +173,150 @@ def register(mcp: FastMCP) -> None:
         code = "__mcp_delete = {!r}\n{}".format(payload, _DELETE_SCRIPT)
         return rhino.execute_python(code, rhino_id=rhino_id)
 
+    @mcp.tool(annotations=ToolAnnotations(title="Select All Objects", destructiveHint=True))
+    def select_all_objects(rhino_id: str | None = None) -> dict[str, object]:
+        """
+        Select all objects in the document.
+        """
+        code = "__mcp_selop = 'all'\n" + _SEL_OPS_SCRIPT
+        return rhino.execute_python(code, rhino_id=rhino_id)
+
+    @mcp.tool(annotations=ToolAnnotations(title="Deselect All Objects", destructiveHint=True))
+    def deselect_all_objects(rhino_id: str | None = None) -> dict[str, object]:
+        """
+        Deselect all currently selected objects.
+        """
+        code = "__mcp_selop = 'none'\n" + _SEL_OPS_SCRIPT
+        return rhino.execute_python(code, rhino_id=rhino_id)
+
+    @mcp.tool(annotations=ToolAnnotations(title="Invert Selection", destructiveHint=True))
+    def invert_selection(rhino_id: str | None = None) -> dict[str, object]:
+        """
+        Invert the current selection — selected objects become deselected and
+        vice versa.
+        """
+        code = "__mcp_selop = 'invert'\n" + _SEL_OPS_SCRIPT
+        return rhino.execute_python(code, rhino_id=rhino_id)
+
+    @mcp.tool(annotations=ToolAnnotations(title="Select by Object Type", destructiveHint=True))
+    def select_by_type(
+        object_type: str,
+        rhino_id: str | None = None,
+    ) -> dict[str, object]:
+        """
+        Select all objects of a given type.
+
+        ``object_type``: ``point``, ``curve``, ``surface``, ``polysurface``,
+        ``mesh``, ``text``, ``annotation``, ``light``, or ``block``.
+        """
+        code = "__mcp_selop = {!r}\n".format({"op": "by_type", "type": object_type}) + _SEL_OPS_SCRIPT
+        return rhino.execute_python(code, rhino_id=rhino_id)
+
+    @mcp.tool(annotations=ToolAnnotations(title="Select by Layer", destructiveHint=True))
+    def select_by_layer(
+        layer_name: str,
+        rhino_id: str | None = None,
+    ) -> dict[str, object]:
+        """
+        Select all objects on a specific layer.
+        """
+        code = "__mcp_selop = {!r}\n".format({"op": "by_layer", "layer": layer_name}) + _SEL_OPS_SCRIPT
+        return rhino.execute_python(code, rhino_id=rhino_id)
+
+    @mcp.tool(annotations=ToolAnnotations(title="Select by Name", destructiveHint=True))
+    def select_by_name(
+        name: str,
+        rhino_id: str | None = None,
+    ) -> dict[str, object]:
+        """
+        Select all objects whose name matches ``name`` (exact match).
+        """
+        code = "__mcp_selop = {!r}\n".format({"op": "by_name", "name": name}) + _SEL_OPS_SCRIPT
+        return rhino.execute_python(code, rhino_id=rhino_id)
+
+    @mcp.tool(annotations=ToolAnnotations(title="Delete Selected Objects", destructiveHint=True))
+    def delete_selected_objects(rhino_id: str | None = None) -> dict[str, object]:
+        """
+        Delete all currently selected objects.
+        """
+        code = "__mcp_selop = 'delete_selected'\n" + _SEL_OPS_SCRIPT
+        return rhino.execute_python(code, rhino_id=rhino_id)
+
+    @mcp.tool(annotations=ToolAnnotations(title="Get Last Created Objects", readOnlyHint=True))
+    def get_last_created_objects(rhino_id: str | None = None) -> dict[str, object]:
+        """
+        Return the GUIDs of the most recently added objects in the document.
+        """
+        code = "__mcp_selop = 'last_created'\n" + _SEL_OPS_SCRIPT
+        return rhino.execute_python(code, rhino_id=rhino_id)
+
+
+_SEL_OPS_SCRIPT = r'''
+import rhinoscriptsyntax as rs
+import Rhino
+
+op = __mcp_selop
+
+_TYPE_MAP = {
+    "point": rs.filter.point,
+    "curve": rs.filter.curve,
+    "surface": rs.filter.surface,
+    "polysurface": rs.filter.polysurface,
+    "mesh": rs.filter.mesh,
+    "text": rs.filter.annotation,
+    "annotation": rs.filter.annotation,
+    "light": rs.filter.light,
+    "block": rs.filter.instance,
+}
+
+if op == "all":
+    ids = rs.AllObjects(select=True) or []
+    result = {"selected": [str(i) for i in ids], "count": len(ids)}
+
+elif op == "none":
+    rs.UnselectAllObjects()
+    result = {"ok": True}
+
+elif op == "invert":
+    all_ids  = set(str(o) for o in (rs.AllObjects() or []))
+    sel_ids  = set(str(o) for o in (rs.SelectedObjects() or []))
+    rs.UnselectAllObjects()
+    to_sel = [o for o in (rs.AllObjects() or []) if str(o) not in sel_ids]
+    if to_sel: rs.SelectObjects(to_sel)
+    result = {"selected": [str(o) for o in to_sel], "count": len(to_sel)}
+
+elif isinstance(op, dict) and op.get("op") == "by_type":
+    t    = op["type"].lower()
+    filt = _TYPE_MAP.get(t)
+    if filt:
+        ids = rs.ObjectsByType(filt, select=True) or []
+        result = {"selected": [str(i) for i in ids], "count": len(ids)}
+    else:
+        result = {"ok": False, "error": "Unknown type: {}".format(op["type"])}
+
+elif isinstance(op, dict) and op.get("op") == "by_layer":
+    ids = rs.ObjectsByLayer(op["layer"], select=True) or []
+    result = {"selected": [str(i) for i in ids], "count": len(ids)}
+
+elif isinstance(op, dict) and op.get("op") == "by_name":
+    ids = rs.ObjectsByName(op["name"], select=True) or []
+    result = {"selected": [str(i) for i in ids], "count": len(ids)}
+
+elif op == "delete_selected":
+    ids = rs.SelectedObjects() or []
+    rs.DeleteObjects(ids)
+    result = {"deleted": [str(i) for i in ids], "count": len(ids)}
+
+elif op == "last_created":
+    doc  = Rhino.RhinoDoc.ActiveDoc
+    objs = [o for o in doc.Objects if not o.IsDeleted]
+    if objs:
+        latest = max(objs, key=lambda o: o.Id.ToString())
+        result = {"ids": [str(latest.Id)]}
+    else:
+        result = {"ids": []}
+'''
+
 
 _COMMON = r'''
 import math

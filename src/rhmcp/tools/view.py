@@ -84,6 +84,169 @@ def register(mcp: FastMCP) -> None:
         # Return metadata first, then the visual image so the AI can see the scene.
         return [meta, Image(data=img_bytes, format="png")]
 
+    @mcp.tool(annotations=ToolAnnotations(title="Zoom Extents", destructiveHint=True))
+    def zoom_extents(
+        all_views: bool = False,
+        rhino_id: str | None = None,
+    ) -> dict[str, object]:
+        """
+        Zoom the active viewport to show all objects.
+        ``all_views=True`` zooms all open viewports simultaneously.
+        """
+        code = "__mcp_zoom_all = {!r}\n{}".format(all_views, _VIEW_OPS_SCRIPT)
+        code = "__mcp_view_op = 'zoom_extents'\n" + code
+        payload = {"op": "zoom_extents", "all_views": all_views}
+        code = "__mcp_view_op = {!r}\n{}".format(payload, _VIEW_OPS_SCRIPT)
+        return rhino.execute_python(code, rhino_id=rhino_id)
+
+    @mcp.tool(annotations=ToolAnnotations(title="Zoom Selected", destructiveHint=True))
+    def zoom_selected(
+        rhino_id: str | None = None,
+    ) -> dict[str, object]:
+        """
+        Zoom the active viewport to fit the current selection.
+        """
+        payload = {"op": "zoom_selected"}
+        code = "__mcp_view_op = {!r}\n{}".format(payload, _VIEW_OPS_SCRIPT)
+        return rhino.execute_python(code, rhino_id=rhino_id)
+
+    @mcp.tool(annotations=ToolAnnotations(title="Get View Info", readOnlyHint=True))
+    def get_view_info(
+        viewport: str | None = None,
+        rhino_id: str | None = None,
+    ) -> dict[str, object]:
+        """
+        Return camera position, target, lens length, and display mode for a viewport.
+        Omit ``viewport`` to query the active viewport.
+        """
+        payload = {"op": "get_info", "viewport": viewport}
+        code = "__mcp_view_op = {!r}\n{}".format(payload, _VIEW_OPS_SCRIPT)
+        return rhino.execute_python(code, rhino_id=rhino_id)
+
+    @mcp.tool(annotations=ToolAnnotations(title="Set Display Mode", destructiveHint=True))
+    def set_display_mode(
+        mode: str,
+        viewport: str | None = None,
+        rhino_id: str | None = None,
+    ) -> dict[str, object]:
+        """
+        Set the display mode of a viewport.
+
+        Common modes: ``Wireframe``, ``Shaded``, ``Rendered``, ``Ghosted``,
+        ``XRay``, ``Technical``, ``Artistic``, ``Pen``.
+        Omit ``viewport`` to apply to the active viewport.
+        """
+        payload = {"op": "set_display_mode", "mode": mode, "viewport": viewport}
+        code = "__mcp_view_op = {!r}\n{}".format(payload, _VIEW_OPS_SCRIPT)
+        return rhino.execute_python(code, rhino_id=rhino_id)
+
+    @mcp.tool(annotations=ToolAnnotations(title="Add Named View", destructiveHint=True))
+    def add_named_view(
+        name: str,
+        viewport: str | None = None,
+        rhino_id: str | None = None,
+    ) -> dict[str, object]:
+        """
+        Save the current viewport state as a named view.
+        """
+        payload = {"op": "add_named_view", "name": name, "viewport": viewport}
+        code = "__mcp_view_op = {!r}\n{}".format(payload, _VIEW_OPS_SCRIPT)
+        return rhino.execute_python(code, rhino_id=rhino_id)
+
+    @mcp.tool(annotations=ToolAnnotations(title="Restore Named View", destructiveHint=True))
+    def restore_named_view(
+        name: str,
+        viewport: str | None = None,
+        rhino_id: str | None = None,
+    ) -> dict[str, object]:
+        """
+        Restore a previously saved named view.
+        """
+        payload = {"op": "restore_named_view", "name": name, "viewport": viewport}
+        code = "__mcp_view_op = {!r}\n{}".format(payload, _VIEW_OPS_SCRIPT)
+        return rhino.execute_python(code, rhino_id=rhino_id)
+
+
+_VIEW_OPS_SCRIPT = r'''
+import rhinoscriptsyntax as rs
+import Rhino
+
+data = __mcp_view_op
+op   = data["op"]
+
+def _get_vp(name):
+    doc = Rhino.RhinoDoc.ActiveDoc
+    if name:
+        for v in doc.Views:
+            if v.ActiveViewport.Name == name:
+                return v
+    return doc.Views.ActiveView
+
+if op == "zoom_extents":
+    if data.get("all_views"):
+        rs.ZoomExtents(None, True)
+    else:
+        rs.ZoomExtents()
+    result = {"ok": True}
+
+elif op == "zoom_selected":
+    rs.ZoomSelected()
+    result = {"ok": True}
+
+elif op == "get_info":
+    vp = _get_vp(data.get("viewport"))
+    avp = vp.ActiveViewport if vp else None
+    if avp:
+        cam    = avp.CameraLocation
+        target = avp.CameraTarget
+        result = {
+            "name": avp.Name,
+            "camera": [cam.X, cam.Y, cam.Z],
+            "target": [target.X, target.Y, target.Z],
+            "lens_length": avp.Camera35mmLensLength,
+            "display_mode": str(avp.DisplayMode.EnglishName),
+            "projection": str(avp.IsParallelProjection and "Parallel" or "Perspective"),
+        }
+    else:
+        result = {"ok": False, "error": "Viewport not found"}
+
+elif op == "set_display_mode":
+    vp = _get_vp(data.get("viewport"))
+    if vp:
+        mode_id = Rhino.Display.DisplayModeDescription.FindByName(data["mode"])
+        if mode_id:
+            vp.ActiveViewport.DisplayMode = mode_id
+            vp.Redraw()
+            result = {"ok": True, "mode": data["mode"]}
+        else:
+            result = {"ok": False, "error": "Unknown display mode: {}".format(data["mode"])}
+    else:
+        result = {"ok": False, "error": "Viewport not found"}
+
+elif op == "add_named_view":
+    vp = _get_vp(data.get("viewport"))
+    if vp:
+        doc = Rhino.RhinoDoc.ActiveDoc
+        idx = doc.NamedViews.Add(data["name"], vp.ActiveViewport.Id)
+        result = {"ok": idx >= 0, "name": data["name"], "index": idx}
+    else:
+        result = {"ok": False, "error": "Viewport not found"}
+
+elif op == "restore_named_view":
+    doc = Rhino.RhinoDoc.ActiveDoc
+    idx = doc.NamedViews.FindByName(data["name"])
+    if idx >= 0:
+        vp = _get_vp(data.get("viewport"))
+        if vp:
+            doc.NamedViews.Restore(idx, vp.ActiveViewport)
+            vp.Redraw()
+            result = {"ok": True, "name": data["name"]}
+        else:
+            result = {"ok": False, "error": "Viewport not found"}
+    else:
+        result = {"ok": False, "error": "Named view not found: {}".format(data["name"])}
+'''
+
 
 _SET_VIEW_SCRIPT = r'''
 import Rhino

@@ -136,6 +136,72 @@ def register(mcp: FastMCP) -> None:
         return rhino.execute_python(code, rhino_id=rhino_id)
 
 
+    @mcp.tool(annotations=ToolAnnotations(title="Set Material Color", destructiveHint=True))
+    def set_material_color(
+        object_id: str,
+        color: list[int],
+        rhino_id: str | None = None,
+    ) -> dict[str, object]:
+        """
+        Set the diffuse color of an object's material using RGB [r, g, b] (0-255).
+
+        Creates a new material if the object uses the default material.
+        """
+        payload = {"op": "set_color", "object_id": object_id, "color": color}
+        code = "__mcp_mat_op = {!r}\n{}".format(payload, _MAT_OPS_SCRIPT)
+        return rhino.execute_python(code, rhino_id=rhino_id)
+
+    @mcp.tool(annotations=ToolAnnotations(title="Set Material Transparency", destructiveHint=True))
+    def set_material_transparency(
+        object_id: str,
+        transparency: float,
+        rhino_id: str | None = None,
+    ) -> dict[str, object]:
+        """
+        Set the transparency of an object's material.
+
+        ``transparency``: 0.0 = fully opaque, 1.0 = fully transparent.
+        """
+        payload = {"op": "set_transparency", "object_id": object_id,
+                   "transparency": max(0.0, min(1.0, float(transparency)))}
+        code = "__mcp_mat_op = {!r}\n{}".format(payload, _MAT_OPS_SCRIPT)
+        return rhino.execute_python(code, rhino_id=rhino_id)
+
+    @mcp.tool(annotations=ToolAnnotations(title="Set Material Shine", destructiveHint=True))
+    def set_material_shine(
+        object_id: str,
+        shine: float,
+        rhino_id: str | None = None,
+    ) -> dict[str, object]:
+        """
+        Set the shininess of an object's material.
+
+        ``shine``: 0.0 = matte, 255.0 = glossy.
+        """
+        payload = {"op": "set_shine", "object_id": object_id,
+                   "shine": max(0.0, min(255.0, float(shine)))}
+        code = "__mcp_mat_op = {!r}\n{}".format(payload, _MAT_OPS_SCRIPT)
+        return rhino.execute_python(code, rhino_id=rhino_id)
+
+    @mcp.tool(annotations=ToolAnnotations(title="Add Material to Layer", destructiveHint=True))
+    def add_material_to_layer(
+        layer_name: str,
+        color: list[int] | None = None,
+        transparency: float = 0.0,
+        rhino_id: str | None = None,
+    ) -> dict[str, object]:
+        """
+        Create a material and assign it to a layer.
+
+        ``color`` is an RGB list [r, g, b] (0-255). All objects on the layer
+        that use layer material will inherit this appearance.
+        """
+        payload = {"op": "layer_material", "layer_name": layer_name,
+                   "color": color, "transparency": transparency}
+        code = "__mcp_mat_op = {!r}\n{}".format(payload, _MAT_OPS_SCRIPT)
+        return rhino.execute_python(code, rhino_id=rhino_id)
+
+
 def _try_plugin(command_type: str, params: dict[str, object]) -> dict[str, object] | None:
     if rhino.preferred_backend() not in {"auto", "plugin"}:
         return None
@@ -251,4 +317,71 @@ if mat_index is None:
 mat_index = int(mat_index)
 ok = doc.Materials.Delete(mat_index, True)
 result = {"deleted": bool(ok), "material_index": mat_index}
+'''
+
+_MAT_OPS_SCRIPT = r'''
+import rhinoscriptsyntax as rs
+import Rhino
+import System
+
+data = __mcp_mat_op
+op   = data["op"]
+
+def _get_or_create_material(oid):
+    """Return the material index for oid, creating one if needed."""
+    doc = Rhino.RhinoDoc.ActiveDoc
+    obj = doc.Objects.FindId(System.Guid(str(oid)))
+    if obj is None:
+        raise ValueError("Object not found: {}".format(oid))
+    if obj.Attributes.MaterialSource == Rhino.DocObjects.ObjectMaterialSource.MaterialFromObject:
+        return obj, obj.Attributes.MaterialIndex
+    # Duplicate default material to object-level
+    mat  = Rhino.DocObjects.Material()
+    idx  = doc.Materials.Add(mat)
+    obj.Attributes.MaterialIndex = idx
+    obj.Attributes.MaterialSource = Rhino.DocObjects.ObjectMaterialSource.MaterialFromObject
+    obj.CommitChanges()
+    return obj, idx
+
+if op == "set_color":
+    doc = Rhino.RhinoDoc.ActiveDoc
+    obj, idx = _get_or_create_material(data["object_id"])
+    mat = doc.Materials[idx]
+    c = data["color"]
+    mat.DiffuseColor = System.Drawing.Color.FromArgb(int(c[0]), int(c[1]), int(c[2]))
+    doc.Materials.Modify(mat, idx, True)
+    result = {"ok": True, "material_index": idx, "color": c}
+
+elif op == "set_transparency":
+    doc = Rhino.RhinoDoc.ActiveDoc
+    obj, idx = _get_or_create_material(data["object_id"])
+    mat = doc.Materials[idx]
+    mat.Transparency = float(data["transparency"])
+    doc.Materials.Modify(mat, idx, True)
+    result = {"ok": True, "material_index": idx, "transparency": data["transparency"]}
+
+elif op == "set_shine":
+    doc = Rhino.RhinoDoc.ActiveDoc
+    obj, idx = _get_or_create_material(data["object_id"])
+    mat = doc.Materials[idx]
+    mat.Shine = float(data["shine"])
+    doc.Materials.Modify(mat, idx, True)
+    result = {"ok": True, "material_index": idx, "shine": data["shine"]}
+
+elif op == "layer_material":
+    doc   = Rhino.RhinoDoc.ActiveDoc
+    lname = data["layer_name"]
+    if not rs.IsLayer(lname):
+        rs.AddLayer(lname)
+    li  = doc.Layers.FindByFullPath(lname, Rhino.RhinoMath.UnsetIntIndex)
+    mat = Rhino.DocObjects.Material()
+    if data.get("color"):
+        c = data["color"]
+        mat.DiffuseColor = System.Drawing.Color.FromArgb(int(c[0]), int(c[1]), int(c[2]))
+    mat.Transparency = float(data.get("transparency", 0.0))
+    idx = doc.Materials.Add(mat)
+    layer = doc.Layers[li]
+    layer.RenderMaterialIndex = idx
+    layer.CommitChanges()
+    result = {"ok": True, "layer": lname, "material_index": idx}
 '''

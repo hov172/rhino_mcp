@@ -29,6 +29,35 @@ def register(mcp: FastMCP) -> None:
         code = "_mcp_path = {!s}\n{}".format(json.dumps(path), _SAVE_SCRIPT)
         return rhino.execute_python(code, rhino_id=rhino_id)
 
+    @mcp.tool(annotations=ToolAnnotations(title="Enable Viewport Redraw", destructiveHint=True))
+    def enable_redraw(
+        enable: bool = True,
+        rhino_id: str | None = None,
+    ) -> dict[str, object]:
+        """
+        Enable or disable viewport redraw.
+
+        Disable redraw before batch operations to prevent flickering and speed
+        things up, then re-enable when done.
+        """
+        code = "__mcp_redraw = {!r}\nimport rhinoscriptsyntax as rs\nrs.EnableRedraw(__mcp_redraw)\nresult = {{'enabled': __mcp_redraw}}".format(enable)
+        return rhino.execute_python(code, rhino_id=rhino_id)
+
+    @mcp.tool(annotations=ToolAnnotations(title="Set Unit System", destructiveHint=True))
+    def set_unit_system(
+        unit_system: str,
+        rhino_id: str | None = None,
+    ) -> dict[str, object]:
+        """
+        Set the document unit system.
+
+        ``unit_system`` accepts a name string: ``Millimeters``, ``Centimeters``,
+        ``Meters``, ``Kilometers``, ``Inches``, ``Feet``, ``Miles``,
+        ``Microns``, or ``None``.
+        """
+        code = "__mcp_units = {!r}\n{}".format(unit_system, _UNITS_SCRIPT)
+        return rhino.execute_python(code, rhino_id=rhino_id)
+
     @mcp.tool(annotations=ToolAnnotations(title="Export Rhino Document", destructiveHint=True))
     def export_rhino_document(path: str, select_all: bool = True, rhino_id: str | None = None) -> dict[str, object]:
         """
@@ -42,6 +71,33 @@ def register(mcp: FastMCP) -> None:
             command = "_SelAll " + command
         command = '{} "{}" _Enter'.format(command, path)
         return rhino.run_command(command, rhino_id=rhino_id)
+
+
+_UNITS_SCRIPT = r'''
+import Rhino
+
+doc = Rhino.RhinoDoc.ActiveDoc
+name = __mcp_units.strip().lower()
+_MAP = {
+    "none": Rhino.UnitSystem.None_,
+    "microns": Rhino.UnitSystem.Microns,
+    "millimeters": Rhino.UnitSystem.Millimeters,
+    "centimeters": Rhino.UnitSystem.Centimeters,
+    "meters": Rhino.UnitSystem.Meters,
+    "kilometers": Rhino.UnitSystem.Kilometers,
+    "microinches": Rhino.UnitSystem.Microinches,
+    "mils": Rhino.UnitSystem.Mils,
+    "inches": Rhino.UnitSystem.Inches,
+    "feet": Rhino.UnitSystem.Feet,
+    "miles": Rhino.UnitSystem.Miles,
+}
+us = _MAP.get(name)
+if us is None:
+    result = {"ok": False, "error": "Unknown unit system: {}".format(__mcp_units)}
+else:
+    doc.ModelUnitSystem = us
+    result = {"ok": True, "unit_system": doc.ModelUnitSystem.ToString()}
+'''
 
 
 _SUMMARY_SCRIPT = r'''
