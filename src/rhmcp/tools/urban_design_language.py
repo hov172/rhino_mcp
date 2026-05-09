@@ -155,11 +155,13 @@ def register(mcp: FastMCP) -> None:
 
         try:
             result = _call()
-        except (json.JSONDecodeError, Exception):
+        except json.JSONDecodeError:
             try:
                 result = _call()
             except Exception as exc:
                 return {"ok": False, "error": str(exc), **_ZERO}
+        except Exception as exc:
+            return {"ok": False, "error": str(exc), **_ZERO}
 
         _current_design_language = result
         return {"ok": True, **result}
@@ -167,19 +169,20 @@ def register(mcp: FastMCP) -> None:
     @mcp.tool(annotations=ToolAnnotations(title="Update Design Language Field", destructiveHint=False))
     def urban_update_design_language(
         field: str,
-        value: str,
+        value: str | list | dict,
     ) -> dict[str, object]:
         """
         Patch a single field of the current design language.
         Re-derives diffusion_prompt if style_name, facade_vocabulary,
         material_palette, or colour_story changes.
-        Raises KeyError if field is not a valid DesignLanguage key.
+        For structured fields (facade_vocabulary, material_palette, colour_story), pass a list or dict directly.
+        Returns error dict if field is not a valid DesignLanguage key.
         """
         global _current_design_language
         if _current_design_language is None:
             return {"ok": False, "error": "No design language set. Call urban_generate_design_language first."}
         if field not in _SCHEMA_KEYS:
-            raise KeyError(f"Unknown field: {field!r}. Valid: {sorted(_SCHEMA_KEYS)}")
+            return {"ok": False, "error": f"Unknown field: {field!r}. Valid: {sorted(_SCHEMA_KEYS)}"}
         _current_design_language[field] = value
         updated_prompt = field in ("material_palette", "facade_vocabulary", "colour_story", "style_name")
         if updated_prompt:

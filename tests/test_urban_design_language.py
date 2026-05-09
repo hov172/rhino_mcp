@@ -90,10 +90,11 @@ class TestUrbanUpdateDesignLanguage(unittest.TestCase):
         self.assertTrue(r["diffusion_prompt_updated"])
         self.assertNotEqual(m._current_design_language["diffusion_prompt"], old_prompt)
 
-    def test_raises_key_error_on_unknown_field(self):
+    def test_returns_error_on_unknown_field(self):
         tools = self._setup()
-        with self.assertRaises(KeyError):
-            tools["urban_update_design_language"](field="nonexistent", value="x")
+        r = tools["urban_update_design_language"](field="nonexistent", value="x")
+        self.assertFalse(r["ok"])
+        self.assertIn("nonexistent", r["error"])
 
 
 class TestUrbanGetDesignLanguage(unittest.TestCase):
