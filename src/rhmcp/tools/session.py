@@ -76,6 +76,18 @@ result = {"commands": names, "count": len(names)}
         """
         return rhino.status(rhino_id=rhino_id)
 
+    @mcp.tool(annotations=ToolAnnotations(title="Health Check", readOnlyHint=True))
+    def health_check(timeout: float = 3.0) -> dict[str, object]:
+        """
+        Ping the RhinoMCP plugin socket and return connection latency and Rhino version.
+
+        Returns ``ok: true`` with ``latency_ms`` and ``rhino`` version string when
+        the plugin is reachable. Returns ``ok: false`` with ``error_code`` when the
+        socket is unavailable or Rhino does not respond.
+        """
+        from rhmcp.tools_helpers.plugin_client import health_check as _hc
+        return _hc(timeout=timeout)
+
     @mcp.tool(annotations=ToolAnnotations(title="List Rhino Plugins", readOnlyHint=True))
     def list_rhino_plugins(rhino_id: str | None = None) -> dict[str, object]:
         """

@@ -8,6 +8,7 @@ from mcp.server.fastmcp import FastMCP
 from mcp.types import ToolAnnotations
 
 from rhmcp.tools_helpers import backend as rhino
+from rhmcp.tools_helpers import validate
 
 
 def register(mcp: FastMCP) -> None:
@@ -30,6 +31,8 @@ def register(mcp: FastMCP) -> None:
         ``font`` selects a font family (e.g. ``"Arial"``); leave blank for the
         document default.
         """
+        err = validate.coordinate(point, "point")
+        if err: return err
         payload = {
             "text": text, "point": point, "height": height, "font": font,
             "bold": bold, "italic": italic, "name": name, "layer": layer,
@@ -52,6 +55,8 @@ def register(mcp: FastMCP) -> None:
         Text dots always face the camera and maintain a constant screen size,
         making them ideal for labels and callouts.
         """
+        err = validate.coordinate(point, "point")
+        if err: return err
         payload = {
             "text": text, "point": point, "font_height": font_height,
             "name": name, "layer": layer,

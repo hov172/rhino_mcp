@@ -153,7 +153,11 @@ def run_plugin_or_python(
     if mode == BACKEND_PLUGIN:
         return normalize({"ok": False, "backend": BACKEND_PLUGIN, "error": "Plug-in backend unavailable.", "error_code": "SOCKET_UNAVAILABLE"})
     result = rhinocode.execute_python(python_code, rhino_id=rhino_id)
-    return normalize({"backend": BACKEND_RHINOCODE, **result})
+    resp = normalize({"backend": BACKEND_RHINOCODE, **result})
+    if not resp.get("ok") and result.get("status") == "unknown":
+        resp["error_code"] = "RHINOCODE_DISPATCH_FAILED"
+        resp.setdefault("error", "Rhino did not execute the script. Ensure MCPStart is running or set RHINO_MCP_BACKEND=plugin.")
+    return resp
 
 
 def run_plugin_or_csharp(

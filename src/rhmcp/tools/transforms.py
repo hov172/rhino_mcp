@@ -8,6 +8,7 @@ from mcp.server.fastmcp import FastMCP
 from mcp.types import ToolAnnotations
 
 from rhmcp.tools_helpers import backend as rhino
+from rhmcp.tools_helpers import validate
 
 
 def register(mcp: FastMCP) -> None:
@@ -25,6 +26,11 @@ def register(mcp: FastMCP) -> None:
 
         ``copy=True`` keeps the originals. Uses selected objects when ``ids`` is omitted.
         """
+        if ids is not None:
+            err = validate.guid_list(ids, "ids");
+            if err: return err
+        err = validate.coordinate(plane_origin, "plane_origin") or validate.coordinate(plane_normal, "plane_normal")
+        if err: return err
         payload = {"op": "mirror", "ids": ids, "selected": selected,
                    "plane_origin": list(plane_origin), "plane_normal": list(plane_normal),
                    "copy": copy}
@@ -41,6 +47,11 @@ def register(mcp: FastMCP) -> None:
         """
         Copy objects and move the copies by ``translation`` [dx, dy, dz].
         """
+        if ids is not None:
+            err = validate.guid_list(ids, "ids")
+            if err: return err
+        err = validate.coordinate(translation, "translation")
+        if err: return err
         payload = {"op": "copy", "ids": ids, "selected": selected, "translation": list(translation)}
         code = "__mcp_xf = {!r}\n{}".format(payload, _SCRIPT)
         return rhino.execute_python(code, rhino_id=rhino_id)
@@ -60,6 +71,11 @@ def register(mcp: FastMCP) -> None:
         ``spacing`` sets the distance between copies. If omitted, ``direction``
         magnitude is used as spacing.
         """
+        if ids is not None:
+            err = validate.guid_list(ids, "ids")
+            if err: return err
+        err = validate.coordinate(direction, "direction") or validate.positive(count, "count")
+        if err: return err
         payload = {"op": "array_linear", "ids": ids, "selected": selected,
                    "direction": list(direction), "count": count, "spacing": spacing}
         code = "__mcp_xf = {!r}\n{}".format(payload, _SCRIPT)
@@ -79,6 +95,11 @@ def register(mcp: FastMCP) -> None:
 
         ``angle`` is the total sweep in degrees (default 360 = full circle).
         """
+        if ids is not None:
+            err = validate.guid_list(ids, "ids")
+            if err: return err
+        err = validate.coordinate(center, "center") or validate.positive(count, "count")
+        if err: return err
         payload = {"op": "array_polar", "ids": ids, "selected": selected,
                    "center": list(center), "count": count, "angle": angle}
         code = "__mcp_xf = {!r}\n{}".format(payload, _SCRIPT)
@@ -102,6 +123,14 @@ def register(mcp: FastMCP) -> None:
         ``reference_point1`` → ``reference_point2`` aligns with
         ``target_point1`` → ``target_point2``.
         """
+        if ids is not None:
+            err = validate.guid_list(ids, "ids")
+            if err: return err
+        err = (validate.coordinate(list(reference_point1), "reference_point1") or
+               validate.coordinate(list(reference_point2), "reference_point2") or
+               validate.coordinate(list(target_point1), "target_point1") or
+               validate.coordinate(list(target_point2), "target_point2"))
+        if err: return err
         payload = {"op": "orient", "ids": ids, "selected": selected,
                    "ref1": list(reference_point1), "ref2": list(reference_point2),
                    "tgt1": list(target_point1), "tgt2": list(target_point2), "copy": copy}

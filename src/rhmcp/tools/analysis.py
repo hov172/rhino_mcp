@@ -8,6 +8,7 @@ from mcp.server.fastmcp import FastMCP
 from mcp.types import ToolAnnotations
 
 from rhmcp.tools_helpers import backend as rhino
+from rhmcp.tools_helpers import validate
 
 
 def register(mcp: FastMCP) -> None:
@@ -20,6 +21,8 @@ def register(mcp: FastMCP) -> None:
         """
         Return the Euclidean distance between two points [x, y, z].
         """
+        err = validate.coordinate(point1, "point1") or validate.coordinate(point2, "point2")
+        if err: return err
         payload = {"op": "distance", "point1": point1, "point2": point2}
         code = "__mcp_analysis = {!r}\n{}".format(payload, _SCRIPT)
         return rhino.execute_python(code, rhino_id=rhino_id)
@@ -32,6 +35,8 @@ def register(mcp: FastMCP) -> None:
         """
         Return the arc length of a curve.
         """
+        err = validate.guid(curve_id, "curve_id")
+        if err: return err
         payload = {"op": "curve_length", "curve_id": curve_id}
         code = "__mcp_analysis = {!r}\n{}".format(payload, _SCRIPT)
         return rhino.execute_python(code, rhino_id=rhino_id)
@@ -44,6 +49,8 @@ def register(mcp: FastMCP) -> None:
         """
         Return the area of a surface, polysurface, or closed planar curve.
         """
+        err = validate.guid(object_id, "object_id")
+        if err: return err
         payload = {"op": "area", "object_id": object_id}
         code = "__mcp_analysis = {!r}\n{}".format(payload, _SCRIPT)
         return rhino.execute_python(code, rhino_id=rhino_id)
@@ -56,6 +63,8 @@ def register(mcp: FastMCP) -> None:
         """
         Return the volume of a closed solid (polysurface or mesh).
         """
+        err = validate.guid(object_id, "object_id")
+        if err: return err
         payload = {"op": "volume", "object_id": object_id}
         code = "__mcp_analysis = {!r}\n{}".format(payload, _SCRIPT)
         return rhino.execute_python(code, rhino_id=rhino_id)
@@ -71,6 +80,8 @@ def register(mcp: FastMCP) -> None:
 
         Returns ``min``, ``max``, ``center``, ``width``, ``depth``, ``height``.
         """
+        err = validate.guid_list(object_ids, "object_ids")
+        if err: return err
         payload = {"op": "bbox", "object_ids": object_ids, "world": world_coordinates}
         code = "__mcp_analysis = {!r}\n{}".format(payload, _SCRIPT)
         return rhino.execute_python(code, rhino_id=rhino_id)
@@ -83,6 +94,8 @@ def register(mcp: FastMCP) -> None:
         """
         Check whether an object is a closed solid (watertight polysurface or mesh).
         """
+        err = validate.guid(object_id, "object_id")
+        if err: return err
         payload = {"op": "is_solid", "object_id": object_id}
         code = "__mcp_analysis = {!r}\n{}".format(payload, _SCRIPT)
         return rhino.execute_python(code, rhino_id=rhino_id)

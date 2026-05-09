@@ -15,8 +15,10 @@ import time
 from collections.abc import Sequence
 from typing import Any
 
+import sys
+
 _TIMEOUT = float(os.environ.get("RHINO_MCP_TIMEOUT", "300"))
-_TEMP_DIR = os.environ.get("RHINO_MCP_TEMP_DIR", "/private/tmp")
+_TEMP_DIR = os.environ.get("RHINO_MCP_TEMP_DIR", tempfile.gettempdir())
 _POLL_INTERVAL = float(os.environ.get("RHINO_MCP_POLL_INTERVAL", "0.25"))
 _RUNPYTHON_FALLBACK = os.environ.get("RHINO_MCP_RUNPYTHON_FALLBACK", "").lower() in {"1", "true", "yes"}
 
@@ -26,7 +28,7 @@ def find_rhinocode() -> str:
     Return the ``rhinocode`` executable path.
 
     ``RHINOCODE`` can point at a custom executable. Otherwise PATH is checked,
-    followed by Rhino 8's default macOS location.
+    followed by platform-specific default install locations.
     """
     configured = os.environ.get("RHINOCODE")
     if configured:
@@ -36,9 +38,25 @@ def find_rhinocode() -> str:
     if found:
         return found
 
-    macos_default = "/Applications/Rhino 8.app/Contents/Resources/bin/rhinocode"
-    if os.path.exists(macos_default):
-        return macos_default
+    if sys.platform == "darwin":
+        macos_default = "/Applications/Rhino 8.app/Contents/Resources/bin/rhinocode"
+        if os.path.exists(macos_default):
+            return macos_default
+    elif sys.platform == "win32":
+        import winreg  # type: ignore[import]
+        for root in (winreg.HKEY_LOCAL_MACHINE, winreg.HKEY_CURRENT_USER):
+            try:
+                with winreg.OpenKey(root, r"SOFTWARE\McNeel\Rhinoceros\8.0") as key:
+                    install_path, _ = winreg.QueryValueEx(key, "InstallPath")
+                    candidate = os.path.join(install_path, "System", "rhinocode.exe")
+                    if os.path.exists(candidate):
+                        return candidate
+            except OSError:
+                pass
+        # Common default path
+        candidate = r"C:\Program Files\Rhino 8\System\rhinocode.exe"
+        if os.path.exists(candidate):
+            return candidate
 
     return "rhinocode"
 

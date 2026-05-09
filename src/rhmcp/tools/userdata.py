@@ -8,6 +8,7 @@ from mcp.server.fastmcp import FastMCP
 from mcp.types import ToolAnnotations
 
 from rhmcp.tools_helpers import backend as rhino
+from rhmcp.tools_helpers import validate
 
 
 def register(mcp: FastMCP) -> None:
@@ -24,6 +25,8 @@ def register(mcp: FastMCP) -> None:
         Use ``get_user_text`` to read it back or filter by it via
         ``select_rhino_objects`` / ``get_rhino_objects``.
         """
+        err = validate.guid(object_id, "object_id")
+        if err: return err
         payload = {"op": "set_obj", "object_id": object_id, "key": key, "value": value}
         code = "__mcp_ud = {!r}\n{}".format(payload, _SCRIPT)
         return rhino.execute_python(code, rhino_id=rhino_id)
@@ -40,6 +43,8 @@ def register(mcp: FastMCP) -> None:
         If ``key`` is provided returns just that value; omit it to return all
         key-value pairs as a dict.
         """
+        err = validate.guid(object_id, "object_id")
+        if err: return err
         payload = {"op": "get_obj", "object_id": object_id, "key": key}
         code = "__mcp_ud = {!r}\n{}".format(payload, _SCRIPT)
         return rhino.execute_python(code, rhino_id=rhino_id)
@@ -53,6 +58,8 @@ def register(mcp: FastMCP) -> None:
         """
         Delete a single user text key from an object.
         """
+        err = validate.guid(object_id, "object_id")
+        if err: return err
         payload = {"op": "del_obj", "object_id": object_id, "key": key}
         code = "__mcp_ud = {!r}\n{}".format(payload, _SCRIPT)
         return rhino.execute_python(code, rhino_id=rhino_id)

@@ -96,7 +96,7 @@ def send_command(
 
 def probe(timeout: float = 1.0) -> dict[str, Any]:
     """
-    Return whether a RhinoMCP-style socket appears reachable.
+    Return whether a RhinoMCP-style socket appears reachable (TCP only).
     """
     host, port, _ = connection_settings(timeout=timeout)
     try:
@@ -104,3 +104,30 @@ def probe(timeout: float = 1.0) -> dict[str, Any]:
             return {"ok": True, "host": host, "port": port}
     except OSError as ex:
         return {"ok": False, "host": host, "port": port, "message": str(ex)}
+
+
+def health_check(timeout: float = 3.0) -> dict[str, Any]:
+    """
+    Send a ``ping`` command and verify the server responds correctly.
+
+    Returns ``{"ok": True, "version": ..., "rhino": ..., "latency_ms": ...}``
+    on success, or ``{"ok": False, "error": ..., "error_code": ...}`` on failure.
+    """
+    import time
+    host, port, _ = connection_settings()
+    t0 = time.monotonic()
+    try:
+        resp = send_command("ping", {}, timeout=timeout, retries=0)
+        latency = round((time.monotonic() - t0) * 1000, 1)
+        if resp.get("ok") or resp.get("status") == "ok":
+            return {
+                "ok": True,
+                "host": host,
+                "port": port,
+                "latency_ms": latency,
+                "version": resp.get("version"),
+                "rhino": resp.get("rhino"),
+            }
+        return {"ok": False, "host": host, "port": port, "error": "Unexpected ping response", "error_code": "HEALTH_CHECK_FAILED", "raw": resp}
+    except OSError as ex:
+        return {"ok": False, "host": host, "port": port, "error": str(ex), "error_code": "SOCKET_UNAVAILABLE"}

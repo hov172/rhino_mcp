@@ -11,6 +11,7 @@ import argparse
 import importlib
 import os
 import pkgutil
+import sys
 
 import yaml
 from mcp.server.fastmcp import FastMCP
@@ -85,6 +86,27 @@ def main() -> int:
     # Install optional telemetry interceptor after all tools are registered.
     from rhmcp import telemetry
     telemetry.install(mcp)
+
+    # Non-blocking startup connectivity check — printed to stderr only.
+    try:
+        from rhmcp.tools_helpers.plugin_client import health_check
+        hc = health_check(timeout=1.0)
+        if hc.get("ok"):
+            print(
+                "Rhino MCP: plugin connected at {}:{} ({}ms, Rhino {})".format(
+                    hc["host"], hc["port"], hc["latency_ms"], hc.get("rhino", "?")
+                ),
+                file=sys.stderr,
+            )
+        else:
+            print(
+                "Rhino MCP: plugin not reachable at startup ({}) — start Rhino and the MCPStart command".format(
+                    hc.get("error_code", "unknown")
+                ),
+                file=sys.stderr,
+            )
+    except Exception:
+        pass
 
     transport = args.transport
     if transport == "http":

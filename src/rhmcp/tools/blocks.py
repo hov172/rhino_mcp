@@ -8,6 +8,7 @@ from mcp.server.fastmcp import FastMCP
 from mcp.types import ToolAnnotations
 
 from rhmcp.tools_helpers import backend as rhino
+from rhmcp.tools_helpers import validate
 
 
 def register(mcp: FastMCP) -> None:
@@ -25,6 +26,8 @@ def register(mcp: FastMCP) -> None:
         ``delete_input=True`` (default) removes the source objects after creating
         the block. Returns the block name.
         """
+        err = validate.guid_list(object_ids, "object_ids") or validate.coordinate(base_point, "base_point")
+        if err: return err
         payload = {"object_ids": object_ids, "base_point": base_point, "name": name, "delete_input": delete_input}
         code = "__mcp_block = {!r}\n{}".format(payload, _SCRIPT)
         return rhino.execute_python(code, rhino_id=rhino_id)
@@ -42,6 +45,8 @@ def register(mcp: FastMCP) -> None:
 
         ``scale`` scales uniformly. ``rotation`` is in degrees around the Z axis.
         """
+        err = validate.coordinate(point, "point")
+        if err: return err
         payload = {"op": "insert", "name": name, "point": point, "scale": scale, "rotation": rotation}
         code = "__mcp_block = {!r}\n{}".format(payload, _SCRIPT)
         return rhino.execute_python(code, rhino_id=rhino_id)

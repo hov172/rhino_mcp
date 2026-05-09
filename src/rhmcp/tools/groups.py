@@ -8,6 +8,7 @@ from mcp.server.fastmcp import FastMCP
 from mcp.types import ToolAnnotations
 
 from rhmcp.tools_helpers import backend as rhino
+from rhmcp.tools_helpers import validate
 
 
 def register(mcp: FastMCP) -> None:
@@ -22,6 +23,9 @@ def register(mcp: FastMCP) -> None:
 
         If ``name`` is omitted Rhino auto-generates one. Returns the group name.
         """
+        if object_ids is not None:
+            err = validate.guid_list(object_ids, "object_ids")
+            if err: return err
         payload = {"op": "create", "name": name, "object_ids": object_ids}
         code = "__mcp_grp = {!r}\n{}".format(payload, _SCRIPT)
         return rhino.execute_python(code, rhino_id=rhino_id)
@@ -47,6 +51,8 @@ def register(mcp: FastMCP) -> None:
         """
         Add ``object_ids`` to an existing group.
         """
+        err = validate.guid_list(object_ids, "object_ids")
+        if err: return err
         payload = {"op": "add", "name": name, "object_ids": object_ids}
         code = "__mcp_grp = {!r}\n{}".format(payload, _SCRIPT)
         return rhino.execute_python(code, rhino_id=rhino_id)
@@ -60,6 +66,8 @@ def register(mcp: FastMCP) -> None:
         """
         Remove ``object_ids`` from a group.
         """
+        err = validate.guid_list(object_ids, "object_ids")
+        if err: return err
         payload = {"op": "remove", "name": name, "object_ids": object_ids}
         code = "__mcp_grp = {!r}\n{}".format(payload, _SCRIPT)
         return rhino.execute_python(code, rhino_id=rhino_id)

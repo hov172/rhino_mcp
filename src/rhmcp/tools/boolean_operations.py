@@ -10,6 +10,7 @@ from mcp.server.fastmcp import FastMCP
 from mcp.types import ToolAnnotations
 
 from rhmcp.tools_helpers import backend as rhino
+from rhmcp.tools_helpers import validate
 
 
 def register(mcp: FastMCP) -> None:
@@ -18,6 +19,8 @@ def register(mcp: FastMCP) -> None:
         """
         Union multiple closed solid objects.
         """
+        err = validate.guid_list(object_ids, "object_ids")
+        if err: return err
         return _run("union", locals())
 
     @mcp.tool(annotations=ToolAnnotations(title="Boolean Difference", destructiveHint=True))
@@ -31,6 +34,8 @@ def register(mcp: FastMCP) -> None:
         """
         Subtract solids from a base solid.
         """
+        err = validate.guid(base_id, "base_id") or validate.guid_list(subtract_ids, "subtract_ids")
+        if err: return err
         return _run("difference", locals())
 
     @mcp.tool(annotations=ToolAnnotations(title="Boolean Intersection", destructiveHint=True))
@@ -38,6 +43,8 @@ def register(mcp: FastMCP) -> None:
         """
         Keep only the overlapping volume of multiple solids.
         """
+        err = validate.guid_list(object_ids, "object_ids")
+        if err: return err
         return _run("intersection", locals())
 
 

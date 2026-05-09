@@ -10,6 +10,7 @@ from mcp.server.fastmcp import FastMCP
 from mcp.types import ToolAnnotations
 
 from rhmcp.tools_helpers import backend as rhino
+from rhmcp.tools_helpers import validate
 
 
 def register(mcp: FastMCP) -> None:
@@ -18,6 +19,10 @@ def register(mcp: FastMCP) -> None:
         """
         Project a curve onto surfaces, polysurfaces, or meshes.
         """
+        err = (validate.guid(curve_id, "curve_id") or
+               validate.guid_list(target_ids, "target_ids") or
+               validate.coordinate(direction, "direction"))
+        if err: return err
         return _run("project_curve", locals())
 
     @mcp.tool(annotations=ToolAnnotations(title="Intersect Rhino Curves", destructiveHint=True))
@@ -31,6 +36,8 @@ def register(mcp: FastMCP) -> None:
         """
         Create point objects at intersections between two curves.
         """
+        err = validate.guid(curve_id_a, "curve_id_a") or validate.guid(curve_id_b, "curve_id_b")
+        if err: return err
         return _run("intersect_curves", locals())
 
     @mcp.tool(annotations=ToolAnnotations(title="Split Rhino Curve", destructiveHint=True))
@@ -45,6 +52,11 @@ def register(mcp: FastMCP) -> None:
         """
         Split a curve at parameters or at closest parameters to point objects.
         """
+        err = validate.guid(curve_id, "curve_id")
+        if err: return err
+        if point_ids is not None:
+            err = validate.guid_list(point_ids, "point_ids")
+            if err: return err
         return _run("split_curve", locals())
 
     @mcp.tool(annotations=ToolAnnotations(title="Create Rectangle Curve", destructiveHint=True))
@@ -60,6 +72,8 @@ def register(mcp: FastMCP) -> None:
         Create a rectangle curve centred at ``center`` [x, y, z] with ``width`` and ``height``.
         ``plane_normal`` tilts the plane (default Z-up).
         """
+        err = validate.coordinate(center, "center")
+        if err: return err
         return _run("create_rectangle", locals())
 
     @mcp.tool(annotations=ToolAnnotations(title="Create Spiral Curve", destructiveHint=True))
@@ -79,6 +93,8 @@ def register(mcp: FastMCP) -> None:
         ``pitch`` is rise per revolution. ``turns`` is the number of full turns.
         ``radius_end < 0`` uses ``radius_start`` for a uniform helix.
         """
+        err = validate.coordinate(axis_start, "axis_start") or validate.coordinate(axis_end, "axis_end")
+        if err: return err
         return _run("create_spiral", locals())
 
     @mcp.tool(annotations=ToolAnnotations(title="Create NURBS Curve", destructiveHint=True))
@@ -106,6 +122,8 @@ def register(mcp: FastMCP) -> None:
 
         ``continuity``: 0 = position, 1 = tangency (default), 2 = curvature.
         """
+        err = validate.guid(curve1_id, "curve1_id") or validate.guid(curve2_id, "curve2_id")
+        if err: return err
         return _run("create_blend_curve", locals())
 
     @mcp.tool(annotations=ToolAnnotations(title="Fillet Curves", destructiveHint=True))
@@ -120,6 +138,8 @@ def register(mcp: FastMCP) -> None:
         """
         Create a fillet arc of ``radius`` between two curves and optionally trim them.
         """
+        err = validate.guid(curve1_id, "curve1_id") or validate.guid(curve2_id, "curve2_id")
+        if err: return err
         return _run("fillet_curves", locals())
 
     @mcp.tool(annotations=ToolAnnotations(title="Divide Curve by Segments", destructiveHint=True))
@@ -135,6 +155,8 @@ def register(mcp: FastMCP) -> None:
         ``create_points=True`` adds point objects at each division.
         Returns division parameters and point coordinates.
         """
+        err = validate.guid(curve_id, "curve_id")
+        if err: return err
         return _run("divide_curve", locals())
 
     @mcp.tool(annotations=ToolAnnotations(title="Divide Curve by Length", destructiveHint=True))
@@ -149,6 +171,8 @@ def register(mcp: FastMCP) -> None:
 
         ``create_points=True`` adds point objects at each division.
         """
+        err = validate.guid(curve_id, "curve_id")
+        if err: return err
         return _run("divide_curve_length", locals())
 
     @mcp.tool(annotations=ToolAnnotations(title="Close Curve", destructiveHint=True))
@@ -160,6 +184,8 @@ def register(mcp: FastMCP) -> None:
         """
         Close an open curve by connecting its endpoints.
         """
+        err = validate.guid(curve_id, "curve_id")
+        if err: return err
         return _run("close_curve", locals())
 
     @mcp.tool(annotations=ToolAnnotations(title="Reverse Curve", destructiveHint=True))
@@ -170,6 +196,8 @@ def register(mcp: FastMCP) -> None:
         """
         Reverse the direction of a curve.
         """
+        err = validate.guid(curve_id, "curve_id")
+        if err: return err
         return _run("reverse_curve", locals())
 
     @mcp.tool(annotations=ToolAnnotations(title="Rebuild Curve", destructiveHint=True))
@@ -182,6 +210,8 @@ def register(mcp: FastMCP) -> None:
         """
         Rebuild a curve with a new ``degree`` and ``point_count``.
         """
+        err = validate.guid(curve_id, "curve_id")
+        if err: return err
         return _run("rebuild_curve", locals())
 
     @mcp.tool(annotations=ToolAnnotations(title="Curve Closest Point", readOnlyHint=True))
@@ -195,6 +225,8 @@ def register(mcp: FastMCP) -> None:
 
         Returns the closest point coordinates and curve parameter.
         """
+        err = validate.guid(curve_id, "curve_id") or validate.coordinate(point, "point")
+        if err: return err
         return _run("curve_closest_point", locals())
 
     @mcp.tool(annotations=ToolAnnotations(title="Evaluate Curve at Parameter", readOnlyHint=True))
@@ -206,6 +238,8 @@ def register(mcp: FastMCP) -> None:
         """
         Evaluate a curve at ``parameter`` to return its point and tangent vector.
         """
+        err = validate.guid(curve_id, "curve_id")
+        if err: return err
         return _run("evaluate_curve", locals())
 
     @mcp.tool(annotations=ToolAnnotations(title="Get Curve Start and End Points", readOnlyHint=True))
@@ -216,6 +250,8 @@ def register(mcp: FastMCP) -> None:
         """
         Return the start and end points of a curve.
         """
+        err = validate.guid(curve_id, "curve_id")
+        if err: return err
         return _run("curve_start_end_points", locals())
 
     @mcp.tool(annotations=ToolAnnotations(title="Join Curves", destructiveHint=True))
@@ -229,6 +265,8 @@ def register(mcp: FastMCP) -> None:
         """
         Join a list of curves into one or more polycurves.
         """
+        err = validate.guid_list(curve_ids, "curve_ids")
+        if err: return err
         return _run("join_curves", locals())
 
     @mcp.tool(annotations=ToolAnnotations(title="Explode Curves", destructiveHint=True))
@@ -240,6 +278,8 @@ def register(mcp: FastMCP) -> None:
         """
         Explode polycurves into their constituent segments.
         """
+        err = validate.guid_list(curve_ids, "curve_ids")
+        if err: return err
         return _run("explode_curves", locals())
 
 

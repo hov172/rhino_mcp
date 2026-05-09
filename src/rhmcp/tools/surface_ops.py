@@ -8,6 +8,7 @@ from mcp.server.fastmcp import FastMCP
 from mcp.types import ToolAnnotations
 
 from rhmcp.tools_helpers import backend as rhino
+from rhmcp.tools_helpers import validate
 
 
 def register(mcp: FastMCP) -> None:
@@ -26,6 +27,10 @@ def register(mcp: FastMCP) -> None:
 
         ``angle`` is in degrees (default 360 = full revolution).
         """
+        err = (validate.guid(curve_id, "curve_id") or
+               validate.coordinate(axis_start, "axis_start") or
+               validate.coordinate(axis_end, "axis_end"))
+        if err: return err
         payload = {"op": "revolve", "curve_id": curve_id, "axis_start": axis_start,
                    "axis_end": axis_end, "angle": angle, "delete_input": delete_input, "name": name}
         code = "__mcp_surf = {!r}\n{}".format(payload, _SCRIPT)
@@ -44,6 +49,10 @@ def register(mcp: FastMCP) -> None:
         """
         Sweep ``profile_ids`` cross-sections along two rails.
         """
+        err = (validate.guid(rail1_id, "rail1_id") or
+               validate.guid(rail2_id, "rail2_id") or
+               validate.guid_list(profile_ids, "profile_ids"))
+        if err: return err
         payload = {"op": "sweep2", "rail1_id": rail1_id, "rail2_id": rail2_id,
                    "profile_ids": profile_ids, "closed": closed,
                    "delete_input": delete_input, "name": name}
@@ -59,6 +68,8 @@ def register(mcp: FastMCP) -> None:
         """
         Fill a closed planar curve (or curves) with a planar surface.
         """
+        err = validate.guid_list(curve_ids, "curve_ids")
+        if err: return err
         payload = {"op": "planar_srf", "curve_ids": curve_ids, "name": name}
         code = "__mcp_surf = {!r}\n{}".format(payload, _SCRIPT)
         return rhino.execute_python(code, rhino_id=rhino_id)
@@ -72,6 +83,8 @@ def register(mcp: FastMCP) -> None:
         """
         Create a surface from 2, 3, or 4 edge curves (EdgeSrf).
         """
+        err = validate.guid_list(curve_ids, "curve_ids")
+        if err: return err
         payload = {"op": "edge_srf", "curve_ids": curve_ids, "name": name}
         code = "__mcp_surf = {!r}\n{}".format(payload, _SCRIPT)
         return rhino.execute_python(code, rhino_id=rhino_id)
@@ -88,6 +101,8 @@ def register(mcp: FastMCP) -> None:
 
         ``continuity``: 0 = position, 1 = tangency (default), 2 = curvature.
         """
+        err = validate.guid_list(curve_ids, "curve_ids")
+        if err: return err
         payload = {"op": "network_srf", "curve_ids": curve_ids,
                    "continuity": continuity, "name": name}
         code = "__mcp_surf = {!r}\n{}".format(payload, _SCRIPT)
@@ -106,6 +121,8 @@ def register(mcp: FastMCP) -> None:
 
         ``u_spans`` / ``v_spans`` control the resolution of the patch.
         """
+        err = validate.guid_list(object_ids, "object_ids")
+        if err: return err
         payload = {"op": "patch", "object_ids": object_ids,
                    "u_spans": u_spans, "v_spans": v_spans, "name": name}
         code = "__mcp_surf = {!r}\n{}".format(payload, _SCRIPT)
@@ -124,6 +141,8 @@ def register(mcp: FastMCP) -> None:
         """
         Offset a surface by ``distance`` along its normals.
         """
+        err = validate.guid(surface_id, "surface_id")
+        if err: return err
         payload = {"op": "offset_srf", "surface_id": surface_id, "distance": distance,
                    "both_sides": both_sides, "solid": solid,
                    "delete_input": delete_input, "name": name}
@@ -141,6 +160,8 @@ def register(mcp: FastMCP) -> None:
         """
         Split ``brep_id`` with ``cutter_id`` (another brep or surface).
         """
+        err = validate.guid(brep_id, "brep_id") or validate.guid(cutter_id, "cutter_id")
+        if err: return err
         payload = {"op": "split_brep", "brep_id": brep_id, "cutter_id": cutter_id,
                    "delete_input": delete_input, "name": name}
         code = "__mcp_surf = {!r}\n{}".format(payload, _SCRIPT)
@@ -158,6 +179,8 @@ def register(mcp: FastMCP) -> None:
         """
         Create a fillet surface of ``radius`` between two surfaces.
         """
+        err = validate.guid(surface1_id, "surface1_id") or validate.guid(surface2_id, "surface2_id")
+        if err: return err
         payload = {"op": "fillet_srf", "surface1_id": surface1_id,
                    "surface2_id": surface2_id, "radius": radius,
                    "trim": trim, "name": name}
@@ -172,6 +195,8 @@ def register(mcp: FastMCP) -> None:
         """
         Cap all planar holes in a polysurface, making it a closed solid.
         """
+        err = validate.guid(brep_id, "brep_id")
+        if err: return err
         payload = {"op": "cap_holes", "brep_id": brep_id}
         code = "__mcp_surf = {!r}\n{}".format(payload, _SCRIPT)
         return rhino.execute_python(code, rhino_id=rhino_id)
@@ -187,6 +212,8 @@ def register(mcp: FastMCP) -> None:
         """
         Extrude ``curve_id`` along ``path_id`` (a path curve).
         """
+        err = validate.guid(curve_id, "curve_id") or validate.guid(path_id, "path_id")
+        if err: return err
         payload = {"op": "extrude_along", "curve_id": curve_id, "path_id": path_id,
                    "delete_input": delete_input, "name": name}
         code = "__mcp_surf = {!r}\n{}".format(payload, _SCRIPT)
@@ -203,6 +230,8 @@ def register(mcp: FastMCP) -> None:
         """
         Extrude ``curve_id`` to a single apex ``point``, creating a cone-like surface.
         """
+        err = validate.guid(curve_id, "curve_id") or validate.coordinate(point, "point")
+        if err: return err
         payload = {"op": "extrude_to_point", "curve_id": curve_id, "point": point,
                    "delete_input": delete_input, "name": name}
         code = "__mcp_surf = {!r}\n{}".format(payload, _SCRIPT)
@@ -217,6 +246,8 @@ def register(mcp: FastMCP) -> None:
         """
         Extract all edge curves of a brep/polysurface as new curve objects.
         """
+        err = validate.guid(brep_id, "brep_id")
+        if err: return err
         payload = {"op": "dup_edges", "brep_id": brep_id, "name": name}
         code = "__mcp_surf = {!r}\n{}".format(payload, _SCRIPT)
         return rhino.execute_python(code, rhino_id=rhino_id)
@@ -233,6 +264,8 @@ def register(mcp: FastMCP) -> None:
 
         ``border_type``: 0 = outer loop, 1 = inner loops, 2 = all.
         """
+        err = validate.guid(surface_id, "surface_id")
+        if err: return err
         payload = {"op": "dup_border", "surface_id": surface_id,
                    "border_type": border_type, "name": name}
         code = "__mcp_surf = {!r}\n{}".format(payload, _SCRIPT)
@@ -248,6 +281,8 @@ def register(mcp: FastMCP) -> None:
         """
         Join multiple surfaces into a single polysurface.
         """
+        err = validate.guid_list(surface_ids, "surface_ids")
+        if err: return err
         payload = {"op": "join_srfs", "surface_ids": surface_ids,
                    "delete_input": delete_input, "name": name}
         code = "__mcp_surf = {!r}\n{}".format(payload, _SCRIPT)
@@ -262,6 +297,8 @@ def register(mcp: FastMCP) -> None:
         """
         Explode a polysurface into its individual surface faces.
         """
+        err = validate.guid(brep_id, "brep_id")
+        if err: return err
         payload = {"op": "explode_brep", "brep_id": brep_id, "delete_input": delete_input}
         code = "__mcp_surf = {!r}\n{}".format(payload, _SCRIPT)
         return rhino.execute_python(code, rhino_id=rhino_id)
@@ -276,6 +313,8 @@ def register(mcp: FastMCP) -> None:
         """
         Unroll a developable surface flat onto the construction plane.
         """
+        err = validate.guid(surface_id, "surface_id")
+        if err: return err
         payload = {"op": "unroll", "surface_id": surface_id, "explode": explode, "name": name}
         code = "__mcp_surf = {!r}\n{}".format(payload, _SCRIPT)
         return rhino.execute_python(code, rhino_id=rhino_id)
