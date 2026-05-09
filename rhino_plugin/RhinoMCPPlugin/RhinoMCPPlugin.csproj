@@ -7,7 +7,7 @@
     <AssemblyName>rhino-mcp</AssemblyName>
     <TargetExt>.rhp</TargetExt>
     <RootNamespace>RhinoMCPPlugin</RootNamespace>
-    <Version>0.4.0</Version>
+    <Version>0.5.0</Version>
     <GenerateAssemblyInformationalVersionAttribute>false</GenerateAssemblyInformationalVersionAttribute>
     <Title>rhino-mcp</Title>
     <Company>Rhino MCP Contributors</Company>
