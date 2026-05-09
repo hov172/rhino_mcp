@@ -299,6 +299,37 @@ def register(mcp: FastMCP) -> None:
         meta = {"path": r.get("path"), "saved": r.get("saved", False), "width": width, "height": height}
         return [meta, Image(data=base64.b64decode(b64), format="png")]
 
+    @mcp.tool(annotations=ToolAnnotations(title="Get Commands", readOnlyHint=True))
+    def get_commands(filter: str | None = None, loaded_only: bool = True, rhino_id: str | None = None) -> dict[str, object]:
+        """
+        jingcheng-chen/rhinomcp alias for get_rhino_commands.
+        List available Rhino command names, optionally filtered by substring.
+        """
+        code = "__mcp_filter = {!r}\n__mcp_loaded_only = {!r}\n".format(filter or "", loaded_only) + r"""
+import Rhino
+names = []
+try:
+    names = list(Rhino.Commands.Command.GetCommandNames(__mcp_loaded_only, True))
+except Exception:
+    try:
+        names = list(Rhino.Commands.Command.GetCommandNames())
+    except Exception:
+        pass
+if __mcp_filter:
+    names = [n for n in names if __mcp_filter.lower() in n.lower()]
+names.sort()
+result = {"commands": names, "count": len(names)}
+"""
+        return rhino.execute_python(code, rhino_id=rhino_id)
+
+    @mcp.tool(annotations=ToolAnnotations(title="Run Command", destructiveHint=True))
+    def run_command(command: str, echo: bool = True, rhino_id: str | None = None) -> dict[str, object]:
+        """
+        jingcheng-chen/rhinomcp alias for run_rhino_command.
+        Execute a Rhino command macro string and return captured output.
+        """
+        return rhino.run_command(command, rhino_id=rhino_id)
+
     @mcp.tool(annotations=ToolAnnotations(title="Undo", destructiveHint=True))
     def undo(steps: int = 1, rhino_id: str | None = None) -> dict[str, object]:
         """

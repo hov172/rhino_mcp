@@ -110,6 +110,32 @@ def register(mcp: FastMCP) -> None:
         code = "__mcp_view_op = {!r}\n{}".format(payload, _VIEW_OPS_SCRIPT)
         return rhino.execute_python(code, rhino_id=rhino_id)
 
+    @mcp.tool(annotations=ToolAnnotations(title="Zoom to Object", destructiveHint=True))
+    def zoom_to_object(
+        object_id: str,
+        rhino_id: str | None = None,
+    ) -> dict[str, object]:
+        """
+        Zoom the active viewport to frame a specific object by GUID.
+        McNeel/RhinoMCP ZoomToObjectTool equivalent.
+        """
+        payload = {"op": "zoom_to_object", "object_id": object_id}
+        code = "__mcp_view_op = {!r}\n{}".format(payload, _VIEW_OPS_SCRIPT)
+        return rhino.execute_python(code, rhino_id=rhino_id)
+
+    @mcp.tool(annotations=ToolAnnotations(title="Zoom to Layer", destructiveHint=True))
+    def zoom_to_layer(
+        layer_name: str,
+        rhino_id: str | None = None,
+    ) -> dict[str, object]:
+        """
+        Zoom the active viewport to frame all objects on a layer.
+        McNeel/RhinoMCP ZoomToLayerTool equivalent.
+        """
+        payload = {"op": "zoom_to_layer", "layer_name": layer_name}
+        code = "__mcp_view_op = {!r}\n{}".format(payload, _VIEW_OPS_SCRIPT)
+        return rhino.execute_python(code, rhino_id=rhino_id)
+
     @mcp.tool(annotations=ToolAnnotations(title="Get View Info", readOnlyHint=True))
     def get_view_info(
         viewport: str | None = None,
@@ -170,6 +196,7 @@ def register(mcp: FastMCP) -> None:
 _VIEW_OPS_SCRIPT = r'''
 import rhinoscriptsyntax as rs
 import Rhino
+import System
 
 data = __mcp_view_op
 op   = data["op"]
@@ -192,6 +219,36 @@ if op == "zoom_extents":
 elif op == "zoom_selected":
     rs.ZoomSelected()
     result = {"ok": True}
+
+elif op == "zoom_to_object":
+    doc = Rhino.RhinoDoc.ActiveDoc
+    obj = doc.Objects.FindId(System.Guid(str(data["object_id"])))
+    if obj is None:
+        result = {"ok": False, "error": "Object not found: {}".format(data["object_id"])}
+    else:
+        bbox = obj.Geometry.GetBoundingBox(True)
+        doc.Views.ActiveView.ActiveViewport.ZoomBoundingBox(bbox)
+        doc.Views.ActiveView.Redraw()
+        result = {"ok": True, "object_id": data["object_id"]}
+
+elif op == "zoom_to_layer":
+    doc = Rhino.RhinoDoc.ActiveDoc
+    import Rhino.Geometry
+    lname = data["layer_name"]
+    li = doc.Layers.FindByFullPath(lname, Rhino.RhinoMath.UnsetIntIndex)
+    if li < 0:
+        result = {"ok": False, "error": "Layer not found: {}".format(lname)}
+    else:
+        bbox = Rhino.Geometry.BoundingBox.Empty
+        for obj in doc.Objects:
+            if not obj.IsDeleted and obj.Attributes.LayerIndex == li:
+                bbox.Union(obj.Geometry.GetBoundingBox(True))
+        if bbox.IsValid:
+            doc.Views.ActiveView.ActiveViewport.ZoomBoundingBox(bbox)
+            doc.Views.ActiveView.Redraw()
+            result = {"ok": True, "layer": lname}
+        else:
+            result = {"ok": False, "error": "No objects on layer: {}".format(lname)}
 
 elif op == "get_info":
     vp = _get_vp(data.get("viewport"))

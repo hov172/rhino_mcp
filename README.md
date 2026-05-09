@@ -39,7 +39,7 @@ Control Rhino 3D from Claude, Cursor, Codex, and any other MCP-capable AI tool. 
   - [Manual Installation](#manual-installation)
   - [File-based Installation](#file-based-installation)
   - [Checking Plugin Status](#checking-plugin-status)
-- [All 314 Tools](#all-314-tools)
+- [All 318 Tools](#all-318-tools)
   - [Plugin Management](#plugin-management)
   - [Grasshopper — Canvas](#grasshopper--canvas)
   - [Grasshopper — Parameters](#grasshopper--parameters)
@@ -181,7 +181,7 @@ The `command` + `args` lines are literally the shell command Claude Desktop runs
 
 #### Step 5 — Restart Claude Desktop and start using it
 
-Fully quit Claude Desktop (don't just close the window) and reopen it. Claude Desktop reads the config on launch, spawns the MCP server in the background, and the 314 Rhino tools become available automatically.
+Fully quit Claude Desktop (don't just close the window) and reopen it. Claude Desktop reads the config on launch, spawns the MCP server in the background, and the 318 Rhino tools become available automatically.
 
 Test it by typing in Claude:
 
@@ -270,7 +270,7 @@ Same as Path A Step 4. Type `MCPStart` in Rhino and confirm it shows `Listening 
 
 #### Step 5 — Restart Claude Desktop and start using it
 
-Fully quit and reopen Claude Desktop. It connects to the running container and the 314 tools appear.
+Fully quit and reopen Claude Desktop. It connects to the running container and the 318 tools appear.
 
 **Connection flow:**
 ```
@@ -1287,7 +1287,7 @@ You can also call `check_plugin_loaded(plugin_name="V-Ray")` directly to test wh
 
 ---
 
-## All 314 Tools
+## All 318 Tools
 
 ---
 
@@ -2008,6 +2008,8 @@ Lands Design adds landscape-specific objects (plants, terrain, paths, water) dir
 |---|---|
 | `zoom_extents` | Zoom the active viewport to show all objects. `all_views=true` zooms all viewports simultaneously. |
 | `zoom_selected` | Zoom the active viewport to fit the current selection. |
+| `zoom_to_object` | Zoom the active viewport to frame a specific object by GUID. (McNeel RhinoMCP compatible) |
+| `zoom_to_layer` | Zoom the active viewport to frame all objects on a named layer. (McNeel RhinoMCP compatible) |
 | `get_view_info` | Return camera position, target, lens length, and display mode for a viewport. |
 | `set_display_mode` | Set the display mode of a viewport (`Wireframe`, `Shaded`, `Rendered`, `Ghosted`, `XRay`, etc.). |
 | `add_named_view` | Save the current viewport state as a named view. |
@@ -2028,7 +2030,7 @@ Lands Design adds landscape-specific objects (plants, terrain, paths, water) dir
 
 These tools use the public RhinoMCP wire protocol names so agents trained on other MCP servers work without prompting:
 
-`create_object`, `create_objects`, `get_objects`, `get_object_info`, `get_selected_objects_info`, `modify_object`, `modify_objects`, `delete_object`, `select_objects`, `create_layer`, `delete_layer`, `get_or_set_current_layer`, `capture_viewport`, `undo`, `redo`, `execute_rhinoscript_python_code`, `execute_rhinocommon_csharp_code`, `get_document_summary`, `send_rhinomcp_plugin_command`
+`create_object`, `create_objects`, `get_objects`, `get_object_info`, `get_selected_objects_info`, `modify_object`, `modify_objects`, `delete_object`, `select_objects`, `create_layer`, `delete_layer`, `get_or_set_current_layer`, `capture_viewport`, `undo`, `redo`, `execute_rhinoscript_python_code`, `execute_rhinocommon_csharp_code`, `get_document_summary`, `send_rhinomcp_plugin_command`, `get_commands`, `run_command`
 
 ---
 
