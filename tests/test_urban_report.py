@@ -2,6 +2,7 @@
 from __future__ import annotations
 import importlib
 import unittest
+from pathlib import Path
 from unittest.mock import patch, MagicMock, call
 from mcp.server.fastmcp import FastMCP
 
@@ -102,12 +103,15 @@ class TestUrbanExportReport(unittest.TestCase):
         self.assertIn("pdf_url", r)
 
     def test_falls_back_to_local_when_no_cloud_credentials(self):
+        import tempfile
+        tmp_home = Path(tempfile.mkdtemp())
         tools = _register()
         with patch("rhmcp.tools.urban_design_language._current_design_language", _SAMPLE_DL):
             with patch("rhmcp.tools.urban_renders._current_renders", {}):
                 with patch("rhmcp.tools.urban._urban_get_metrics", return_value=_SAMPLE_METRICS):
                     with patch.dict("os.environ", {}, clear=True):
-                        r = tools["urban_export_report"](project_name="P", scheme_name="S")
+                        with patch("pathlib.Path.home", return_value=tmp_home):
+                            r = tools["urban_export_report"](project_name="P", scheme_name="S")
         self.assertTrue(r["ok"])
         self.assertTrue(r["pdf_url"].startswith("file://") or "local_path" in r)
 

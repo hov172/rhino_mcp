@@ -29,8 +29,11 @@ class _AttrDict:
     def __init__(self, d: dict) -> None:
         self.__dict__.update(d)
 
-    def __getattr__(self, name: str) -> Any:  # pragma: no cover
-        return None
+    def __getattr__(self, name: str) -> Any:
+        raise AttributeError(f"_AttrDict has no attribute '{name}'")
+
+    def get(self, key: str, default=None):
+        return self.__dict__.get(key, default)
 
 
 def _render_html(
@@ -168,8 +171,8 @@ def register(mcp: FastMCP) -> None:
         if os.environ.get("DOCRAPTOR_API_KEY"):
             try:
                 pdf_bytes = _html_to_pdf_docraptor(html)
-            except Exception:
-                pass
+            except Exception as exc:
+                print(f"[urban_report] DocRaptor failed: {exc}", flush=True)
 
         if not pdf_bytes:
             pdf_bytes = html.encode()  # fallback: store HTML as "pdf"
@@ -180,8 +183,8 @@ def register(mcp: FastMCP) -> None:
         if os.environ.get("URBAN_AGENT_S3_BUCKET") and os.environ.get("AWS_ACCESS_KEY_ID"):
             try:
                 pdf_url, html_url = _upload_to_s3(pdf_bytes, html, project_name, scheme_name)
-            except Exception:
-                pass
+            except Exception as exc:
+                print(f"[urban_report] S3 upload failed: {exc}", flush=True)
 
         if not pdf_url:
             pdf_url, html_url = _save_local(pdf_bytes, html, project_name, scheme_name)
@@ -231,7 +234,9 @@ def register(mcp: FastMCP) -> None:
             include_design_language=bool(dl),
         )
 
-        tmp = Path(tempfile.mktemp(suffix=".html"))
+        fd, tmp_str = tempfile.mkstemp(suffix=".html")
+        os.close(fd)
+        tmp = Path(tmp_str)
         tmp.write_text(html)
         return {"ok": True, "html_path": str(tmp), "html_content": html}
 
