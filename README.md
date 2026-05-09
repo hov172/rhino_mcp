@@ -23,7 +23,10 @@ Control Rhino 3D from Claude, Cursor, Codex, and any other MCP-capable AI tool. 
 - [Connecting AI Clients](#connecting-ai-clients)
   - [Claude Desktop](#claude-desktop)
   - [Claude Code (CLI)](#claude-code-cli)
+  - [ChatGPT Desktop](#chatgpt-desktop)
   - [Cursor](#cursor)
+  - [Windsurf](#windsurf)
+  - [GitHub Copilot (VS Code)](#github-copilot-vs-code)
   - [Codex CLI](#codex-cli)
   - [Docker / HTTP Transport](#docker--http-transport)
 - [Backend Selection](#backend-selection)
@@ -89,13 +92,13 @@ The plugin runs a socket server inside Rhino that the MCP server talks to.
 
 ```bash
 # macOS
-cp rhino_plugin/package/RhinoMCPPlugin.rhp \
+cp rhino_plugin/package/rhino-mcp.rhp \
    "/Applications/Rhino 8.app/Contents/PlugIns/"
 ```
 
 ```powershell
 # Windows
-Copy-Item rhino_plugin\package\RhinoMCPPlugin.rhp `
+Copy-Item rhino_plugin\package\rhino-mcp.rhp `
   "$env:ProgramFiles\Rhino 8\Plug-ins\"
 ```
 
@@ -421,13 +424,13 @@ The plugin is a `.rhp` file that runs a TCP socket server inside Rhino. There ar
 
 ```bash
 # macOS
-cp rhino_plugin/package/RhinoMCPPlugin.rhp \
+cp rhino_plugin/package/rhino-mcp.rhp \
    "/Applications/Rhino 8.app/Contents/PlugIns/"
 ```
 
 ```powershell
 # Windows — adjust Rhino version path as needed
-Copy-Item rhino_plugin\package\RhinoMCPPlugin.rhp `
+Copy-Item rhino_plugin\package\rhino-mcp.rhp `
   "C:\Program Files\Rhino 8\Plug-ins\"
 ```
 
@@ -437,19 +440,17 @@ Then restart Rhino. The plugin loads automatically on startup.
 
 1. Open Rhino.
 2. Run the command `_PackageManager` in the Rhino command line.
-3. Click **Install from file…** and select either:
-   - `rhino_plugin/package/rhino-mcp-0.1.0-rh8_30-any.yak` (Rhino 8)
-   - `rhino_plugin/package/rhino-mcp-0.1.0-any-any.yak` (any version)
+3. Click **Install from file…** and select `rhino_plugin/package/rhino-mcp-0.2.0-rh8_17-any.yak`.
 4. Restart Rhino when prompted.
 
 #### Option C — Build from source
 
 ```bash
 # Requires .NET 8 SDK
-./scripts/build-plugin.sh
+dotnet build -c Release rhino_plugin/RhinoMCPPlugin/RhinoMCPPlugin.csproj
 ```
 
-The build output is placed at `rhino_plugin/RhinoMCPPlugin/bin/Debug/net8.0/RhinoMCPPlugin.rhp` and is automatically copied to `/Applications/Rhino 8.app/Contents/PlugIns/` on macOS by the PostBuild step.
+The build output is placed at `rhino_plugin/RhinoMCPPlugin/bin/Release/net8.0/rhino-mcp.rhp` and is automatically copied to `/Applications/Rhino 8.app/Contents/PlugIns/` on macOS by the PostBuild step.
 
 ---
 
@@ -629,7 +630,7 @@ Replace `/path/to/rhino-mcp` with the absolute path to the cloned repo. Omit any
 
 ### Claude Code (CLI)
 
-Add to your project's `.mcp.json` or `~/.claude/mcp.json`:
+Add to your project's `.mcp.json` or `~/.claude/mcp.json` (create the file if it doesn't exist):
 
 ```json
 {
@@ -661,6 +662,48 @@ claude --mcp-server "rhino:uv run --directory /path/to/rhino-mcp python -m rhmcp
 
 ---
 
+### ChatGPT Desktop
+
+Edit `~/Library/Application Support/ChatGPT/mcp.json` (macOS) or `%APPDATA%\ChatGPT\mcp.json` (Windows). Create the file if it doesn't exist:
+
+```json
+{
+  "mcpServers": {
+    "rhino": {
+      "command": "uv",
+      "args": ["run", "--directory", "/path/to/rhino-mcp", "python", "-m", "rhmcp"],
+      "env": {
+        "RHINO_MCP_BACKEND": "plugin",
+        "RHINO_MCP_HOST": "127.0.0.1",
+        "RHINO_MCP_PORT": "1999",
+        "ANTHROPIC_API_KEY": "sk-ant-...",
+        "FAL_KEY": "...",
+        "DOCRAPTOR_API_KEY": "...",
+        "URBAN_AGENT_S3_BUCKET": "my-bucket",
+        "AWS_ACCESS_KEY_ID": "...",
+        "AWS_SECRET_ACCESS_KEY": "..."
+      }
+    }
+  }
+}
+```
+
+Replace `/path/to/rhino-mcp` with the absolute path to the cloned repo. Restart ChatGPT Desktop after saving.
+
+With Docker running, use the URL form instead:
+
+```json
+{
+  "mcpServers": {
+    "rhino": {
+      "url": "http://localhost:8000/"
+    }
+  }
+}
+```
+
+---
+
 ### Cursor
 
 In Cursor Settings → MCP → Add Server:
@@ -684,6 +727,88 @@ In Cursor Settings → MCP → Add Server:
   }
 }
 ```
+
+---
+
+### Windsurf
+
+Edit `~/.codeium/windsurf/mcp_config.json` (macOS/Linux) or `%APPDATA%\Codeium\windsurf\mcp_config.json` (Windows):
+
+```json
+{
+  "mcpServers": {
+    "rhino": {
+      "command": "uv",
+      "args": ["run", "--directory", "/path/to/rhino-mcp", "python", "-m", "rhmcp"],
+      "env": {
+        "RHINO_MCP_BACKEND": "plugin",
+        "RHINO_MCP_HOST": "127.0.0.1",
+        "RHINO_MCP_PORT": "1999",
+        "ANTHROPIC_API_KEY": "sk-ant-...",
+        "FAL_KEY": "...",
+        "DOCRAPTOR_API_KEY": "...",
+        "URBAN_AGENT_S3_BUCKET": "my-bucket",
+        "AWS_ACCESS_KEY_ID": "...",
+        "AWS_SECRET_ACCESS_KEY": "..."
+      }
+    }
+  }
+}
+```
+
+Or via Windsurf Settings → MCP Servers → Add. Restart Windsurf after saving.
+
+With Docker: add a server with type `sse` and URL `http://localhost:8000/`.
+
+---
+
+### GitHub Copilot (VS Code)
+
+Add to your workspace `.vscode/mcp.json` (per-project) or user `settings.json` (global):
+
+**`.vscode/mcp.json`** (recommended — commit alongside your project):
+
+```json
+{
+  "servers": {
+    "rhino": {
+      "type": "stdio",
+      "command": "uv",
+      "args": ["run", "--directory", "/path/to/rhino-mcp", "python", "-m", "rhmcp"],
+      "env": {
+        "RHINO_MCP_BACKEND": "plugin",
+        "RHINO_MCP_HOST": "127.0.0.1",
+        "RHINO_MCP_PORT": "1999",
+        "ANTHROPIC_API_KEY": "${env:ANTHROPIC_API_KEY}",
+        "FAL_KEY": "${env:FAL_KEY}"
+      }
+    }
+  }
+}
+```
+
+> VS Code MCP supports `${env:VAR}` substitution so API keys are read from your shell environment rather than hardcoded.
+
+**Global** — add to `settings.json` under `"github.copilot.mcp"`:
+
+```json
+"github.copilot.mcp": {
+  "servers": {
+    "rhino": {
+      "type": "stdio",
+      "command": "uv",
+      "args": ["run", "--directory", "/path/to/rhino-mcp", "python", "-m", "rhmcp"],
+      "env": {
+        "RHINO_MCP_BACKEND": "plugin",
+        "RHINO_MCP_HOST": "127.0.0.1",
+        "RHINO_MCP_PORT": "1999"
+      }
+    }
+  }
+}
+```
+
+With Docker running, use `"type": "http"` and `"url": "http://localhost:8000/"` instead of `command`/`args`.
 
 ---
 
@@ -722,7 +847,11 @@ When the server is running in Docker (or started manually with `--transport http
 claude --mcp-server "rhino:http://localhost:8000/"
 ```
 
-**Cursor** — in Settings → MCP → Add Server, use type `http` and URL `http://localhost:8000/`.
+**Cursor** — Settings → MCP → Add Server, type `http`, URL `http://localhost:8000/`.
+
+**Windsurf** — add a server with type `sse` and URL `http://localhost:8000/`.
+
+**GitHub Copilot (VS Code)** — in `.vscode/mcp.json` use `"type": "http"` and `"url": "http://localhost:8000/"`.
 
 **Codex CLI:**
 
