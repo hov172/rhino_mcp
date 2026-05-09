@@ -604,13 +604,23 @@ RHINO_MCP_HOST=127.0.0.1 RHINO_MCP_PORT=1999 uv run python -m rhmcp
 >
 > - **Your AI account login** (Claude account, ChatGPT account, OpenAI key for Codex) — this powers the AI conversation. If you are logged into the desktop app, this is already handled. You do not put it in the MCP config.
 >
-> - **Studio Pipeline API keys** (`ANTHROPIC_API_KEY`, `FAL_KEY`, etc.) — these are used by the **MCP server process itself** to call external services when you ask it to generate design language, produce AI renders, or export PDFs. Your app login is not shared with the server process — it needs its own credentials.
+> - **Studio Pipeline API keys** (`ANTHROPIC_API_KEY`, `FAL_KEY`, etc.) — these are used by the **MCP server process itself** to call external services. Your app login is not shared with the server process — it needs its own credentials for those services.
 >
-> **If you only use Rhino tools** (geometry, Grasshopper, layers, materials, rendering, BIM) you need **no API keys at all** in the `env` block — just the three connection variables:
+> **If you only use Rhino tools** (geometry, Grasshopper, layers, materials, rendering, BIM) you need **no API keys at all** — just the three connection variables:
 > ```json
 > "env": { "RHINO_MCP_BACKEND": "plugin", "RHINO_MCP_HOST": "127.0.0.1", "RHINO_MCP_PORT": "1999" }
 > ```
-> Add API keys only if you want Studio Pipeline features. See [Studio Pipeline Env Vars](#studio-pipeline-env-vars) for the full list.
+>
+> **Add a key only when you need that specific feature:**
+>
+> | Key | Get it from | Unlocks |
+> |---|---|---|
+> | `ANTHROPIC_API_KEY` | [console.anthropic.com](https://console.anthropic.com/) | `urban_generate_design_language` — AI design language generation |
+> | `FAL_KEY` | [fal.ai/dashboard](https://fal.ai/dashboard) | `urban_render_views`, `urban_render_style_preview` — AI viewport renders |
+> | `DOCRAPTOR_API_KEY` | [docraptor.com](https://docraptor.com/) | `urban_export_report` — PDF conversion (falls back to local HTML without it) |
+> | `URBAN_AGENT_S3_BUCKET` + AWS credentials | AWS Console | `urban_export_report` — cloud share links (falls back to `~/.urbanagent/reports/` without it) |
+>
+> All Studio Pipeline keys are optional — the pipeline degrades gracefully. Without any keys the report still exports as a local HTML file.
 
 ---
 
