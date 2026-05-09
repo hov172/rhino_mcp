@@ -40,7 +40,7 @@ public static class CommandDispatcher
         {
             var result = request.Type switch
             {
-                "ping" => McpResponse.Ok(new { ok = true, version = "0.5.0", rhino = RhinoApp.Version.ToString() }),
+                "ping" => McpResponse.Ok(new { ok = true, version = "0.6.0", rhino = RhinoApp.Version.ToString() }),
                 "get_document_summary" => McpResponse.Ok(RhinoHandlers.GetDocumentSummary()),
                 "get_objects" => McpResponse.Ok(RhinoHandlers.GetObjects(p)),
                 "get_object_info" => McpResponse.Ok(RhinoHandlers.GetObjectInfo(p)),
