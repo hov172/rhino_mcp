@@ -81,7 +81,7 @@ def _fal_img2img(
         data = resp.json()
         img_url = data["images"][0]["url"]
         request_id = data.get("request_id", "")
-        seed_used = int(data.get("seed", seed or 0))
+        seed_used = int(data.get("seed") or seed or 0)
         img_resp = client.get(img_url)
         img_resp.raise_for_status()
         rendered_b64 = base64.b64encode(img_resp.content).decode()
@@ -103,7 +103,7 @@ def _fal_text2img(prompt: str, seed: int | None) -> tuple[str, str, int]:
         data = resp.json()
         img_url = data["images"][0]["url"]
         request_id = data.get("request_id", "")
-        seed_used = int(data.get("seed", seed or 0))
+        seed_used = int(data.get("seed") or seed or 0)
         img_resp = client.get(img_url)
         img_resp.raise_for_status()
         return base64.b64encode(img_resp.content).decode(), request_id, seed_used
@@ -157,6 +157,14 @@ def register(mcp: FastMCP) -> None:
         results = []
         for view in views:
             original_b64 = _capture_named_view(view)
+            if not original_b64:
+                results.append({
+                    "view": view, "ok": False, "error": f"failed to capture viewport '{view}'",
+                    "original_b64": "", "rendered_b64": "", "prompt_used": "",
+                    "negative_prompt": negative, "seed": seed or 0,
+                    "strength": strength, "model": "", "fal_request_id": "",
+                })
+                continue
             suffix = _VIEW_SUFFIXES.get(view, _DEFAULT_SUFFIX)
             prompt = f"{base_prompt}, {suffix}"
             if style_override:
