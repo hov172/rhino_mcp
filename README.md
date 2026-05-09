@@ -603,27 +603,26 @@ Once running, point your AI client at `http://localhost:8000/` — see [Docker /
 ### Step 1 — Start Rhino and activate the plugin
 
 1. **Open Rhino 3D** (version 7 or 8).
-2. In the Rhino command line, type:
+2. The plugin starts its socket server automatically on load. You should see this in the Rhino command history:
+   ```
+   Rhino MCP listening on 127.0.0.1:1999
+   ```
+
+3. **If the auto-start message doesn't appear** (e.g. port conflict on first launch), run `MCPStart` manually:
 
    ```
    MCPStart
    ```
 
-   You should see a message like:
-   ```
-   RhinoMCP: Listening on 127.0.0.1:1999
-   ```
+   Use `MCPStatus` at any time to confirm the server is running. If you see `already listening`, the auto-start succeeded and no further action is needed.
 
-3. *(Optional — for Grasshopper tools)* Open Grasshopper:
+4. *(Optional — for Grasshopper tools)* Open Grasshopper:
 
    ```
    Grasshopper
    ```
 
    Grasshopper must be open at least once before GH tools will work. After the first open, `gh_new_definition` will open it automatically on demand.
-
-> **Tip:** To start the socket server automatically every time Rhino opens, add `MCPStart` to your Rhino startup commands:  
-> *Rhino Options → General → Command Lists → Add to startup commands*
 
 ---
 
