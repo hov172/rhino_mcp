@@ -147,6 +147,7 @@ On macOS, the PostBuild step in `RhinoMCPPlugin.csproj` copies the built `rhino-
 ```
 
 The package script also stages release assets in `rhino_plugin/release/` so GitHub releases can ship both the direct-install `.rhp` and the Yak package together.
+The repository also includes `.github/workflows/release-plugin.yml` for automated GitHub Release uploads from a self-hosted macOS runner with Rhino installed.
 
 ---
 
