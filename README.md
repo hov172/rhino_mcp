@@ -598,6 +598,22 @@ RHINO_MCP_HOST=127.0.0.1 RHINO_MCP_PORT=1999 uv run python -m rhmcp
 
 ## Connecting AI Clients
 
+> **Do I need API keys?**
+>
+> There are two completely separate things that look similar but are not the same:
+>
+> - **Your AI account login** (Claude account, ChatGPT account, OpenAI key for Codex) — this powers the AI conversation. If you are logged into the desktop app, this is already handled. You do not put it in the MCP config.
+>
+> - **Studio Pipeline API keys** (`ANTHROPIC_API_KEY`, `FAL_KEY`, etc.) — these are used by the **MCP server process itself** to call external services when you ask it to generate design language, produce AI renders, or export PDFs. Your app login is not shared with the server process — it needs its own credentials.
+>
+> **If you only use Rhino tools** (geometry, Grasshopper, layers, materials, rendering, BIM) you need **no API keys at all** in the `env` block — just the three connection variables:
+> ```json
+> "env": { "RHINO_MCP_BACKEND": "plugin", "RHINO_MCP_HOST": "127.0.0.1", "RHINO_MCP_PORT": "1999" }
+> ```
+> Add API keys only if you want Studio Pipeline features. See [Studio Pipeline Env Vars](#studio-pipeline-env-vars) for the full list.
+
+---
+
 ### Claude Desktop
 
 Edit `~/Library/Application Support/Claude/claude_desktop_config.json` (macOS) or `%APPDATA%\Claude\claude_desktop_config.json` (Windows):
