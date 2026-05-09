@@ -1,3 +1,4 @@
+using System.Diagnostics;
 using Rhino;
 using Rhino.Commands;
 
@@ -36,6 +37,19 @@ public sealed class MCPStatusCommand : Command
             RhinoApp.WriteLine($"Rhino MCP server running on {server.BindAddress}:{server.Port}");
         else
             RhinoApp.WriteLine("Rhino MCP server is stopped.");
+        return Result.Success;
+    }
+}
+
+public sealed class MCPHelpCommand : Command
+{
+    public override string EnglishName => "MCPHelp";
+
+    protected override Result RunCommand(RhinoDoc doc, RunMode mode)
+    {
+        const string url = "https://github.com/hov172/rhino_mcp";
+        RhinoApp.WriteLine($"Rhino MCP docs: {url}");
+        Process.Start(new ProcessStartInfo(url) { UseShellExecute = true });
         return Result.Success;
     }
 }
