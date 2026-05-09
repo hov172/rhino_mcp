@@ -139,7 +139,7 @@ All command handlers that touch Rhino or Grasshopper state run on the Rhino main
 ./scripts/build-plugin.sh
 ```
 
-On macOS, the PostBuild step in `RhinoMCPPlugin.csproj` copies the built `.rhp` to `/Applications/Rhino 8.app/Contents/PlugIns/` automatically. Restart Rhino after each build.
+On macOS, the PostBuild step in `RhinoMCPPlugin.csproj` copies the built `rhino-mcp.rhp` to `/Applications/Rhino 8.app/Contents/PlugIns/` automatically. Restart Rhino after each build.
 
 ```bash
 # Package for Yak distribution
@@ -156,4 +156,4 @@ On macOS, the PostBuild step in `RhinoMCPPlugin.csproj` copies the built `.rhp` 
 | Port | `1999` |
 | Protocol | TCP, newline-delimited JSON |
 | Rhino versions | Rhino 7 and Rhino 8 |
-| Target framework | `net48` (Rhino 7/8 compatible) |
+| Target framework | `net8.0` |

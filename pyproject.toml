@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "rhino-mcp"
-version = "0.1.0"
+version = "0.2.0"
 description = "MCP server for Rhino 3D"
 requires-python = ">=3.10"
 dependencies = [
@@ -32,7 +32,7 @@ where = ["src"]
 
 [tool.pytest.ini_options]
 markers = [
-    "integration: tests that require a running Rhino 8 instance with RhinoMCPPlugin loaded",
+    "integration: tests that require a running Rhino 8 instance with rhino-mcp plugin loaded",
 ]
 
 [dependency-groups]

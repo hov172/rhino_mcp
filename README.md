@@ -391,7 +391,7 @@ AI Client (Claude / Cursor / Codex)
   Python MCP Server (rhmcp)      ← this repo, runs anywhere
        │  TCP JSON socket  :1999
        ▼
-  RhinoMCPPlugin (.rhp)          ← runs inside Rhino 7/8
+  rhino-mcp.rhp (plugin)         ← runs inside Rhino 7/8
        │
        ▼
   Rhino 3D + Grasshopper
@@ -895,7 +895,7 @@ The MCP server supports three backend modes:
 
 | Mode | Description | Use case |
 |---|---|---|
-| `plugin` | TCP socket to RhinoMCPPlugin | **Recommended.** Full feature set including Grasshopper. Works with Rhino 7 and 8. |
+| `plugin` | TCP socket to rhino-mcp.rhp | **Recommended.** Full feature set including Grasshopper. Works with Rhino 7 and 8. |
 | `rhinocode` | Rhino 8.11+ official CLI | No plugin required. Does not support Grasshopper. Slower for complex operations. |
 | `auto` | Try plugin first, fall back to rhinocode | Good default when plugin availability is uncertain. |
 
@@ -1772,7 +1772,7 @@ uv run python -m pytest tests/test_urban_unit.py tests/test_urban_design_languag
 # Grasshopper integration tests (requires Rhino running with MCPStart active)
 uv run python -m pytest tests/test_gh_integration.py -v -m integration
 
-# All non-integration tests (169 tests, ~1.7s)
+# All non-integration tests (161 tests, ~1.7s)
 uv run python -m pytest tests/ --ignore=tests/test_gh_integration.py -v
 ```
 

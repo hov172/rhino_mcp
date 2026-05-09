@@ -80,7 +80,8 @@ Phase 1 (implemented):
 - AI design language generation (Claude API)
 - AI render pipeline (fal.ai FLUX.1 ControlNet)
 - Branded PDF report generation (DocRaptor + S3)
-- Studio Pipeline single-call orchestrator
+- Studio Pipeline single-call orchestrator (including solar analysis step)
+- Solar analysis (`_step_run_solar` → `_urban_run_solar_internal` → `analysis_solar.gh`)
 - 3DM/GLB/GeoJSON/PDF export hooks
 - MCP integration
 - GeoJSON-style site boundary dimensions
@@ -88,7 +89,6 @@ Phase 1 (implemented):
 
 Future SaaS / Phase 2 Possibilities:
 
-- Solar analysis integration in pipeline (stub exists, `urban_run_analysis` wiring)
 - Deeper optimization algorithms
 - Production rendering queues
 - Billing integration
