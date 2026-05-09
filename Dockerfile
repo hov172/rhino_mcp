@@ -30,12 +30,8 @@ COPY pyproject.toml uv.lock ./
 # Install dependencies without the project itself (cache layer)
 RUN uv sync --frozen --no-install-project
 
-# Copy source and install the project
+# Copy source and install the project (includes data/, report_templates/)
 COPY src/ ./src/
-
-# Copy data files (prompts, templates, notes)
-COPY src/rhmcp/data/ ./src/rhmcp/data/
-COPY src/rhmcp/report_templates/ ./src/rhmcp/report_templates/ 2>/dev/null || true
 
 RUN uv sync --frozen
 
