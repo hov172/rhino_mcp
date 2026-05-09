@@ -1,0 +1,23 @@
+.git
+.DS_Store
+.venv
+__pycache__
+*.pyc
+*.pyo
+*.pyd
+
+# Dev / test artifacts
+tests/
+docs/
+scripts/
+grasshopper/
+rhino_plugin/
+test_*.py
+*.md
+*.png
+*.jpg
+*.json
+*.txt
+*.cs
+yak_*.py
+live_results.txt

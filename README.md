@@ -15,12 +15,14 @@ Control Rhino 3D from Claude, Cursor, Codex, and any other MCP-capable AI tool. 
   - [1. Install the Rhino Plugin](#1-install-the-rhino-plugin)
   - [2. Install the Python MCP Server](#2-install-the-python-mcp-server)
   - [3. Configure API Keys (Studio Pipeline)](#3-configure-api-keys-studio-pipeline)
+  - [Docker Quick-Start (alternative to steps 2 & 3)](#docker-quick-start-alternative-to-steps-2--3)
 - [Starting the Service](#starting-the-service)
 - [Connecting AI Clients](#connecting-ai-clients)
   - [Claude Desktop](#claude-desktop)
   - [Claude Code (CLI)](#claude-code-cli)
   - [Cursor](#cursor)
   - [Codex CLI](#codex-cli)
+  - [Docker / HTTP Transport](#docker--http-transport)
 - [Backend Selection](#backend-selection)
 - [Environment Variables](#environment-variables)
 - [Remote Host Support](#remote-host-support)
@@ -313,6 +315,45 @@ export AWS_SECRET_ACCESS_KEY="..."       # optional
 
 ---
 
+### Docker Quick-Start (alternative to steps 2 & 3)
+
+Docker bundles the Python server and all dependencies into a self-contained image. You still need the Rhino plugin (step 1) — it runs inside Rhino on your machine and cannot be containerized.
+
+**Build the image:**
+
+```bash
+docker build -t rhino-mcp .
+```
+
+**Run it:**
+
+```bash
+docker run -d \
+  -p 8000:8000 \
+  -e ANTHROPIC_API_KEY="sk-ant-..." \
+  -e FAL_KEY="..." \
+  -e DOCRAPTOR_API_KEY="..." \
+  -e URBAN_AGENT_S3_BUCKET="my-bucket" \
+  -e AWS_ACCESS_KEY_ID="..." \
+  -e AWS_SECRET_ACCESS_KEY="..." \
+  --name rhino-mcp \
+  rhino-mcp
+```
+
+The container defaults to `RHINO_MCP_HOST=host.docker.internal`, which on **macOS and Windows** resolves automatically to the Docker host where Rhino is running. **Linux** requires one extra flag:
+
+```bash
+docker run -d -p 8000:8000 --add-host=host.docker.internal:host-gateway \
+  -e ANTHROPIC_API_KEY="sk-ant-..." \
+  rhino-mcp
+```
+
+Once running, point your AI client at `http://localhost:8000/` — see [Docker / HTTP Transport](#docker--http-transport) below.
+
+**Both paths work independently.** Existing manual stdio setups are unaffected by the Docker option.
+
+---
+
 ## Starting the Service
 
 ### Step 1 — Start Rhino and activate the plugin
@@ -461,6 +502,40 @@ ANTHROPIC_API_KEY="sk-ant-..." \
 FAL_KEY="..." \
 codex --mcp-server "uv run --directory /path/to/rhino-mcp python -m rhmcp"
 ```
+
+---
+
+### Docker / HTTP Transport
+
+When the server is running in Docker (or started manually with `--transport http`), AI clients connect to a URL instead of spawning a process. API keys are set on the container at `docker run` time — no `env` block needed in the client config.
+
+**Claude Desktop** — edit `claude_desktop_config.json`:
+
+```json
+{
+  "mcpServers": {
+    "rhino": {
+      "url": "http://localhost:8000/"
+    }
+  }
+}
+```
+
+**Claude Code (CLI):**
+
+```bash
+claude --mcp-server "rhino:http://localhost:8000/"
+```
+
+**Cursor** — in Settings → MCP → Add Server, use type `http` and URL `http://localhost:8000/`.
+
+**Codex CLI:**
+
+```bash
+codex --mcp-server "http://localhost:8000/"
+```
+
+> The manual stdio setup and Docker/HTTP setup can coexist. Point different clients at whichever they prefer — the Rhino plugin on port 1999 handles both.
 
 ---
 
