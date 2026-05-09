@@ -584,7 +584,8 @@ public static class RhinoHandlers
                 }
                 catch (Exception execEx)
                 {
-                    // Extract "line N" from the exception message for structured diagnostics
+                    doc.Views.Redraw();
+
                     int? errorLine = null;
                     var msg = execEx.Message;
                     var lineMatch = System.Text.RegularExpressions.Regex.Match(msg, @"\bline\s+(\d+)\b", System.Text.RegularExpressions.RegexOptions.IgnoreCase);

@@ -14,11 +14,17 @@ def _wrap_with_revert(code: str) -> str:
     indented = "\n".join("    " + line for line in code.splitlines())
     return (
         'import rhinoscriptsyntax as rs\n'
+        'import Rhino as _mcp_Rhino\n'
+        '_mcp_doc = _mcp_Rhino.RhinoDoc.ActiveDoc\n'
+        '_mcp_ids_before = set(str(o.Id) for o in _mcp_doc.Objects)\n'
         'try:\n'
         f'{indented}\n'
         'except Exception as _mcp_ex:\n'
         '    try:\n'
-        '        rs.Command("_Undo", False)\n'
+        '        for _o in list(_mcp_doc.Objects):\n'
+        '            if str(_o.Id) not in _mcp_ids_before:\n'
+        '                _mcp_doc.Objects.Delete(_o.Id, True)\n'
+        '        _mcp_doc.Views.Redraw()\n'
         '    except Exception:\n'
         '        pass\n'
         '    raise _mcp_ex\n'

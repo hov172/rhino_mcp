@@ -4,6 +4,7 @@ Backend router for Rhino 7/8 control paths.
 
 from __future__ import annotations
 
+import json
 import os
 from typing import Any
 
@@ -59,17 +60,45 @@ def plugin_result(command_type: str, params: dict[str, Any] | None = None) -> di
     return {"ok": True, "backend": BACKEND_PLUGIN, "result": response, "raw": response}
 
 
+_RESULT_SENTINEL = "__MCP_RESULT__:"
+_RESULT_SERIALIZER = (
+    "\ntry:\n"
+    "    import json as _mj\n"
+    "    print('" + _RESULT_SENTINEL + "' + _mj.dumps(result))\n"
+    "except:\n"
+    "    pass\n"
+)
+
+
 def execute_python(code: str, rhino_id: str | None = None, backend_name: str | None = None) -> dict[str, Any]:
     """
     Execute Rhino Python through the best available script-capable backend.
+    Appends a serialization snippet so the ``result`` variable is returned.
     """
-    return run_plugin_or_python(
+    resp = run_plugin_or_python(
         "execute_rhinoscript_python_code",
-        {"code": code},
-        code,
+        {"code": code + _RESULT_SERIALIZER},
+        code + _RESULT_SERIALIZER,
         rhino_id=rhino_id,
         backend_name=backend_name,
     )
+    # Extract script result from sentinel line in output
+    inner = resp.get("result")
+    if isinstance(inner, dict):
+        output = inner.get("output") or ""
+        for line in output.splitlines():
+            if line.startswith(_RESULT_SENTINEL):
+                payload = line[len(_RESULT_SENTINEL):]
+                try:
+                    resp["script_result"] = json.loads(payload)
+                except Exception:
+                    resp["script_result"] = payload
+                # Strip sentinel line from output so callers don't see it
+                inner["output"] = "\n".join(
+                    l for l in output.splitlines() if not l.startswith(_RESULT_SENTINEL)
+                )
+                break
+    return resp
 
 
 def execute_script(

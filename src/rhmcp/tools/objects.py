@@ -4,7 +4,6 @@ Tools for selecting, transforming, deleting, and editing Rhino objects.
 
 from __future__ import annotations
 
-import json
 from typing import Any
 
 from mcp.server.fastmcp import FastMCP
@@ -32,7 +31,7 @@ def register(mcp: FastMCP) -> None:
         returned.
         """
         payload = {"filters": filters or {}, "logic": logic, "limit": limit, "include_hidden": include_hidden, "bbox_filter": bbox_filter}
-        code = "__mcp_get_objects = {!s}\n{}".format(json.dumps(payload), _GET_OBJECTS_SCRIPT)
+        code = "__mcp_get_objects = {!r}\n{}".format(payload, _GET_OBJECTS_SCRIPT)
         return rhino.execute_python(code, rhino_id=rhino_id)
 
     @mcp.tool(annotations=ToolAnnotations(title="Get Rhino Object Info", readOnlyHint=True))
@@ -41,7 +40,7 @@ def register(mcp: FastMCP) -> None:
         Return detailed information for one object id.
         """
         payload = {"object_id": object_id}
-        code = "__mcp_object_info = {!s}\n{}".format(json.dumps(payload), _OBJECT_INFO_SCRIPT)
+        code = "__mcp_object_info = {!r}\n{}".format(payload, _OBJECT_INFO_SCRIPT)
         return rhino.execute_python(code, rhino_id=rhino_id)
 
     @mcp.tool(annotations=ToolAnnotations(title="Get Selected Rhino Objects", readOnlyHint=True))
@@ -50,7 +49,7 @@ def register(mcp: FastMCP) -> None:
         Return summaries for the current Rhino selection.
         """
         payload = {"limit": limit}
-        code = "__mcp_selected = {!s}\n{}".format(json.dumps(payload), _SELECTED_SCRIPT)
+        code = "__mcp_selected = {!r}\n{}".format(payload, _SELECTED_SCRIPT)
         return rhino.execute_python(code, rhino_id=rhino_id)
 
     @mcp.tool(annotations=ToolAnnotations(title="Select Rhino Objects", destructiveHint=True))
@@ -62,7 +61,7 @@ def register(mcp: FastMCP) -> None:
         ``logic`` can be ``and`` or ``or``.
         """
         payload = {"filters": filters, "logic": logic}
-        code = "__mcp_select = {!s}\n{}".format(json.dumps(payload), _SELECT_SCRIPT)
+        code = "__mcp_select = {!r}\n{}".format(payload, _SELECT_SCRIPT)
         return rhino.execute_python(code, rhino_id=rhino_id)
 
     @mcp.tool(annotations=ToolAnnotations(title="Transform Rhino Objects", destructiveHint=True))
@@ -92,7 +91,7 @@ def register(mcp: FastMCP) -> None:
             "scale_origin": scale_origin,
             "copy": copy,
         }
-        code = "__mcp_transform = {!s}\n{}".format(json.dumps(payload), _TRANSFORM_SCRIPT)
+        code = "__mcp_transform = {!r}\n{}".format(payload, _TRANSFORM_SCRIPT)
         return rhino.execute_python(code, rhino_id=rhino_id)
 
     @mcp.tool(annotations=ToolAnnotations(title="Edit Rhino Object Attributes", destructiveHint=True))
@@ -112,7 +111,7 @@ def register(mcp: FastMCP) -> None:
         document regardless of ``ids`` or ``selected``.
         """
         payload = {"ids": ids, "selected": selected, "apply_to_all": apply_to_all, "name": name, "layer": layer, "color": color}
-        code = "__mcp_attrs = {!s}\n{}".format(json.dumps(payload), _ATTR_SCRIPT)
+        code = "__mcp_attrs = {!r}\n{}".format(payload, _ATTR_SCRIPT)
         return rhino.execute_python(code, rhino_id=rhino_id)
 
     @mcp.tool(annotations=ToolAnnotations(title="Delete Rhino Objects", destructiveHint=True))
@@ -121,7 +120,7 @@ def register(mcp: FastMCP) -> None:
         Delete objects by ids or delete the current selection.
         """
         payload = {"ids": ids, "selected": selected}
-        code = "__mcp_delete = {!s}\n{}".format(json.dumps(payload), _DELETE_SCRIPT)
+        code = "__mcp_delete = {!r}\n{}".format(payload, _DELETE_SCRIPT)
         return rhino.execute_python(code, rhino_id=rhino_id)
 
 
@@ -156,7 +155,7 @@ def _summary(oid):
         "name": rs.ObjectName(oid),
         "type": str(rs.ObjectType(oid)),
         "layer": rs.ObjectLayer(oid),
-        "color": list(rs.ObjectColor(oid)),
+        "color": [int(c) for c in rs.ObjectColor(oid)],
         "hidden": rs.IsObjectHidden(oid),
         "locked": rs.IsObjectLocked(oid),
         "bbox": [[p.X, p.Y, p.Z] if hasattr(p, "X") else [p[0], p[1], p[2]] for p in bbox],
