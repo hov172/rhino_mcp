@@ -287,7 +287,7 @@ def register(mcp: FastMCP) -> None:
         if plugin:
             return [plugin]
 
-        payload = {"path": path, "width": width, "height": height}
+        payload = {"path": path, "width": width, "height": height, "viewport": viewport, "show_grid": show_grid, "show_axes": show_axes, "show_cplane_axes": show_cplane_axes, "zoom_to_fit": zoom_to_fit}
         raw = rhino.execute_python(
             "__mcp_capture = {!s}\n{}".format(json.dumps(payload), _CAPTURE_SCRIPT),
             rhino_id=rhino_id,

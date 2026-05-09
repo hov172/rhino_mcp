@@ -36,21 +36,33 @@ def register(mcp: FastMCP) -> None:
         path: str | None = None,
         width: int = 1200,
         height: int = 900,
+        viewport: str | None = None,
+        show_grid: bool | None = None,
+        show_axes: bool | None = None,
+        show_cplane_axes: bool | None = None,
+        zoom_to_fit: bool = False,
         rhino_id: str | None = None,
     ) -> list[object]:
         """
-        Capture the active Rhino viewport and return the image so the AI can see
-        the current state of the scene.
+        Capture a Rhino viewport and return the image so the AI can see the scene.
 
-        path: optional file path to save the PNG on disk (e.g. '/tmp/view.png').
-              Omit to capture in-memory only.
+        viewport: named viewport to capture (e.g. 'Top', 'Perspective'). Omit to
+                  use the active viewport.
+        path: optional file path to save the PNG on disk.
         width/height: output resolution in pixels (default 1200×900).
+        show_grid: temporarily show (True) or hide (False) the construction grid.
+        show_axes: temporarily show/hide the world axis widget.
+        show_cplane_axes: temporarily show/hide the construction-plane axis lines.
+        zoom_to_fit: zoom to extents of all objects before capture.
 
-        Returns the image as visual content the AI can inspect, plus metadata
-        ({path, saved, width, height}).  When path is omitted, saved=false and
-        path=null in the metadata.
+        Display overrides are restored after capture. Returns metadata + the image.
         """
-        payload = {"path": path, "width": width, "height": height}
+        payload = {
+            "path": path, "width": width, "height": height,
+            "viewport": viewport, "show_grid": show_grid,
+            "show_axes": show_axes, "show_cplane_axes": show_cplane_axes,
+            "zoom_to_fit": zoom_to_fit,
+        }
         code = "__mcp_capture = {!s}\n{}".format(json.dumps(payload), _CAPTURE_SCRIPT)
         raw = rhino.execute_python(code, rhino_id=rhino_id)
 
@@ -103,23 +115,49 @@ import System.Drawing.Imaging
 import System.IO
 import System.Convert
 
-view = Rhino.RhinoDoc.ActiveDoc.Views.ActiveView
+doc = Rhino.RhinoDoc.ActiveDoc
+viewport_name = __mcp_capture.get("viewport")
+if viewport_name:
+    v = doc.Views.Find(viewport_name, False)
+    if v is not None:
+        doc.Views.ActiveView = v
+
+view = doc.Views.ActiveView
 if view is None:
     raise RuntimeError("No active Rhino view")
 
+vp = view.ActiveViewport
 w = int(__mcp_capture["width"])
 h = int(__mcp_capture["height"])
 path = __mcp_capture.get("path")
+zoom_to_fit = bool(__mcp_capture.get("zoom_to_fit", False))
+show_grid = __mcp_capture.get("show_grid")
+show_cplane_axes = __mcp_capture.get("show_cplane_axes")
+if show_cplane_axes is None:
+    show_cplane_axes = __mcp_capture.get("show_axes")
 
-bitmap = view.CaptureToBitmap(System.Drawing.Size(w, h))
+# Save original display states
+orig_grid = vp.ConstructionGridVisible
+orig_axes = vp.ConstructionAxesVisible
 
-# Encode PNG to base64 in memory so the MCP server can return it as image content.
+try:
+    if show_grid is not None:
+        vp.ConstructionGridVisible = bool(show_grid)
+    if show_cplane_axes is not None:
+        vp.ConstructionAxesVisible = bool(show_cplane_axes)
+    if zoom_to_fit:
+        view.ZoomExtents()
+    view.Redraw()
+    bitmap = view.CaptureToBitmap(System.Drawing.Size(w, h))
+finally:
+    vp.ConstructionGridVisible = orig_grid
+    vp.ConstructionAxesVisible = orig_axes
+
 ms = System.IO.MemoryStream()
 bitmap.Save(ms, System.Drawing.Imaging.ImageFormat.Png)
 b64 = System.Convert.ToBase64String(ms.ToArray())
 ms.Dispose()
 
-# Save to disk only when a path was requested.
 saved = False
 if path:
     bitmap.Save(path)

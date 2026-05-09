@@ -170,13 +170,17 @@ def run_plugin_or_csharp(
     return {"backend": BACKEND_RHINOCODE, **result}
 
 
-def run_command(command: str, rhino_id: str | None = None, backend_name: str | None = None) -> dict[str, Any]:
+def run_command(command: str, echo: bool = False, rhino_id: str | None = None, backend_name: str | None = None) -> dict[str, Any]:
     """
-    Run a Rhino command. RhinoMCP plug-in does not expose a universal command
-    runner, so commands use rhinocode.
+    Run a Rhino command. Tries the plugin socket first (supports echo + output
+    capture), falls back to rhinocode when the plugin is unavailable.
     """
     mode = preferred_backend(backend_name)
-    if mode == BACKEND_PLUGIN:
-        return {"ok": False, "backend": BACKEND_PLUGIN, "message": "Raw Rhino commands require rhinocode backend."}
+    if mode in {BACKEND_AUTO, BACKEND_PLUGIN}:
+        try:
+            return plugin_result("run_command", {"command": command, "echo": echo}, rhino_id=rhino_id)
+        except OSError:
+            if mode == BACKEND_PLUGIN:
+                return {"ok": False, "backend": BACKEND_PLUGIN, "message": "Plugin socket unavailable."}
     result = rhinocode.run_command(command, rhino_id=rhino_id)
     return {"backend": BACKEND_RHINOCODE, **result}

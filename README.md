@@ -1,6 +1,6 @@
 # Rhino MCP
 
-Control Rhino 3D from Claude, Cursor, Codex, and any other MCP-capable AI tool. Create geometry, manipulate objects, run Grasshopper definitions, manage layers and materials, install plugins, bake results, generate AI 3D models, and more — all through natural language.
+Control Rhino 3D from Claude, Cursor, Codex, and any other MCP-capable AI tool. Create geometry, manipulate objects, run Grasshopper definitions, manage layers and materials, install plugins, bake results, generate AI 3D models, read design documents (PDFs, drawings, floor plans, spreadsheets, Word docs, SVGs, images), and more — all through natural language.
 
 ---
 
@@ -30,6 +30,7 @@ Control Rhino 3D from Claude, Cursor, Codex, and any other MCP-capable AI tool. 
   - [Codex CLI](#codex-cli)
   - [Docker / HTTP Transport](#docker--http-transport)
 - [Backend Selection](#backend-selection)
+  - [Session & Instance Management](#session--instance-management)
 - [Environment Variables](#environment-variables)
 - [Remote Host Support](#remote-host-support)
 - [Telemetry](#telemetry)
@@ -38,7 +39,7 @@ Control Rhino 3D from Claude, Cursor, Codex, and any other MCP-capable AI tool. 
   - [Manual Installation](#manual-installation)
   - [File-based Installation](#file-based-installation)
   - [Checking Plugin Status](#checking-plugin-status)
-- [All 216 Tools](#all-216-tools)
+- [All 223 Tools](#all-223-tools)
   - [Plugin Management](#plugin-management)
   - [Grasshopper — Canvas](#grasshopper--canvas)
   - [Grasshopper — Parameters](#grasshopper--parameters)
@@ -60,6 +61,7 @@ Control Rhino 3D from Claude, Cursor, Codex, and any other MCP-capable AI tool. 
   - [Enscape Real-Time Rendering](#enscape-real-time-rendering)
   - [Views & Viewport](#views--viewport)
   - [Document & File I/O](#document--file-io)
+  - [Document Reading](#document-reading)
   - [Scripting](#scripting)
   - [Boolean Operations](#boolean-operations)
   - [Curve Operations](#curve-operations)
@@ -166,7 +168,7 @@ The `command` + `args` lines are literally the shell command Claude Desktop runs
 
 #### Step 5 — Restart Claude Desktop and start using it
 
-Fully quit Claude Desktop (don't just close the window) and reopen it. Claude Desktop reads the config on launch, spawns the MCP server in the background, and the 216 Rhino tools become available automatically.
+Fully quit Claude Desktop (don't just close the window) and reopen it. Claude Desktop reads the config on launch, spawns the MCP server in the background, and the 223 Rhino tools become available automatically.
 
 Test it by typing in Claude:
 
@@ -255,7 +257,7 @@ Same as Path A Step 4. Type `MCPStart` in Rhino and confirm it shows `Listening 
 
 #### Step 5 — Restart Claude Desktop and start using it
 
-Fully quit and reopen Claude Desktop. It connects to the running container and the 216 tools appear.
+Fully quit and reopen Claude Desktop. It connects to the running container and the 223 tools appear.
 
 **Connection flow:**
 ```
@@ -284,14 +286,15 @@ Claude Desktop → HTTP → localhost:8000 (Docker container)
 | **UrbanAgent Platform** | Parse urban prompts, generate site layouts and massing, calculate/validate metrics, optimize FAR, render previews, export models, save versions, and orchestrate full schemes. **Studio Pipeline:** generate design language (Claude API), AI-render viewports (fal.ai FLUX.1), export branded PDF reports (DocRaptor + S3), run all steps with a single `urban_run_studio_pipeline` call |
 | **Geometry** | Create boxes, spheres, cylinders, cones, tori, curves, surfaces, meshes, text, arcs, ellipses, planes, and more |
 | **Modeling** | Boolean union/difference/intersection, loft, extrude, sweep, offset, pipe, project/intersect/split curves |
-| **Objects** | Select, move, rotate, scale, rename, change layer/color, delete, undo/redo |
+| **Document Reading** | Read PDF files page-by-page as images; read images (JPG, PNG, TIFF, HEIC, WebP); read CSV/Excel spreadsheets; parse SVG drawings with optional PNG render; extract text and tables from Word (.docx) documents — all without leaving the MCP session |
+| **Objects** | Select, move, rotate, scale, rename, change layer/color, delete, undo/redo. Filter by bounding box spatial region. Apply attribute changes to all objects at once with `apply_to_all` |
 | **Layers** | List, create, delete, set current, change color/visibility/lock |
 | **Materials** | Create, assign, and delete standard and PBR materials; set environment maps; configure render settings |
 | **V-Ray** | Start/stop IPR, render to file, create and apply V-Ray materials, add lights (Rectangle/Sphere/IES/Dome/Sun), set HDRI environment, configure GI presets, export `.vrscene` |
 | **Enscape** | Launch Enscape window, capture screenshots, export 360° panoramas, export standalone executables, set time of day and atmosphere, save named views |
 | **Views** | Capture the active viewport — **Claude receives the image and can see the scene**; set named views, camera position, target, and lens length; save PNG to disk |
 | **Files** | Save and export to `.3dm`, `.obj`, `.stl`, `.fbx`, `.step`, `.iges`, `.dwg` |
-| **Scripting** | Run arbitrary Rhino Python (RhinoScriptSyntax / RhinoCommon) or C# (Roslyn) directly |
+| **Scripting** | Run arbitrary Rhino Python (RhinoScriptSyntax / RhinoCommon) or C# (Roslyn) directly. Python scripts auto-revert newly added objects if the script raises an exception. Use `verified_functions` to suppress the API-hallucination warning |
 | **AI Generation** | Generate 3D models from text or images via Hunyuan3D, import results into Rhino |
 | **Asset Libraries** | Search and import Poly Haven textures/HDRIs, download Sketchfab models |
 | **VisualARQ (BIM)** | Create walls, doors, windows, slabs, columns, stairs, railings, levels; query BIM properties; export IFC |
@@ -307,9 +310,32 @@ Rhino MCP includes an agent-led urban massing workflow for early site studies. C
 
 Supported massing typologies are `tower`, `podium_tower`, `courtyard`, `perimeter_block`, and `street_grid`. The workflow is driven by `urban_generate_massing`, which accepts the site origin, site dimensions, and typology-specific parameter overrides such as floor count, setbacks, footprint size, program mix, road width, or grid rotation. Results are baked to layers like `Urban::Massing::tower`.
 
-Use `urban_get_metrics` after generation to retrieve the active definition's reported `gfa_m2`, `far`, `unit_count_est`, and `open_space_pct`. Use `urban_update_param` for iterative slider changes, `urban_capture_and_evaluate` to pair metrics with a viewport image, `urban_run_analysis` for the Ladybug solar-analysis definition, and `urban_clear_massing` to remove generated layers.
+### Core Urban Massing Tools
 
-The PRD-facing API is also available with product-level names: `parse_urban_prompt`, `generate_site_layout`, `generate_massing`, `calculate_urban_metrics`, `optimize_plan`, `render_urban_preview`, `export_model`, `save_project_version`, and `create_urban_scheme`. The orchestrator accepts GeoJSON-style `site_boundary` input and derives site dimensions from its bbox/coordinates when the prompt does not include explicit dimensions.
+| Tool | Key Parameters | Description |
+|---|---|---|
+| `urban_generate_massing` | `typology`, `site_origin`, `site_width`, `site_depth`, `params`, `layer_prefix` | Generate parametric 3D massing by driving a Grasshopper definition. `params` is a dict of slider overrides (e.g. `{"floor_count": 20}`). Returns `{ok, typology, layer, gfa_m2, far, unit_count_est, open_space_pct}`. |
+| `urban_get_metrics` | — | Read `gfa_m2`, `far`, `unit_count_est`, `open_space_pct` from the currently open Grasshopper massing definition. Returns zeros if none is open. |
+| `urban_update_param` | `param_name`, `value` | Update a single Grasshopper slider and re-solve without regenerating the full massing. |
+| `urban_capture_and_evaluate` | — | Capture the active viewport and return metrics together in one round-trip. |
+| `urban_run_analysis` | `epw_path`, `analysis_type`, `period` | Open the Ladybug solar-analysis definition and return radiation/sun-hour values. |
+| `urban_clear_massing` | `layer_prefix` | Delete all objects on `Urban::Massing::*` layers and close any open GH definition. |
+
+### PRD-Facing Urban Tools
+
+The orchestrator-level API uses product-level names and accepts GeoJSON-style `site_boundary` input, deriving site dimensions from its bbox/coordinates when not explicitly provided.
+
+| Tool | Key Parameters | Description |
+|---|---|---|
+| `parse_urban_prompt` | `prompt` | Parse a natural-language brief into structured site + typology params. |
+| `generate_site_layout` | `site_boundary`, `program_mix`, `constraints` | Generate a complete site layout from GeoJSON boundary and program requirements. |
+| `generate_massing` | `site_boundary`, `typology`, `params` | High-level massing generation wrapper that accepts GeoJSON site input. |
+| `calculate_urban_metrics` | — | Calculate and return comprehensive urban metrics for the current massing. |
+| `optimize_plan` | `objectives`, `constraints`, `iterations` | Run iterative optimisation toward FAR, unit count, or open-space targets. |
+| `render_urban_preview` | — | Capture and return a quick Rhino viewport preview of current massing. |
+| `export_model` | `path`, `format` | Export the current massing to a file (3dm, obj, stl, etc.). |
+| `save_project_version` | `project_name`, `version_name`, `notes` | Save a named snapshot of the current massing + metrics for comparison. |
+| `create_urban_scheme` | `scheme_name`, `typology`, `site_boundary`, `params` | Create a complete named urban scheme in one call (layout + massing + metrics). |
 
 Prerequisites are the plugin backend, Rhino with Grasshopper open, and the urban Grasshopper definitions present in `grasshopper/urban/`. Ladybug-based analysis additionally requires Ladybug Tools and local EPW weather files.
 
@@ -668,6 +694,7 @@ Add to your project's `.mcp.json` or `~/.claude/mcp.json` (create the file if it
         "RHINO_MCP_BACKEND": "plugin",
         "RHINO_MCP_HOST": "127.0.0.1",
         "RHINO_MCP_PORT": "1999",
+        "DYLD_LIBRARY_PATH": "/opt/homebrew/lib",
         "ANTHROPIC_API_KEY": "sk-ant-...",
         "FAL_KEY": "...",
         "DOCRAPTOR_API_KEY": "...",
@@ -679,6 +706,8 @@ Add to your project's `.mcp.json` or `~/.claude/mcp.json` (create the file if it
   }
 }
 ```
+
+> **`DYLD_LIBRARY_PATH`** is required on macOS for SVG-to-PNG rendering (`read_svg`). It points to Homebrew's library directory where libcairo lives. On Linux or Windows omit this variable. Install cairo first if needed: `brew install cairo`.
 
 Or start Claude Code with the server inline (API keys picked up from your shell environment):
 
@@ -906,6 +935,16 @@ export RHINO_MCP_BACKEND=plugin    # or rhinocode, auto
 ```
 
 Use `get_rhino_backend_status` from any AI client to check which backends are currently reachable.
+
+### Session & Instance Management
+
+| Tool | Description |
+|---|---|
+| `get_rhino_instances` | List all running Rhino processes with their `id`, `name`, and `version`. Use when more than one Rhino instance may be running — pass the returned `id` as `rhino_id` to any other tool to target that instance. |
+| `get_rhino_backend_status` | Report which backends are currently reachable: plugin socket (port 1999) and rhinocode CLI. Shows the selected backend mode and any connection errors. |
+| `get_rhino_commands` | List all available Rhino command names, optionally filtered by substring (e.g. `filter="circle"`). `loaded_only=true` (default) restricts to currently loaded plugins; set `false` to include unloaded plugins. Use this before `run_rhino_command` to discover exact spellings. |
+| `list_rhino_plugins` | List plugins loaded in the current Rhino session, routed through the active backend. |
+| `load_rhino_plugin` | Load a Rhino plugin by GUID or file path. Use when a plugin is installed but not yet loaded in the current Rhino session. |
 
 ---
 
@@ -1223,7 +1262,7 @@ You can also call `check_plugin_loaded(plugin_name="V-Ray")` directly to test wh
 
 ---
 
-## All 216 Tools
+## All 223 Tools
 
 ---
 
@@ -1347,7 +1386,7 @@ All Weaverbird tools wire the `Mesh` input automatically from `mesh_instance_gui
 | `gh_wb_butterfly` | `mesh_instance_guid`, `iterations=1`, `canvas_x`, `canvas_y` | Place a **Butterfly Subdivision** component. Interpolating scheme — original vertices are preserved exactly. |
 | `gh_wb_frame` | `mesh_instance_guid`, `offset=0.1`, `canvas_x`, `canvas_y` | Place a **Mesh Frame** component. Shrinks each face inward by `offset`, leaving a frame of faces at each edge. Useful for generating mesh apertures. |
 | `gh_wb_thicken` | `mesh_instance_guid`, `thickness=0.1`, `canvas_x`, `canvas_y` | Place a **Mesh Thickening** component. Offsets the mesh by `thickness` in the face normal direction, producing a closed solid shell. |
-| `gh_wb_extrude_face` | `mesh_instance_guid`, `distance=0.5`, `canvas_x`, `canvas_y` | Place an **Extrude Face** component. Extrudes each face outward by `distance`. |
+| `gh_wb_extrude_face` | `mesh_instance_guid`, `distance=0.5`, `canvas_x`, `canvas_y` | Place a **Mesh Face Extrusion** component. Extrudes each face outward by `distance` along its normal, creating a faceted relief surface. |
 
 ---
 
@@ -1464,8 +1503,8 @@ Ladybug handles climate visualisation (weather data, sun, wind, radiation). Hone
 |---|---|
 | `create_rhino_geometry` | Create a single geometric object. Supported types: `box`, `sphere`, `cylinder`, `cone`, `torus`, `line`, `polyline`, `arc`, `circle`, `ellipse`, `curve` (free-form NURBS), `surface` (from points), `plane`, `text`, `point`, `mesh`, `extrusion`, `brep` (from existing), and more. |
 | `create_rhino_scene` | Create multiple objects in one call. Accepts a list of the same object descriptors as `create_rhino_geometry`. |
-| `get_rhino_objects` | List objects in the document with optional filters by type, layer, name, or bounding box. |
-| `get_rhino_object_info` | Get detailed info about a specific object by GUID: type, layer, name, bounding box, material, and geometry properties. |
+| `get_rhino_objects` | List objects with optional filters by type, layer, name, or color. **Pagination:** `offset` + `limit` (default 100) — response includes `total_matching` and `has_more` so you can page through large scenes. **Hidden objects:** `include_hidden=true` includes objects that are hidden (default false). **Lightweight mode:** `include_geometry=false` skips bounding-box computation for fast metadata-only queries. **Spatial filter:** `bbox_filter=[[min_x,min_y,min_z],[max_x,max_y,max_z]]` restricts to objects overlapping a region. Supports `logic="or"` for multi-filter unions. |
+| `get_rhino_object_info` | Get detailed info about one object: type, layer, name, bounding box, material, groups, and user text dict. Pass `object_id` (GUID) **or** `name` (exact name match, returns first hit) — no need to know the GUID when you have a name. |
 
 ---
 
@@ -1473,13 +1512,13 @@ Ladybug handles climate visualisation (weather data, sun, wind, radiation). Hone
 
 | Tool | Description |
 |---|---|
-| `select_rhino_objects` | Select objects by GUID, name, layer, type, or color. Supports multi-select. |
-| `get_selected_rhino_objects` | Return the GUIDs and basic properties of all currently selected objects. |
-| `transform_rhino_objects` | Move, rotate, or scale objects. Specify object GUIDs or operate on the current selection. |
-| `edit_rhino_object_attributes` | Change name, layer, display color, linetype, or print color on one or more objects. |
-| `delete_rhino_objects` | Delete objects by GUID or delete the current selection. |
-| `undo_rhino` | Undo the last N operations (default 1). |
-| `redo_rhino` | Redo the last N undone operations. |
+| `select_rhino_objects` | Select objects by GUID, name, layer, type, color, `color_tolerance` (per-channel fuzzy match), or `user_text` (`{"key": "value"}` dict). Supports `logic="or"`. `deselect=true` removes matching objects from the selection instead of replacing it. `limit` caps the number of objects acted on. |
+| `get_selected_rhino_objects` | Return the GUIDs and basic properties of all currently selected objects. Add `include_attributes=true` to include each object's user text key-value pairs in one round-trip. |
+| `transform_rhino_objects` | Move, rotate, or scale objects. Specify object GUIDs or operate on the current selection. Supports `copy=true` to duplicate instead of move. |
+| `edit_rhino_object_attributes` | Change name, layer, display color, or visibility on one or more objects. `visible=true` shows hidden objects; `visible=false` hides them. Pass `apply_to_all=true` to target every object in the document. |
+| `delete_rhino_objects` | Delete objects by GUID, the current selection, or pass `delete_all=true` to clear the entire document in one call. |
+| `undo_rhino` | Undo the last N operations (`count`, default 1). Via the plugin backend: stops when the undo stack is exhausted and reports `undone_steps` vs `requested_steps`. Via rhinocode: runs `count` individual `_Undo` commands. |
+| `redo_rhino` | Redo the last N undone operations (`count`, default 1). Via the plugin backend: stops when the redo stack is exhausted. Via rhinocode: runs `count` individual `_Redo` commands. |
 
 ---
 
@@ -1557,8 +1596,8 @@ Requires [Enscape](https://enscape3d.com) to be installed and licensed. Each too
 
 | Tool | Parameters | Description |
 |---|---|---|
-| `set_rhino_view` | `view="Perspective"`, `camera=[x,y,z]`, `target=[x,y,z]`, `lens=None` | Activate a named view or set camera position, target, and lens length. Common view names: `Perspective`, `Top`, `Front`, `Right`. |
-| `capture_rhino_view` | `path=None`, `width=1200`, `height=900` | **Capture the active viewport and return it as a visual image the AI can see.** `path` is optional — omit it for in-memory capture only. When `path` is provided the PNG is also saved to disk. Returns `[{metadata}, Image]` so the AI client renders the image inline. |
+| `set_rhino_view` | `view="Perspective"`, `camera=[x,y,z]`, `target=[x,y,z]`, `lens=None` | Activate a named view or set camera position, target, and lens length. Common view names: `Perspective`, `Top`, `Front`, `Right`, `Back`, `Left`, `Bottom`. |
+| `capture_rhino_view` | `path=None`, `width=1200`, `height=900`, `viewport=None`, `show_grid=None`, `show_axes=None`, `show_cplane_axes=None`, `zoom_to_fit=False` | **Capture a viewport and return it as a visual image the AI can see.** `viewport` selects a named viewport (e.g. `"Top"`, `"Perspective"`) — omit to capture the active viewport. `path` is optional; when provided the PNG is also saved to disk. `show_grid` temporarily toggles the construction grid. `show_axes` and `show_cplane_axes` are aliases — both control construction-axes visibility for the capture. Returns `[{metadata}, Image]` so the AI client renders the image inline. |
 
 ---
 
@@ -1567,8 +1606,45 @@ Requires [Enscape](https://enscape3d.com) to be installed and licensed. Each too
 | Tool | Description |
 |---|---|
 | `get_rhino_document_summary` | Return document metadata: object count by type and layer, materials, units, tolerance, and named views. |
-| `save_rhino_document` | Save the active document to its current path. |
-| `export_rhino_document` | Export to a specified file format. Supported: `.3dm`, `.obj`, `.stl`, `.fbx`, `.step`, `.iges`, `.stp`, `.dxf`, `.dwg`, `.pdf`. |
+| `save_rhino_document` | Save the active document to its current path. Pass `path` to save-as a new file. |
+| `export_rhino_document` | Export to a specified file format. Supported: `.3dm`, `.obj`, `.stl`, `.fbx`, `.step`, `.iges`, `.stp`, `.dxf`, `.dwg`, `.pdf`. `select_all=true` (default) exports the whole document; set `false` to export only selected objects. |
+
+---
+
+### Document Reading
+
+Read external design files — floor plans, specifications, spreadsheets, and reference images — directly from the MCP session. The AI receives page images it can visually interpret, extracted text, and structured data, eliminating the need for separate file-reading workarounds.
+
+**Recommended workflow for architectural drawings:**
+```
+1. get_pdf_info(path)               → page count + page dimensions
+2. read_pdf(path, pages="3-4")      → renders pages 3-4 as images the AI sees inline
+3. read_image(path)                 → for site photos or sketch scans
+```
+
+| Tool | Formats | Description |
+|---|---|---|
+| `get_pdf_info` | `.pdf` | Return page count, title, author, and the width/height (in points and inches) of every page — no rendering. Call this first to understand the document before fetching pages. |
+| `read_pdf` | `.pdf` | Render one or more PDF pages to base64-encoded PNG images. Each page image is returned alongside any extractable text. Scanned drawings (no text layer) return empty text but full image renders. Parameters: `pages` (e.g. `"1"`, `"1-4"`, `"1,3,5-8"`), `dpi` (default 150; use 200-300 for fine detail), `max_pages` (default 10). |
+| `read_image` | `.jpg` `.png` `.tiff` `.bmp` `.webp` `.gif` `.heic` `.heif` | Read an image file and return it as a base64-encoded PNG the AI can see. Auto-resizes to `max_dimension` (default 2048 px) while preserving aspect ratio. Supports HEIC/HEIF via pillow-heif. |
+| `read_spreadsheet` | `.csv` `.xlsx` `.xls` | Read a CSV or Excel file and return rows as structured data. For Excel, pass `sheet` as a name or 1-based index; omit to read the first sheet. Returns all sheet names so you can navigate a workbook. Useful for room schedules, coordinate lists, and material quantities. |
+| `read_svg` | `.svg` `.svgz` | Parse an SVG file and return the raw XML text, width/height/viewBox metadata, and element count. Also renders a PNG preview via cairosvg when available. The AI can interpret SVG geometry directly from the XML for simple drawings. |
+| `read_docx` | `.docx` | Extract text and tables from a Word document. Returns paragraphs with their Word style names (Heading 1, Normal, etc.) and full table content. Use for project briefs, room specifications, and any Word-format documentation. |
+
+**Parameters shared across document tools:**
+
+| Parameter | Tool | Default | Notes |
+|---|---|---|---|
+| `pages` | `read_pdf` | all (up to `max_pages`) | `"3"`, `"1-5"`, `"1,3,5-8"` — 1-based |
+| `dpi` | `read_pdf`, `read_svg` | 150 | 150 = clear overview; 200-300 = fine drawing detail |
+| `max_pages` | `read_pdf` | 10 | Hard cap per call; make multiple calls for large documents |
+| `max_dimension` | `read_image` | 2048 | Max pixel dimension after resize; increase for detail work |
+| `sheet` | `read_spreadsheet` | first sheet | Sheet name or 1-based index for Excel files |
+| `max_rows` | `read_spreadsheet` | 500 | Row cap; re-call with offset for large sheets |
+| `include_tables` | `read_docx` | `true` | Set `false` to return text only |
+| `render_png` | `read_svg` | `true` | Requires cairosvg; falls back gracefully if unavailable |
+
+**macOS note:** On macOS, `read_svg` PNG rendering requires libcairo (installed via `brew install cairo`). The server sets `DYLD_LIBRARY_PATH` automatically — no manual configuration needed.
 
 ---
 
@@ -1576,13 +1652,38 @@ Requires [Enscape](https://enscape3d.com) to be installed and licensed. Each too
 
 | Tool | Description |
 |---|---|
-| `execute_rhino_python` | Run arbitrary Python code inside Rhino with full RhinoScriptSyntax and RhinoCommon access. Returns the `result` variable if set. |
-| `execute_rhino_csharp` | Run arbitrary C# code inside Rhino via Roslyn scripting. Returns the last expression value or a `result` variable. |
-| `run_rhino_command` | Execute a Rhino command macro string (e.g. `_Box 0,0,0 1,1,1`). |
+| `execute_rhino_python` | Run arbitrary Python code inside Rhino with full RhinoScriptSyntax and RhinoCommon access. Assign a JSON-serialisable value to `result` to return data. **Auto-revert:** if the script raises an exception, any objects added during that run are automatically deleted, keeping the document clean. Pass `verified_functions=["rs.AddBox", ...]` to document which API calls were looked up — omitting it adds an `api_warning` to the response as a reminder to verify RhinoScript names before use. |
+| `execute_rhino_csharp` | Run arbitrary C# code inside Rhino via Roslyn scripting. Returns stdout output or document changes. Requires RhinoCode C# support (Rhino 8). |
+| `get_rhino_commands` | List all available Rhino command names, optionally filtered by substring (`filter="circle"`). `loaded_only=true` (default) limits to loaded plugins. Call this before `run_rhino_command` to discover exact spellings. |
+| `run_rhino_command` | Execute a Rhino command macro string (e.g. `_Box 0,0,0 1,1,1`). `echo=true` echoes the command to Rhino's history. Returns `output` with captured command-window text so the AI can read results. Requires `StartScriptServer` inside Rhino. |
 | `search_rhino_docs` | Full-text search of bundled Rhino scripting notes. |
-| `get_rhinoscript_docs` | Look up RhinoScriptSyntax module-level documentation. |
-| `search_rhinoscript_functions` | Search RhinoScriptSyntax function reference by name or keyword. |
-| `get_rhinoscript_function` | Get the full docstring for a specific RhinoScriptSyntax function. |
+| `get_rhinoscript_docs` | Look up RhinoScriptSyntax module-level documentation. Pass a module name (`"curve"`, `"surface"`, `"object"`, etc.) to list its functions. |
+| `search_rhinoscript_functions` | Search RhinoScriptSyntax function reference by name or keyword. **Always call this before writing Python scripts** to avoid hallucinated function names. |
+| `get_rhinoscript_function` | Get the full docstring for a specific RhinoScriptSyntax function including parameter types, order, and return values. |
+| `list_rhinoscript_modules` | List all RhinoScriptSyntax modules with their function counts. Use to discover available modules before calling `get_module_functions`. |
+| `get_module_functions` | List all functions in a named RhinoScriptSyntax module with their signatures. Faster than `search_rhinoscript_functions` when you know which module you need. |
+
+**Best practice for `execute_rhino_python`:**
+
+```
+1. search_rhinoscript_functions("AddBox")   → find the right function + signature
+2. execute_rhino_python(
+     code="import rhinoscriptsyntax as rs\n...\nresult = {'id': str(obj)}",
+     verified_functions=["rs.AddBox", "rs.ObjectLayer"]
+   )
+```
+
+Providing `verified_functions` suppresses the `api_warning` in the response and signals that API calls were verified, not guessed.
+
+**Named MCP Resources** (read-only, browseable in MCP clients that support resources):
+
+| Resource URI | Description |
+|---|---|
+| `rhinoscript://modules` | List all RhinoScriptSyntax modules with their function counts |
+| `rhinoscript://module/{name}` | Full function listing for a named module (e.g. `rhinoscript://module/curve`) |
+| `rhinoscript://function/{name}` | Full docstring for a named function (e.g. `rhinoscript://function/AddBox`) |
+
+These mirror `list_rhinoscript_modules`, `get_module_functions`, and `get_rhinoscript_function` as browseable resources rather than tool calls.
 
 ---
 
@@ -1592,7 +1693,7 @@ Requires [Enscape](https://enscape3d.com) to be installed and licensed. Each too
 |---|---|
 | `boolean_union` | Unite two or more Brep/solid objects. |
 | `boolean_difference` | Subtract one set of solids from another. |
-| `boolean_intersection` | Compute the intersection volume of two solids. |
+| `boolean_intersection` | Compute the intersection volume of two or more solids. For 3+ objects, chains pairwise intersections automatically. |
 
 ---
 
@@ -1615,11 +1716,11 @@ Requires [Enscape](https://enscape3d.com) to be installed and licensed. Each too
 
 | Tool | Description |
 |---|---|
-| `generate_3d_from_text` | Submit a text prompt to Hunyuan3D to generate a 3D mesh. Returns a job ID for polling. |
-| `generate_3d_from_images` | Submit one or more reference images to Hunyuan3D for image-to-3D generation. |
-| `poll_generation_job` | Check the status of a generation job and retrieve the result URL when complete. |
-| `import_generated_model` | Download a generated mesh and import it into the active Rhino document. |
-| `get_generation_services_status` | Check which AI generation services (Hunyuan3D, etc.) are reachable. |
+| `generate_3d_from_text` | Submit a text prompt to generate a 3D mesh. `service`: `"rodin"` (Hyper3D, requires `HYPER3D_API_KEY`) or `"hunyuan3d"` (public Gradio, no key needed). `output_format`: `glb`, `obj`, `fbx`, `stl`, `usdz`. `tier`: `"Regular"` or `"Sketch"` (Rodin only). Returns a `job_id` for polling. |
+| `generate_3d_from_images` | Submit 1–5 reference images for image-to-3D generation. Same `service`/`output_format` options as `generate_3d_from_text`. |
+| `poll_generation_job` | Poll a generation job by `job_id` and `service`. Returns `progress` (0.0–1.0), `status`, and `download_url` when complete. |
+| `import_generated_model` | Download a completed mesh and import it into Rhino. Pass either `(job_id, service)` or a direct `download_url`. Supports `scale` and `position` to place the model on import. |
+| `get_generation_services_status` | Check which AI generation services are reachable and whether API keys are configured. |
 
 ---
 
@@ -1631,7 +1732,7 @@ Requires env vars — see [Studio Pipeline Env Vars](#studio-pipeline-env-vars).
 
 | Tool | Description |
 |---|---|
-| `urban_generate_design_language` | Call Claude API to generate a complete design language: style name, facade vocabulary, material palette with hex codes, colour story, landscape character, diffusion prompt, and executive summary. Stores result in session state. |
+| `urban_generate_design_language` | Call Claude API to generate a complete design language. **Required params:** `brief` (free-text site description), `typology` (e.g. `"residential"`, `"mixed-use"`, `"office"`), `far` (floor area ratio, e.g. `3.5`), `climate_zone` (e.g. `"temperate"`, `"arid"`, `"tropical"`). **Optional:** `style_hints` (comma-separated direction words, e.g. `"brick, biophilic"`). Returns: `style_name`, `facade_vocabulary`, `material_palette` (with hex codes), `colour_story`, `landscape_character`, `diffusion_prompt`, `negative_prompt`, `executive_summary`. Stores result in session state. |
 | `urban_update_design_language` | Patch a single field of the current design language (e.g. `style_name`, `facade_vocabulary`, `material_palette`). Re-derives the diffusion prompt when style or materials change. |
 | `urban_get_design_language` | Return the current session design language dict, or `{"set": false}` if none generated yet. |
 
@@ -1639,7 +1740,7 @@ Requires env vars — see [Studio Pipeline Env Vars](#studio-pipeline-env-vars).
 
 | Tool | Description |
 |---|---|
-| `urban_render_views` | Capture one or more named Rhino viewports and AI-render them using fal.ai FLUX.1 ControlNet img2img. Uses the session design language as the diffusion prompt. Retries with reduced strength on first failure; falls back to raw Rhino captures on double failure. Returns list of `RenderResult` dicts with `original_b64`, `rendered_b64`, `prompt_used`, `seed`. |
+| `urban_render_views` | Capture one or more named Rhino viewports and AI-render them using fal.ai FLUX.1 ControlNet img2img. **Optional params:** `views` (list of viewport names, default `["Perspective","Top","Front","Right"]`), `strength` (ControlNet influence 0–1, default `0.65`; lower = more photorealistic, higher = more stylised), `style_override` (ad-hoc prompt string to override the session design language), `seed` (integer for reproducibility). Uses the session design language diffusion prompt by default. Retries with reduced strength on first failure; falls back to raw Rhino captures on double failure. Returns list of `RenderResult` dicts: `original_b64`, `rendered_b64`, `prompt_used`, `seed`. |
 | `urban_render_style_preview` | Text-to-image style mood board via fal.ai FLUX.1 (no massing or Rhino viewport needed). Use to explore design directions before generating the full massing. |
 | `urban_get_renders` | Return all AI renders produced this session, keyed by view name (`Perspective`, `Top`, `Front`, `Right`, etc.). |
 

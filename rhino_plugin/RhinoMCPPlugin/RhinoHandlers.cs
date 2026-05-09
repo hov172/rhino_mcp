@@ -84,8 +84,8 @@ public static class RhinoHandlers
         {
             name = doc.Name,
             path = doc.Path,
-            objectCount = doc.Objects.Count,
-            unitSystem = doc.ModelUnitSystem.ToString(),
+            object_count = doc.Objects.Count,
+            unit_system = doc.ModelUnitSystem.ToString(),
             tolerance = doc.ModelAbsoluteTolerance,
             angle_tolerance = doc.ModelAngleToleranceDegrees,
             objects_by_type = byType,
@@ -138,10 +138,12 @@ public static class RhinoHandlers
             }
         }
 
+        var includeHidden = p.Bool("include_hidden", false);
         var normalizedTypeFilter = typeFilter?.ToUpperInvariant();
 
         var filtered = RhinoDoc.ActiveDoc.Objects
             .Where(o => !o.IsDeleted)
+            .Where(o => includeHidden || !o.IsHidden)
             .Where(o =>
             {
                 if (layerFilter is null) return true;
@@ -480,6 +482,42 @@ public static class RhinoHandlers
         return new { success = results.All(v => v), steps, results };
     }
 
+    public static object UndoSteps(int steps)
+    {
+        var doc = RhinoDoc.ActiveDoc;
+        int count = 0;
+        for (int i = 0; i < Math.Max(1, steps); i++)
+        {
+            if (doc.Undo()) count++;
+            else break;
+        }
+        return new
+        {
+            ok = count > 0,
+            undone_steps = count,
+            requested_steps = steps,
+            message = count > 0 ? $"Undid {count} operation(s)" : "Nothing to undo"
+        };
+    }
+
+    public static object RedoSteps(int steps)
+    {
+        var doc = RhinoDoc.ActiveDoc;
+        int count = 0;
+        for (int i = 0; i < Math.Max(1, steps); i++)
+        {
+            if (doc.Redo()) count++;
+            else break;
+        }
+        return new
+        {
+            ok = count > 0,
+            redone_steps = count,
+            requested_steps = steps,
+            message = count > 0 ? $"Redid {count} operation(s)" : "Nothing to redo"
+        };
+    }
+
     public static object CaptureViewport(Dictionary<string, JsonElement> p)
     {
         var doc = RhinoDoc.ActiveDoc;
@@ -570,20 +608,28 @@ public static class RhinoHandlers
                 // SetupScriptContext enables rhinoscriptsyntax and doc/scriptcontext
                 py.SetupScriptContext(doc);
 
+                bool prevCapture = RhinoApp.CommandWindowCaptureEnabled;
+                RhinoApp.CommandWindowCaptureEnabled = true;
+                string[] rhinoLines = Array.Empty<string>();
                 try
                 {
                     py.ExecuteScript(code);
+                    rhinoLines = RhinoApp.CapturedCommandWindowStrings(true) ?? Array.Empty<string>();
                     doc.Views.Redraw();
+                    var combined = output.ToString();
+                    var rhinoOut = string.Join("\n", rhinoLines).Trim();
+                    if (!string.IsNullOrEmpty(rhinoOut)) combined = (combined + "\n" + rhinoOut).TrimStart();
                     return new
                     {
                         success = true,
-                        output = output.ToString(),
+                        output = combined,
                         error_line = (int?)null,
                         method = "python_script_api"
                     };
                 }
                 catch (Exception execEx)
                 {
+                    rhinoLines = RhinoApp.CapturedCommandWindowStrings(true) ?? Array.Empty<string>();
                     doc.Views.Redraw();
 
                     int? errorLine = null;
@@ -595,11 +641,15 @@ public static class RhinoHandlers
                     return new
                     {
                         success = false,
-                        output = output.ToString(),
+                        output = string.Join("\n", rhinoLines).Trim(),
                         message = msg,
                         error_line = errorLine,
                         method = "python_script_api"
                     };
+                }
+                finally
+                {
+                    RhinoApp.CommandWindowCaptureEnabled = prevCapture;
                 }
             }
         }

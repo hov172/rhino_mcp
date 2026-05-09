@@ -68,7 +68,13 @@ if operation == "union":
 elif operation == "difference":
     ids = rs.BooleanDifference(data["base_id"], data["subtract_ids"], delete_input=delete_sources)
 elif operation == "intersection":
-    ids = rs.BooleanIntersection(data["object_ids"], delete_input=delete_sources)
+    obj_list = list(data["object_ids"])
+    if len(obj_list) < 2:
+        raise ValueError("boolean_intersection requires at least 2 objects")
+    ids = rs.BooleanIntersection([obj_list[0]], [obj_list[1]], delete_input=delete_sources)
+    for oid in obj_list[2:]:
+        if ids:
+            ids = rs.BooleanIntersection(ids, [oid], delete_input=True)
 else:
     raise ValueError("Unsupported boolean operation: {}".format(operation))
 

@@ -18,49 +18,89 @@ def register(mcp: FastMCP) -> None:
         filters: dict[str, Any] | None = None,
         logic: str = "and",
         limit: int = 100,
+        offset: int = 0,
         include_hidden: bool = False,
+        include_geometry: bool = True,
         bbox_filter: list[list[float]] | None = None,
         rhino_id: str | None = None,
     ) -> dict[str, object]:
         """
         Return object summaries filtered by id, name, layer, type, or color.
 
-        ``bbox_filter`` is an optional spatial bounding-box filter in the form
-        ``[[min_x, min_y, min_z], [max_x, max_y, max_z]]``. When provided, only
-        objects whose bounding box overlaps or falls within the specified box are
-        returned.
+        ``offset`` + ``limit`` enable pagination — check ``has_more`` in the
+        response and increment ``offset`` by ``limit`` to fetch the next page.
+        ``total_matching`` is the count of all objects that pass the filters.
+
+        ``include_geometry`` (default True) includes the bounding-box in each
+        summary. Set to False for lightweight metadata-only queries on large scenes.
+
+        ``bbox_filter`` is a spatial filter ``[[min_x,min_y,min_z],[max_x,max_y,max_z]]``
+        that restricts results to objects whose bounding box overlaps the region.
         """
-        payload = {"filters": filters or {}, "logic": logic, "limit": limit, "include_hidden": include_hidden, "bbox_filter": bbox_filter}
+        payload = {
+            "filters": filters or {}, "logic": logic, "limit": limit, "offset": offset,
+            "include_hidden": include_hidden, "include_geometry": include_geometry,
+            "bbox_filter": bbox_filter,
+        }
         code = "__mcp_get_objects = {!r}\n{}".format(payload, _GET_OBJECTS_SCRIPT)
         return rhino.execute_python(code, rhino_id=rhino_id)
 
     @mcp.tool(annotations=ToolAnnotations(title="Get Rhino Object Info", readOnlyHint=True))
-    def get_rhino_object_info(object_id: str, rhino_id: str | None = None) -> dict[str, object]:
+    def get_rhino_object_info(
+        object_id: str | None = None,
+        name: str | None = None,
+        rhino_id: str | None = None,
+    ) -> dict[str, object]:
         """
-        Return detailed information for one object id.
+        Return detailed information for one object, including user text and groups.
+
+        Pass ``object_id`` to look up by GUID, or ``name`` to look up by exact
+        object name (returns the first match when names are not unique).
         """
-        payload = {"object_id": object_id}
+        payload = {"object_id": object_id, "name": name}
         code = "__mcp_object_info = {!r}\n{}".format(payload, _OBJECT_INFO_SCRIPT)
         return rhino.execute_python(code, rhino_id=rhino_id)
 
     @mcp.tool(annotations=ToolAnnotations(title="Get Selected Rhino Objects", readOnlyHint=True))
-    def get_selected_rhino_objects(limit: int = 100, rhino_id: str | None = None) -> dict[str, object]:
+    def get_selected_rhino_objects(
+        limit: int = 100,
+        include_attributes: bool = False,
+        rhino_id: str | None = None,
+    ) -> dict[str, object]:
         """
         Return summaries for the current Rhino selection.
+
+        Set ``include_attributes=True`` to include each object's user text
+        key-value pairs in the response (equivalent to calling
+        ``get_rhino_object_info`` per object but in one round-trip).
         """
-        payload = {"limit": limit}
+        payload = {"limit": limit, "include_attributes": include_attributes}
         code = "__mcp_selected = {!r}\n{}".format(payload, _SELECTED_SCRIPT)
         return rhino.execute_python(code, rhino_id=rhino_id)
 
     @mcp.tool(annotations=ToolAnnotations(title="Select Rhino Objects", destructiveHint=True))
-    def select_rhino_objects(filters: dict[str, Any], logic: str = "and", rhino_id: str | None = None) -> dict[str, object]:
+    def select_rhino_objects(
+        filters: dict[str, Any],
+        logic: str = "and",
+        deselect: bool = False,
+        limit: int | None = None,
+        color_tolerance: int = 0,
+        rhino_id: str | None = None,
+    ) -> dict[str, object]:
         """
-        Select objects using filters.
+        Select or deselect objects using filters.
 
-        Supported filters: ids, name_contains, exact_name, layer, type, color.
-        ``logic`` can be ``and`` or ``or``.
+        Supported filter keys: ``ids``, ``name_contains``, ``exact_name``,
+        ``layer``, ``type``, ``color`` (RGB list), ``user_text`` (``{"key": "value"}``
+        dict to match objects tagged with a specific user attribute).
+        ``logic`` can be ``"and"`` or ``"or"``.
+
+        ``color_tolerance``: per-channel tolerance (0–255) for fuzzy color matching
+        when a ``color`` filter is present. Default 0 = exact match.
+        ``deselect=True`` removes matching objects from the selection instead of
+        adding them. ``limit`` caps the number of objects acted on.
         """
-        payload = {"filters": filters, "logic": logic}
+        payload = {"filters": filters, "logic": logic, "deselect": deselect, "limit": limit, "color_tolerance": color_tolerance}
         code = "__mcp_select = {!r}\n{}".format(payload, _SELECT_SCRIPT)
         return rhino.execute_python(code, rhino_id=rhino_id)
 
@@ -102,24 +142,34 @@ def register(mcp: FastMCP) -> None:
         name: str | None = None,
         layer: str | None = None,
         color: list[int] | None = None,
+        visible: bool | None = None,
         rhino_id: str | None = None,
     ) -> dict[str, object]:
         """
-        Set object name, layer, or display color for ids or selected objects.
+        Set object name, layer, display color, or visibility for ids or selected objects.
 
+        ``visible=True`` shows hidden objects; ``visible=False`` hides visible ones.
         When ``apply_to_all`` is ``True``, the tool targets ALL objects in the
         document regardless of ``ids`` or ``selected``.
         """
-        payload = {"ids": ids, "selected": selected, "apply_to_all": apply_to_all, "name": name, "layer": layer, "color": color}
+        payload = {"ids": ids, "selected": selected, "apply_to_all": apply_to_all, "name": name, "layer": layer, "color": color, "visible": visible}
         code = "__mcp_attrs = {!r}\n{}".format(payload, _ATTR_SCRIPT)
         return rhino.execute_python(code, rhino_id=rhino_id)
 
     @mcp.tool(annotations=ToolAnnotations(title="Delete Rhino Objects", destructiveHint=True))
-    def delete_rhino_objects(ids: list[str] | None = None, selected: bool = True, rhino_id: str | None = None) -> dict[str, object]:
+    def delete_rhino_objects(
+        ids: list[str] | None = None,
+        selected: bool = True,
+        delete_all: bool = False,
+        rhino_id: str | None = None,
+    ) -> dict[str, object]:
         """
-        Delete objects by ids or delete the current selection.
+        Delete objects by ids, the current selection, or all objects in the document.
+
+        ``delete_all=True`` clears the entire document regardless of ``ids`` or
+        ``selected`` — use with care.
         """
-        payload = {"ids": ids, "selected": selected}
+        payload = {"ids": ids, "selected": selected, "delete_all": delete_all}
         code = "__mcp_delete = {!r}\n{}".format(payload, _DELETE_SCRIPT)
         return rhino.execute_python(code, rhino_id=rhino_id)
 
@@ -174,16 +224,30 @@ def _match_filter(oid, key, expected):
         return str(expected).lower() in str(rs.ObjectType(oid)).lower()
     if key == "color":
         return tuple(rs.ObjectColor(oid)) == _color(expected)
+    if key == "user_text":
+        if isinstance(expected, dict):
+            for ukey, uval in expected.items():
+                if rs.GetUserText(oid, ukey) != str(uval):
+                    return False
+            return True
+        return rs.GetUserText(oid, str(expected)) is not None
     return False
+
+def _user_text_dict(oid):
+    keys = rs.GetUserText(oid) or []
+    return {k: rs.GetUserText(oid, k) for k in keys}
 '''
 
 _GET_OBJECTS_SCRIPT = _COMMON + r'''
 filters = __mcp_get_objects.get("filters") or {}
 logic = str(__mcp_get_objects.get("logic") or "and").lower()
 limit = int(__mcp_get_objects.get("limit") or 100)
+offset = int(__mcp_get_objects.get("offset") or 0)
 include_hidden = bool(__mcp_get_objects.get("include_hidden", False))
+include_geometry = bool(__mcp_get_objects.get("include_geometry", True))
 bbox_filter = __mcp_get_objects.get("bbox_filter")
-objects = []
+
+matched = []
 for oid in rs.AllObjects() or []:
     if not include_hidden and rs.IsObjectHidden(oid):
         continue
@@ -202,18 +266,48 @@ for oid in rs.AllObjects() or []:
         ok = any(tests) if logic == "or" else all(tests)
         if not ok:
             continue
-    objects.append(_summary(oid))
-    if len(objects) >= limit:
-        break
-result = {"objects": objects, "count": len(objects), "truncated": len(objects) >= limit}
+    matched.append(oid)
+
+total_matching = len(matched)
+page = matched[offset:offset + limit]
+
+def _build(oid):
+    out = {
+        "id": str(oid),
+        "name": rs.ObjectName(oid),
+        "type": str(rs.ObjectType(oid)),
+        "layer": rs.ObjectLayer(oid),
+        "color": [int(c) for c in rs.ObjectColor(oid)],
+        "hidden": rs.IsObjectHidden(oid),
+        "locked": rs.IsObjectLocked(oid),
+    }
+    if include_geometry:
+        bbox = rs.BoundingBox(oid) or []
+        out["bbox"] = [[p.X, p.Y, p.Z] if hasattr(p, "X") else [p[0], p[1], p[2]] for p in bbox]
+    return out
+
+objects = [_build(oid) for oid in page]
+result = {
+    "objects": objects,
+    "count": len(objects),
+    "total_matching": total_matching,
+    "offset": offset,
+    "has_more": (offset + len(objects)) < total_matching,
+}
 '''
 
 _OBJECT_INFO_SCRIPT = _COMMON + r'''
-oid = __mcp_object_info["object_id"]
-if not rs.IsObject(oid):
+oid = __mcp_object_info.get("object_id")
+name_lookup = __mcp_object_info.get("name")
+if not oid and name_lookup:
+    matches = [o for o in (rs.AllObjects() or []) if rs.ObjectName(o) == name_lookup]
+    if not matches:
+        raise ValueError("No object named: {}".format(name_lookup))
+    oid = str(matches[0])
+if not oid or not rs.IsObject(oid):
     raise ValueError("Object not found: {}".format(oid))
 info = _summary(oid)
-info["user_text"] = rs.GetUserText(oid) or []
+info["user_text"] = _user_text_dict(oid)
 info["groups"] = rs.ObjectGroups(oid) or []
 info["material_index"] = rs.ObjectMaterialIndex(oid)
 result = info
@@ -221,29 +315,54 @@ result = info
 
 _SELECTED_SCRIPT = _COMMON + r'''
 limit = int(__mcp_selected.get("limit") or 100)
-objects = [_summary(oid) for oid in (rs.SelectedObjects() or [])[:limit]]
+include_attributes = bool(__mcp_selected.get("include_attributes", False))
+selected = rs.SelectedObjects() or []
+objects = []
+for oid in selected[:limit]:
+    obj = _summary(oid)
+    if include_attributes:
+        obj["user_text"] = _user_text_dict(oid)
+    objects.append(obj)
 result = {"objects": objects, "count": len(objects)}
 '''
 
 _SELECT_SCRIPT = _COMMON + r'''
 filters = __mcp_select.get("filters") or {}
 logic = str(__mcp_select.get("logic") or "and").lower()
+deselect = bool(__mcp_select.get("deselect", False))
+limit = __mcp_select.get("limit")
+color_tol = int(__mcp_select.get("color_tolerance") or 0)
 all_objects = rs.AllObjects() or []
 
-def _matches(oid, key, expected):
+def _match_color_tol(oid, expected):
+    if color_tol <= 0:
+        return tuple(rs.ObjectColor(oid)) == _color(expected)
+    obj_c = tuple(rs.ObjectColor(oid))[:3]
+    exp_c = _color(expected)
+    return all(abs(a - b) <= color_tol for a, b in zip(obj_c, exp_c))
+
+def _match(oid, key, expected):
+    if key == "color":
+        return _match_color_tol(oid, expected)
     return _match_filter(oid, key, expected)
 
 matched = []
 for oid in all_objects:
-    tests = [_matches(oid, key, expected) for key, expected in filters.items()]
+    tests = [_match(oid, key, expected) for key, expected in filters.items()]
     ok = any(tests) if logic == "or" else all(tests)
     if ok:
         matched.append(oid)
+        if limit and len(matched) >= int(limit):
+            break
 
-rs.UnselectAllObjects()
-if matched:
-    rs.SelectObjects(matched)
-result = {"selected": [str(oid) for oid in matched], "count": len(matched)}
+if deselect:
+    if matched:
+        rs.UnselectObjects(matched)
+else:
+    rs.UnselectAllObjects()
+    if matched:
+        rs.SelectObjects(matched)
+result = {"selected": [str(oid) for oid in matched], "count": len(matched), "deselect": deselect}
 '''
 
 _TRANSFORM_SCRIPT = _COMMON + r'''
@@ -287,12 +406,19 @@ for oid in objects:
         rs.ObjectLayer(oid, layer)
     if data.get("color") is not None:
         rs.ObjectColor(oid, _color(data.get("color")))
+    if data.get("visible") is True:
+        rs.ShowObject(oid)
+    elif data.get("visible") is False:
+        rs.HideObject(oid)
 rs.Redraw()
 result = {"objects": [str(oid) for oid in objects], "count": len(objects)}
 '''
 
 _DELETE_SCRIPT = _COMMON + r'''
-objects = _objects(__mcp_delete.get("ids"), bool(__mcp_delete.get("selected", True)))
+if __mcp_delete.get("delete_all"):
+    objects = rs.AllObjects() or []
+else:
+    objects = _objects(__mcp_delete.get("ids"), bool(__mcp_delete.get("selected", True)))
 deleted = rs.DeleteObjects(objects) if objects else 0
 rs.Redraw()
 result = {"deleted": int(deleted or 0)}

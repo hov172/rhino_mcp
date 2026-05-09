@@ -21,15 +21,53 @@ def register(mcp: FastMCP) -> None:
         """
         return rhino.list_instances()
 
+    @mcp.tool(annotations=ToolAnnotations(title="Get Rhino Commands", readOnlyHint=True))
+    def get_rhino_commands(
+        filter: str = "",
+        loaded_only: bool = True,
+        rhino_id: str | None = None,
+    ) -> dict[str, object]:
+        """
+        List all available Rhino command names, optionally filtered by substring.
+
+        ``loaded_only=True`` (default) returns only commands from currently loaded
+        plugins. Set ``False`` to include commands from unloaded plugins as well.
+        Use this before ``run_rhino_command`` to discover exact command names
+        rather than guessing.
+        """
+        code = "__mcp_filter = {!r}\n__mcp_loaded_only = {!r}\n".format(filter, loaded_only) + r"""
+import Rhino
+names = []
+try:
+    names = list(Rhino.Commands.Command.GetCommandNames(__mcp_loaded_only, True))
+except Exception:
+    try:
+        names = list(Rhino.Commands.Command.GetCommandNames())
+    except Exception:
+        pass
+if __mcp_filter:
+    names = [n for n in names if __mcp_filter.lower() in n.lower()]
+names.sort()
+result = {"commands": names, "count": len(names)}
+"""
+        return rhino.execute_python(code, rhino_id=rhino_id)
+
     @mcp.tool(annotations=ToolAnnotations(title="Run Rhino Command", destructiveHint=True))
-    def run_rhino_command(command: str, rhino_id: str | None = None) -> dict[str, object]:
+    def run_rhino_command(
+        command: str,
+        echo: bool = False,
+        rhino_id: str | None = None,
+    ) -> dict[str, object]:
         """
         Run a Rhino command macro such as ``_Circle 0,0,0 20``.
 
+        ``echo=True`` echoes the command string to Rhino's command history so users
+        can follow along in the Rhino window. Only supported when routing through
+        the plugin backend (has no effect via rhinocode).
         Use ``rhino_id`` from ``get_rhino_instances`` when more than one Rhino
         process is running.
         """
-        return rhino.run_command(command, rhino_id=rhino_id)
+        return rhino.run_command(command, echo=echo, rhino_id=rhino_id)
 
     @mcp.tool(annotations=ToolAnnotations(title="Get Rhino Backend Status", readOnlyHint=True))
     def get_rhino_backend_status(rhino_id: str | None = None) -> dict[str, object]:

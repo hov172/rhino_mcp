@@ -53,8 +53,8 @@ public static class CommandDispatcher
                 "create_layer" => McpResponse.Ok(RhinoHandlers.CreateLayer(p)),
                 "delete_layer" => McpResponse.Ok(RhinoHandlers.DeleteLayer(p)),
                 "get_or_set_current_layer" => McpResponse.Ok(RhinoHandlers.GetOrSetCurrentLayer(p)),
-                "undo" => McpResponse.Ok(RhinoHandlers.RunRepeated("_Undo", p.Int("steps", 1))),
-                "redo" => McpResponse.Ok(RhinoHandlers.RunRepeated("_Redo", p.Int("steps", 1))),
+                "undo" => McpResponse.Ok(RhinoHandlers.UndoSteps(p.Int("steps", 1))),
+                "redo" => McpResponse.Ok(RhinoHandlers.RedoSteps(p.Int("steps", 1))),
                 "capture_viewport" => McpResponse.Ok(RhinoHandlers.CaptureViewport(p)),
                 "execute_rhinoscript_python_code" => McpResponse.Ok(RhinoHandlers.ExecutePython(p)),
                 "execute_rhinocommon_csharp_code" => McpResponse.Ok(RhinoHandlers.ExecuteCSharp(p)),
@@ -71,7 +71,7 @@ public static class CommandDispatcher
                 "split_curve" => McpResponse.Ok(RhinoHandlers.RunAdvancedCommand("split_curve", p)),
                 "list_plugins" => McpResponse.Ok(RhinoHandlers.ListPlugins(p)),
                 "load_plugin" => McpResponse.Ok(RhinoHandlers.LoadPlugin(p)),
-                "run_command" => McpResponse.Ok(RunScript(p.String("command") ?? "")),
+                "run_command" => McpResponse.Ok(RunScript(p.String("command") ?? "", p.Bool("echo", false))),
                 // Material commands
                 "get_materials" => McpResponse.Ok(RhinoHandlers.GetMaterials()),
                 "create_material" => McpResponse.Ok(RhinoHandlers.CreateMaterial(p)),
@@ -134,11 +134,24 @@ public static class CommandDispatcher
         }
     }
 
-    private static object RunScript(string command)
+    private static object RunScript(string command, bool echo = false)
     {
         if (string.IsNullOrWhiteSpace(command))
             return new { ok = false, message = "command is required" };
-        var ok = RhinoApp.RunScript(command, false);
-        return new { ok, command };
+        bool prevCapture = RhinoApp.CommandWindowCaptureEnabled;
+        RhinoApp.CommandWindowCaptureEnabled = true;
+        bool ok;
+        string[] lines;
+        try
+        {
+            ok = RhinoApp.RunScript(command, echo);
+            lines = RhinoApp.CapturedCommandWindowStrings(true) ?? Array.Empty<string>();
+        }
+        finally
+        {
+            RhinoApp.CommandWindowCaptureEnabled = prevCapture;
+        }
+        var output = string.Join("\n", lines).Trim();
+        return new { ok, command, output };
     }
 }

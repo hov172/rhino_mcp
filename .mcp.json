@@ -1,0 +1,11 @@
+{
+  "mcpServers": {
+    "rhino": {
+      "command": "/Users/helpdesk/Developer/GitHub/rhino_mcp/.venv/bin/rhino-mcp",
+      "args": [],
+      "env": {
+        "DYLD_LIBRARY_PATH": "/opt/homebrew/lib"
+      }
+    }
+  }
+}
