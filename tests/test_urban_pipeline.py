@@ -72,7 +72,8 @@ class TestUrbanRunStudioPipeline(unittest.TestCase):
                             project_name="P", scheme_name="S",
                             render_views=["Perspective"])
         mock_export.assert_called_once()
-        self.assertIn("renders", r["errors"][0].lower() if r["errors"] else "")
+        self.assertTrue(r["errors"], "errors list should not be empty when renders fail")
+        self.assertIn("renders", r["errors"][0].lower())
 
     def test_step_log_has_entry_per_attempted_step(self):
         r, *_ = self._run()

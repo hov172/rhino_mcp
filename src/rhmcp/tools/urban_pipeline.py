@@ -239,9 +239,13 @@ def register(mcp: FastMCP) -> None:
             try:
                 layer = "Urban::Massing::Tower"
                 solar = _step_run_solar(layer, "London")
-                step_log.append({"step": "solar", "status": "ok",
+                solar_status = "ok" if solar.get("ok") else "failed"
+                step_log.append({"step": "solar", "status": solar_status,
                                  "duration_s": round(time.time() - t0, 2),
-                                 "summary": f"avg radiation {solar.get('avg_radiation_kwh_m2', 0)} kWh/m²"})
+                                 "summary": f"avg radiation {solar.get('avg_radiation_kwh_m2', 0)} kWh/m²" if solar.get("ok") else solar.get("error", "solar failed")})
+                if not solar.get("ok"):
+                    errors.append(f"solar: {solar.get('error', 'failed')}")
+                    solar = None  # don't pass failed solar to export
             except Exception as exc:
                 step_log.append({"step": "solar", "status": "failed",
                                  "duration_s": round(time.time() - t0, 2),
@@ -269,12 +273,26 @@ def register(mcp: FastMCP) -> None:
         _current_run["running"] = False
         _current_run["steps_done"] = 4
 
+        # Collect metrics and design language from session state
+        try:
+            from rhmcp.tools.urban import _urban_get_metrics
+            metrics_out = _urban_get_metrics()
+        except (ImportError, AttributeError):
+            metrics_out = {}
+        try:
+            from rhmcp.tools.urban_design_language import _current_design_language
+            dl_out = _current_design_language or {}
+        except (ImportError, AttributeError):
+            dl_out = {}
+
         result: dict[str, Any] = {
             "ok": True,
             "run_id": run_id,
             "scheme_name": scheme_name,
             "report_url": report_url,
             "renders": renders,
+            "metrics": metrics_out,
+            "design_language": dl_out,
             "step_log": step_log,
             "elapsed_s": elapsed,
             "errors": errors,
