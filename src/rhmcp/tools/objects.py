@@ -20,12 +20,18 @@ def register(mcp: FastMCP) -> None:
         logic: str = "and",
         limit: int = 100,
         include_hidden: bool = False,
+        bbox_filter: list[list[float]] | None = None,
         rhino_id: str | None = None,
     ) -> dict[str, object]:
         """
         Return object summaries filtered by id, name, layer, type, or color.
+
+        ``bbox_filter`` is an optional spatial bounding-box filter in the form
+        ``[[min_x, min_y, min_z], [max_x, max_y, max_z]]``. When provided, only
+        objects whose bounding box overlaps or falls within the specified box are
+        returned.
         """
-        payload = {"filters": filters or {}, "logic": logic, "limit": limit, "include_hidden": include_hidden}
+        payload = {"filters": filters or {}, "logic": logic, "limit": limit, "include_hidden": include_hidden, "bbox_filter": bbox_filter}
         code = "__mcp_get_objects = {!s}\n{}".format(json.dumps(payload), _GET_OBJECTS_SCRIPT)
         return rhino.execute_python(code, rhino_id=rhino_id)
 
@@ -93,6 +99,7 @@ def register(mcp: FastMCP) -> None:
     def edit_rhino_object_attributes(
         ids: list[str] | None = None,
         selected: bool = True,
+        apply_to_all: bool = False,
         name: str | None = None,
         layer: str | None = None,
         color: list[int] | None = None,
@@ -100,8 +107,11 @@ def register(mcp: FastMCP) -> None:
     ) -> dict[str, object]:
         """
         Set object name, layer, or display color for ids or selected objects.
+
+        When ``apply_to_all`` is ``True``, the tool targets ALL objects in the
+        document regardless of ``ids`` or ``selected``.
         """
-        payload = {"ids": ids, "selected": selected, "name": name, "layer": layer, "color": color}
+        payload = {"ids": ids, "selected": selected, "apply_to_all": apply_to_all, "name": name, "layer": layer, "color": color}
         code = "__mcp_attrs = {!s}\n{}".format(json.dumps(payload), _ATTR_SCRIPT)
         return rhino.execute_python(code, rhino_id=rhino_id)
 
@@ -173,10 +183,21 @@ filters = __mcp_get_objects.get("filters") or {}
 logic = str(__mcp_get_objects.get("logic") or "and").lower()
 limit = int(__mcp_get_objects.get("limit") or 100)
 include_hidden = bool(__mcp_get_objects.get("include_hidden", False))
+bbox_filter = __mcp_get_objects.get("bbox_filter")
 objects = []
 for oid in rs.AllObjects() or []:
     if not include_hidden and rs.IsObjectHidden(oid):
         continue
+    if bbox_filter is not None:
+        bbox = rs.BoundingBox(oid)
+        if not bbox:
+            continue
+        pts = [(p.X, p.Y, p.Z) if hasattr(p, 'X') else tuple(p) for p in bbox]
+        xs = [p[0] for p in pts]; ys = [p[1] for p in pts]; zs = [p[2] for p in pts]
+        mn, mx = bbox_filter[0], bbox_filter[1]
+        if max(xs) < mn[0] or min(xs) > mx[0]: continue
+        if max(ys) < mn[1] or min(ys) > mx[1]: continue
+        if max(zs) < mn[2] or min(zs) > mx[2]: continue
     if filters:
         tests = [_match_filter(oid, key, expected) for key, expected in filters.items()]
         ok = any(tests) if logic == "or" else all(tests)
@@ -253,7 +274,10 @@ result = {"objects": [str(oid) for oid in current], "count": len(current)}
 
 _ATTR_SCRIPT = _COMMON + r'''
 data = __mcp_attrs
-objects = _objects(data.get("ids"), bool(data.get("selected", True)))
+if __mcp_attrs.get("apply_to_all"):
+    objects = rs.AllObjects() or []
+else:
+    objects = _objects(data.get("ids"), bool(data.get("selected", True)))
 layer = data.get("layer")
 if layer and not rs.IsLayer(layer):
     rs.AddLayer(layer)

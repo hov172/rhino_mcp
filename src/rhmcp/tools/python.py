@@ -10,17 +10,48 @@ from mcp.types import ToolAnnotations
 from rhmcp.tools_helpers import backend as rhino
 
 
+def _wrap_with_revert(code: str) -> str:
+    indented = "\n".join("    " + line for line in code.splitlines())
+    return (
+        'import rhinoscriptsyntax as rs\n'
+        'try:\n'
+        f'{indented}\n'
+        'except Exception as _mcp_ex:\n'
+        '    try:\n'
+        '        rs.Command("_Undo", False)\n'
+        '    except Exception:\n'
+        '        pass\n'
+        '    raise _mcp_ex\n'
+    )
+
+
 def register(mcp: FastMCP) -> None:
     @mcp.tool(annotations=ToolAnnotations(title="Execute Rhino Python", destructiveHint=True))
-    def execute_rhino_python(code: str, rhino_id: str | None = None) -> dict[str, object]:
+    def execute_rhino_python(
+        code: str,
+        rhino_id: str | None = None,
+        verified_functions: list[str] | None = None,
+    ) -> dict[str, object]:
         """
         Execute Python code inside Rhino.
 
         The code runs with access to Rhino's Python environment, including
         ``rhinoscriptsyntax`` and RhinoCommon. Assign a JSON-serialisable value
         to ``result`` to return data.
+
+        :param verified_functions: List of RhinoScript/RhinoCommon function names
+            that the caller has looked up (e.g. via ``search_rhinoscript_functions``)
+            before writing this code. Providing this list documents that API calls
+            have been verified and suppresses the api_warning in the response.
         """
-        return rhino.execute_python(code, rhino_id=rhino_id)
+        result = rhino.execute_python(_wrap_with_revert(code), rhino_id=rhino_id)
+        if not verified_functions:
+            result["api_warning"] = (
+                "verified_functions not provided — consider using "
+                "search_rhinoscript_functions before writing code to avoid "
+                "hallucinated API calls."
+            )
+        return result
 
     @mcp.tool(annotations=ToolAnnotations(title="Execute RhinoCommon CSharp", destructiveHint=True))
     def execute_rhino_csharp(code: str, rhino_id: str | None = None) -> dict[str, object]:

@@ -13,3 +13,67 @@ initial_instructions: |
   - When executing Python, assign a JSON-serialisable value to result.
   - Break complex models into named layers and return object ids after creation.
   - For exhaustive API behavior, consult RhinoScriptSyntax and RhinoCommon documentation.
+
+  Visual quality defaults:
+  - For site plans, layouts, and architectural geometry: always create planar surfaces
+    (rs.AddSrfPt or rs.AddPlanarSrf), not just curves or polylines.
+  - Apply distinct display colors per layer using rs.ObjectColor(obj, color) and
+    rs.ObjectColorSource(obj, 1) so colors are visible in all display modes.
+  - Include a ground plane surface with a neutral colour and a margin around the site.
+  - After creating geometry, switch the active viewport to Shaded mode:
+    rs.Command("_SetDisplayMode _Mode=Shaded", False)
+  - Always call rs.ZoomExtents(None, True) at the end of every script.
+
+rhinoscript_workflow: |
+  Before writing any RhinoScript Python code, you MUST follow this workflow:
+
+  1. Look up functions first — call search_rhinoscript_functions or get_rhinoscript_docs
+     before writing any code. Never guess function names or signatures.
+  2. Check exact signatures — read parameter types, order, and return values carefully.
+  3. Pass verified_functions — when calling execute_rhino_python, include the
+     verified_functions list naming every rs.* function you are using.
+  4. Import correctly — always use `import rhinoscriptsyntax as rs` and call rs.FunctionName().
+  5. Assign result — assign a JSON-serialisable value to `result` to return data.
+
+  Anti-hallucination rules:
+  - Do NOT guess RhinoScript function names — look them up.
+  - Do NOT transpose parameter order — verify the signature.
+  - Do NOT invent undocumented parameters — use only what the docs show.
+  - If a function is not found in search results, use execute_rhino_python with
+    RhinoCommon (import Rhino) as a fallback, or ask the user.
+
+asset_general_strategy: |
+  Use this strategy when working with Rhino objects:
+
+  1. Understand the scene first
+     - Call get_rhino_document_summary to see object counts, layers, and bounding box.
+     - For spatial queries on large scenes, use bbox_filter in get_rhino_objects.
+
+  2. Creating geometry
+     - Simple primitives: use create_rhino_geometry or create_rhino_scene.
+     - Surfaces from curves: use loft, extrude_curve, or sweep1.
+     - Complex or parametric geometry: use execute_rhino_python (follow rhinoscript_workflow).
+     - Always create planar surfaces (rs.AddSrfPt / rs.AddPlanarSrf) for site plans and
+       layouts — never just curves or polylines.
+
+  3. Modifying objects
+     - Name, layer, color: use edit_rhino_object_attributes. Use apply_to_all=True to
+       apply changes to every object without listing IDs.
+     - Move, rotate, scale: use transform_rhino_objects.
+     - Complex changes: use execute_rhino_python.
+
+  4. Querying objects
+     - Single object: get_rhino_object_info.
+     - Filtered set: get_rhino_objects with layer/type/bbox filters.
+     - Current selection: get_selected_rhino_objects.
+
+  5. Visual quality defaults
+     - Apply distinct display colors per layer.
+     - Include a ground plane with a neutral colour and site margin.
+     - Switch viewport to Shaded: rs.Command("_SetDisplayMode _Mode=Shaded", False).
+     - Call rs.ZoomExtents(None, True) at the end of every script.
+
+  6. Safety
+     - Use undo / redo tools to recover from mistakes.
+     - Batch object creation: no more than 50 objects per create_objects call.
+     - Use meaningful object names and organise geometry into named layers.

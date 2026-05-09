@@ -39,6 +39,16 @@ def main() -> int:
 
     mcp = FastMCP("rhino-mcp", instructions=str(prompts["initial_instructions"]))
 
+    @mcp.prompt()
+    def rhinoscript_workflow() -> str:
+        """Mandatory workflow for writing RhinoScript Python — look up docs before coding."""
+        return str(prompts["rhinoscript_workflow"])
+
+    @mcp.prompt()
+    def asset_general_strategy() -> str:
+        """Decision-tree strategy for creating, modifying, and querying Rhino objects."""
+        return str(prompts["asset_general_strategy"])
+
     @mcp.resource("rhinoscript://modules")
     def resource_list_modules() -> str:
         lines = ["# RhinoScript Modules\n", "| Module | Functions |", "|--------|-----------|"]
