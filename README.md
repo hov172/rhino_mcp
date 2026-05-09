@@ -7,6 +7,7 @@ Control Rhino 3D from Claude, Cursor, Codex, and any other MCP-capable AI tool. 
 ## Table of Contents
 
 - [What You Can Do](#what-you-can-do)
+- [Urban Massing Workflow](#urban-massing-workflow)
 - [Architecture Overview](#architecture-overview)
 - [Requirements](#requirements)
 - [Installation](#installation)
@@ -27,7 +28,7 @@ Control Rhino 3D from Claude, Cursor, Codex, and any other MCP-capable AI tool. 
   - [Manual Installation](#manual-installation)
   - [File-based Installation](#file-based-installation)
   - [Checking Plugin Status](#checking-plugin-status)
-- [All 189 Tools](#all-189-tools)
+- [All 204 Tools](#all-204-tools)
   - [Plugin Management](#plugin-management)
   - [Grasshopper — Canvas](#grasshopper--canvas)
   - [Grasshopper — Parameters](#grasshopper--parameters)
@@ -76,6 +77,7 @@ Control Rhino 3D from Claude, Cursor, Codex, and any other MCP-capable AI tool. 
 | **GH — Human & Elefront** | Bake with full attribute control (layer, name, user text), reference objects by filter, set/get user text on Rhino objects |
 | **GH — Kangaroo** | Set up physics solvers, add and wire physics goals (Length, Angle, Anchor, Spring, Pressure, Load, Hinge, etc.), run simulations |
 | **GH — Ladybug / Honeybee** | Load EPW weather data, sun path, radiation analysis, wind rose, UTCI comfort; create Honeybee rooms, add windows, run energy simulations |
+| **UrbanGPT Platform** | Parse urban prompts, generate site layouts and massing, calculate/validate metrics, optimize FAR, render previews, export models, save versions, and orchestrate full schemes |
 | **Geometry** | Create boxes, spheres, cylinders, cones, tori, curves, surfaces, meshes, text, arcs, ellipses, planes, and more |
 | **Modeling** | Boolean union/difference/intersection, loft, extrude, sweep, offset, pipe, project/intersect/split curves |
 | **Objects** | Select, move, rotate, scale, rename, change layer/color, delete, undo/redo |
@@ -92,6 +94,20 @@ Control Rhino 3D from Claude, Cursor, Codex, and any other MCP-capable AI tool. 
 | **Lands Design** | Place plants and trees from species library, generate terrain from contours, create paths and water features, export plant schedules |
 | **Remote host** | Run Rhino on a separate workstation or VM — set `RHINO_MCP_BIND_HOST=0.0.0.0` on the Rhino machine and point the MCP client at its IP |
 | **Telemetry** | Optional per-call usage log (JSONL on disk, opt-in, never leaves the machine) for debugging slow tools and measuring usage patterns |
+
+---
+
+## Urban Massing Workflow
+
+Rhino MCP includes an agent-led urban massing workflow for early site studies. Claude can collect a short brief, choose a typology, open the matching Grasshopper definition under `grasshopper/urban/`, set named sliders, solve the definition, bake the generated geometry into Rhino, and read back planning metrics.
+
+Supported massing typologies are `tower`, `podium_tower`, `courtyard`, `perimeter_block`, and `street_grid`. The workflow is driven by `urban_generate_massing`, which accepts the site origin, site dimensions, and typology-specific parameter overrides such as floor count, setbacks, footprint size, program mix, road width, or grid rotation. Results are baked to layers like `Urban::Massing::tower`.
+
+Use `urban_get_metrics` after generation to retrieve the active definition's reported `gfa_m2`, `far`, `unit_count_est`, and `open_space_pct`. Use `urban_update_param` for iterative slider changes, `urban_capture_and_evaluate` to pair metrics with a viewport image, `urban_run_analysis` for the Ladybug solar-analysis definition, and `urban_clear_massing` to remove generated layers.
+
+The PRD-facing API is also available with product-level names: `parse_urban_prompt`, `generate_site_layout`, `generate_massing`, `calculate_urban_metrics`, `optimize_plan`, `render_urban_preview`, `export_model`, `save_project_version`, and `create_urban_scheme`.
+
+Prerequisites are the plugin backend, Rhino with Grasshopper open, and the urban Grasshopper definitions present in `grasshopper/urban/`. Ladybug-based analysis additionally requires Ladybug Tools and local EPW weather files.
 
 ---
 
@@ -650,7 +666,7 @@ You can also call `check_plugin_loaded(plugin_name="V-Ray")` directly to test wh
 
 ---
 
-## All 189 Tools
+## All 204 Tools
 
 ---
 
