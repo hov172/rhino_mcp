@@ -64,7 +64,6 @@ Control Rhino 3D from Claude, Cursor, Codex, and any other MCP-capable AI tool. 
 - [Building the Plugin from Source](#building-the-plugin-from-source)
 - [Running Tests](#running-tests)
 - [References](#references)
-- [References](#references)
 
 ---
 
