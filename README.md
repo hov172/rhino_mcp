@@ -466,7 +466,7 @@ Then restart Rhino. The plugin loads automatically on startup.
 
 1. Open Rhino.
 2. Run the command `_PackageManager` in the Rhino command line.
-3. Click **Install from file…** and select `rhino_plugin/package/rhino-mcp-0.2.0-rh8_17-any.yak`.
+3. Click **Install from file…** and select `rhino_plugin/package/rhino-mcp-0.3.0-rh8_30-any.yak`.
 4. Restart Rhino when prompted.
 
 #### Option C — Build from source

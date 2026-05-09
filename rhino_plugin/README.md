@@ -48,7 +48,7 @@ The plugin handles the following command types (dispatched in `CommandDispatcher
 |---|---|
 | `create_object` | Create a single geometric object (box, sphere, cylinder, cone, torus, curve, surface, mesh, text, etc.) |
 | `create_objects` | Batch create multiple objects in one round-trip |
-| `get_objects` | List objects with optional type/layer/name filters |
+| `get_objects` | List objects with optional type/layer/name/color filters; `include_hidden=true` includes hidden objects |
 | `get_object_info` | Get detailed properties of a specific object by GUID |
 | `modify_object` | Transform (move/rotate/scale) or change attributes of an object |
 | `modify_objects` | Batch attribute/transform updates |
@@ -70,7 +70,7 @@ The plugin handles the following command types (dispatched in `CommandDispatcher
 
 | Command | Description |
 |---|---|
-| `get_document_summary` | Object counts, layer list, materials, units, tolerance |
+| `get_document_summary` | Object counts, layer list, materials, units, tolerance. Returns `object_count` and `unit_system` (snake_case). |
 | `save_document` | Save the active document |
 | `export_document` | Export to `.3dm`, `.obj`, `.stl`, `.fbx`, `.step`, `.iges`, `.dwg`, `.pdf` |
 | `set_view` | Activate a named view or set camera position/target/lens |
@@ -80,9 +80,11 @@ The plugin handles the following command types (dispatched in `CommandDispatcher
 
 | Command | Description |
 |---|---|
-| `execute_rhinoscript_python_code` | Run Python code inside Rhino (RhinoScriptSyntax + RhinoCommon) |
+| `execute_rhinoscript_python_code` | Run Python code inside Rhino (RhinoScriptSyntax + RhinoCommon); captures both `print()` output and command-window lines |
 | `execute_rhinocommon_csharp_code` | Run C# code via Roslyn scripting |
-| `run_command` | Execute a Rhino command macro string |
+| `run_command` | Execute a Rhino command macro string; `echo=true` echoes it to the command history; response includes captured `output` |
+| `undo` | Undo the last N operations (`steps`); stops automatically when the stack is exhausted and returns `undone_steps` / `requested_steps` |
+| `redo` | Redo the last N undone operations (`steps`); stops automatically when the redo stack is exhausted |
 
 ### Plugins
 
