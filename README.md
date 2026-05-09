@@ -8,6 +8,7 @@ Control Rhino 3D from Claude, Cursor, Codex, and any other MCP-capable AI tool. 
 
 - [What You Can Do](#what-you-can-do)
 - [Urban Massing Workflow](#urban-massing-workflow)
+- [Studio Pipeline](#studio-pipeline)
 - [Architecture Overview](#architecture-overview)
 - [Requirements](#requirements)
 - [Installation](#installation)
@@ -28,7 +29,7 @@ Control Rhino 3D from Claude, Cursor, Codex, and any other MCP-capable AI tool. 
   - [Manual Installation](#manual-installation)
   - [File-based Installation](#file-based-installation)
   - [Checking Plugin Status](#checking-plugin-status)
-- [All 204 Tools](#all-204-tools)
+- [All 216 Tools](#all-216-tools)
   - [Plugin Management](#plugin-management)
   - [Grasshopper — Canvas](#grasshopper--canvas)
   - [Grasshopper — Parameters](#grasshopper--parameters)
@@ -54,12 +55,15 @@ Control Rhino 3D from Claude, Cursor, Codex, and any other MCP-capable AI tool. 
   - [Boolean Operations](#boolean-operations)
   - [Curve Operations](#curve-operations)
   - [AI Generation](#ai-generation)
+  - [Studio Pipeline Tools](#studio-pipeline-tools)
   - [Asset Libraries (Poly Haven & Sketchfab)](#asset-libraries-poly-haven--sketchfab)
   - [VisualARQ (Architectural BIM)](#visualarq-architectural-bim)
   - [Lands Design (Landscape)](#lands-design-landscape)
   - [Reference-Compatible Aliases](#reference-compatible-aliases)
+- [Studio Pipeline Env Vars](#studio-pipeline-env-vars)
 - [Building the Plugin from Source](#building-the-plugin-from-source)
 - [Running Tests](#running-tests)
+- [References](#references)
 - [References](#references)
 
 ---
@@ -77,7 +81,7 @@ Control Rhino 3D from Claude, Cursor, Codex, and any other MCP-capable AI tool. 
 | **GH — Human & Elefront** | Bake with full attribute control (layer, name, user text), reference objects by filter, set/get user text on Rhino objects |
 | **GH — Kangaroo** | Set up physics solvers, add and wire physics goals (Length, Angle, Anchor, Spring, Pressure, Load, Hinge, etc.), run simulations |
 | **GH — Ladybug / Honeybee** | Load EPW weather data, sun path, radiation analysis, wind rose, UTCI comfort; create Honeybee rooms, add windows, run energy simulations |
-| **UrbanAgent Platform** | Parse urban prompts, generate site layouts and massing, calculate/validate metrics, optimize FAR, render previews, export models, save versions, and orchestrate full schemes |
+| **UrbanAgent Platform** | Parse urban prompts, generate site layouts and massing, calculate/validate metrics, optimize FAR, render previews, export models, save versions, and orchestrate full schemes. **Studio Pipeline:** generate design language (Claude API), AI-render viewports (fal.ai FLUX.1), export branded PDF reports (DocRaptor + S3), run all steps with a single `urban_run_studio_pipeline` call |
 | **Geometry** | Create boxes, spheres, cylinders, cones, tori, curves, surfaces, meshes, text, arcs, ellipses, planes, and more |
 | **Modeling** | Boolean union/difference/intersection, loft, extrude, sweep, offset, pipe, project/intersect/split curves |
 | **Objects** | Select, move, rotate, scale, rename, change layer/color, delete, undo/redo |
@@ -432,6 +436,12 @@ Use `get_rhino_backend_status` from any AI client to check which backends are cu
 | Variable | Default | Description |
 |---|---|---|
 | `RHINO_MCP_BACKEND` | `auto` | Backend mode: `plugin`, `rhinocode`, or `auto` |
+| `ANTHROPIC_API_KEY` | *(unset)* | Required for `urban_generate_design_language` and the studio pipeline design step |
+| `FAL_KEY` | *(unset)* | Required for `urban_render_views` and `urban_render_style_preview` (fal.ai account) |
+| `DOCRAPTOR_API_KEY` | *(unset)* | Optional — enables PDF conversion in `urban_export_report`. Falls back to local HTML when unset. |
+| `URBAN_AGENT_S3_BUCKET` | *(unset)* | Optional — S3 bucket name for report uploads. Falls back to `~/.urbanagent/reports/` when unset. |
+| `AWS_ACCESS_KEY_ID` | *(unset)* | Optional — AWS credentials for S3 report uploads. |
+| `AWS_SECRET_ACCESS_KEY` | *(unset)* | Optional — AWS credentials for S3 report uploads. |
 | `RHINO_MCP_HOST` | `127.0.0.1` | IP/hostname of the machine running Rhino (used by the Python side to connect) |
 | `RHINO_MCP_PORT` | `1999` | Plugin socket port |
 | `RHINO_MCP_SOCKET_TIMEOUT` | `15.0` | Socket timeout in seconds |
@@ -733,7 +743,7 @@ You can also call `check_plugin_loaded(plugin_name="V-Ray")` directly to test wh
 
 ---
 
-## All 204 Tools
+## All 216 Tools
 
 ---
 
@@ -1133,6 +1143,44 @@ Requires [Enscape](https://enscape3d.com) to be installed and licensed. Each too
 
 ---
 
+### Studio Pipeline Tools
+
+Requires env vars — see [Studio Pipeline Env Vars](#studio-pipeline-env-vars). All cloud services are optional; the pipeline degrades gracefully to local output without credentials.
+
+**Design Language** (`ANTHROPIC_API_KEY` required):
+
+| Tool | Description |
+|---|---|
+| `urban_generate_design_language` | Call Claude API to generate a complete design language: style name, facade vocabulary, material palette with hex codes, colour story, landscape character, diffusion prompt, and executive summary. Stores result in session state. |
+| `urban_update_design_language` | Patch a single field of the current design language (e.g. `style_name`, `facade_vocabulary`, `material_palette`). Re-derives the diffusion prompt when style or materials change. |
+| `urban_get_design_language` | Return the current session design language dict, or `{"set": false}` if none generated yet. |
+
+**AI Renders** (`FAL_KEY` required):
+
+| Tool | Description |
+|---|---|
+| `urban_render_views` | Capture one or more named Rhino viewports and AI-render them using fal.ai FLUX.1 ControlNet img2img. Uses the session design language as the diffusion prompt. Retries with reduced strength on first failure; falls back to raw Rhino captures on double failure. Returns list of `RenderResult` dicts with `original_b64`, `rendered_b64`, `prompt_used`, `seed`. |
+| `urban_render_style_preview` | Text-to-image style mood board via fal.ai FLUX.1 (no massing or Rhino viewport needed). Use to explore design directions before generating the full massing. |
+| `urban_get_renders` | Return all AI renders produced this session, keyed by view name (`Perspective`, `Top`, `Front`, `Right`, etc.). |
+
+**Report Generator** (`DOCRAPTOR_API_KEY` + AWS credentials optional):
+
+| Tool | Description |
+|---|---|
+| `urban_export_report` | Collect all session state (metrics, renders, solar, design language), render a branded Jinja2 HTML template, convert to PDF via DocRaptor, upload to S3, and return a 7-day presigned URL. Falls back to `~/.urbanagent/reports/` when cloud credentials are absent. |
+| `urban_preview_report` | Render the report as HTML only — no PDF conversion, no S3 upload. Returns the HTML string for fast iteration. |
+| `urban_list_reports` | List all reports exported this session with scheme name, PDF URL, timestamp, and file size. |
+
+**Pipeline Orchestrator**:
+
+| Tool | Description |
+|---|---|
+| `urban_run_studio_pipeline` | Single-call orchestrator. Runs all 4 steps in sequence: design language → AI renders → solar analysis → PDF export. Design language failure aborts; render/solar/export failures are logged but the pipeline continues. Supports `skip_steps=["renders"]` to reuse existing renders. Returns `PipelineResult` with `report_url`, `renders`, `metrics`, `design_language`, `step_log`, `elapsed_s`, and `errors`. |
+| `urban_pipeline_status` | Return the status of the currently running or last completed pipeline: `{running, current_step, steps_done, steps_total}`. |
+| `urban_list_pipeline_runs` | List all pipeline runs this session with their report URLs, step counts, and errors. Allows comparing across scheme iterations. |
+
+---
+
 ### Asset Libraries (Poly Haven & Sketchfab)
 
 | Tool | Description |
@@ -1196,6 +1244,21 @@ These tools use the public RhinoMCP wire protocol names so agents trained on oth
 
 ---
 
+## Studio Pipeline Env Vars
+
+```bash
+export ANTHROPIC_API_KEY=sk-ant-...          # design language generation
+export FAL_KEY=...                            # AI renders (fal.ai account)
+export DOCRAPTOR_API_KEY=...                  # PDF export (optional)
+export URBAN_AGENT_S3_BUCKET=my-bucket       # cloud storage (optional)
+export AWS_ACCESS_KEY_ID=...                  # S3 credentials (optional)
+export AWS_SECRET_ACCESS_KEY=...              # S3 credentials (optional)
+```
+
+Without `DOCRAPTOR_API_KEY` the report is saved as HTML at `~/.urbanagent/reports/`. Without AWS credentials the PDF is saved locally at `~/.urbanagent/reports/`. The pipeline always completes and always produces output.
+
+---
+
 ## Building the Plugin from Source
 
 ```bash
@@ -1222,10 +1285,14 @@ uv run python -m pytest tests/test_tools_unit.py tests/test_plugin_files.py -v
 # Server metadata test (starts the MCP server process, no Rhino required)
 uv run python -m pytest tests/test_server_metadata.py -v
 
+# Urban + Studio Pipeline tests (no Rhino required — all external APIs mocked)
+uv run python -m pytest tests/test_urban_unit.py tests/test_urban_design_language.py \
+    tests/test_urban_renders.py tests/test_urban_report.py tests/test_urban_pipeline.py -v
+
 # Grasshopper integration tests (requires Rhino running with MCPStart active)
 uv run python -m pytest tests/test_gh_integration.py -v -m integration
 
-# All non-integration tests
+# All non-integration tests (169 tests, ~1.7s)
 uv run python -m pytest tests/ --ignore=tests/test_gh_integration.py -v
 ```
 
