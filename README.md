@@ -14,6 +14,7 @@ Control Rhino 3D from Claude, Cursor, Codex, and any other MCP-capable AI tool. 
 - [Installation](#installation)
   - [1. Install the Rhino Plugin](#1-install-the-rhino-plugin)
   - [2. Install the Python MCP Server](#2-install-the-python-mcp-server)
+  - [3. Configure API Keys (Studio Pipeline)](#3-configure-api-keys-studio-pipeline)
 - [Starting the Service](#starting-the-service)
 - [Connecting AI Clients](#connecting-ai-clients)
   - [Claude Desktop](#claude-desktop)
@@ -262,8 +263,8 @@ The build output is placed at `rhino_plugin/RhinoMCPPlugin/bin/Debug/net8.0/Rhin
 git clone https://github.com/your-org/rhino-mcp.git
 cd rhino-mcp
 
-# Install with uv (recommended)
-uv pip install -e .
+# Install all dependencies (recommended)
+uv sync
 
 # Or with pip
 pip install -e .
@@ -274,6 +275,41 @@ Verify the install:
 ```bash
 uv run python -m rhmcp --help
 ```
+
+---
+
+### 3. Configure API Keys (Studio Pipeline)
+
+The Studio Pipeline features require API keys for three external services. All are optional — the pipeline degrades gracefully without them — but you need at least `ANTHROPIC_API_KEY` to generate design language.
+
+| Key | Where to get it | Required for |
+|---|---|---|
+| `ANTHROPIC_API_KEY` | [console.anthropic.com](https://console.anthropic.com/) | Design language generation (`urban_generate_design_language`) |
+| `FAL_KEY` | [fal.ai/dashboard](https://fal.ai/dashboard) | AI viewport renders (`urban_render_views`, `urban_render_style_preview`) |
+| `DOCRAPTOR_API_KEY` | [docraptor.com](https://docraptor.com/) | PDF report export (optional — falls back to local HTML) |
+| `URBAN_AGENT_S3_BUCKET` + AWS credentials | AWS Console | Cloud storage for report share links (optional — falls back to `~/.urbanagent/reports/`) |
+
+**macOS / Linux — add to `~/.zshrc` or `~/.bashrc` for persistence:**
+
+```bash
+export ANTHROPIC_API_KEY="sk-ant-..."
+export FAL_KEY="..."
+export DOCRAPTOR_API_KEY="..."          # optional
+export URBAN_AGENT_S3_BUCKET="my-bucket"  # optional
+export AWS_ACCESS_KEY_ID="..."           # optional
+export AWS_SECRET_ACCESS_KEY="..."       # optional
+```
+
+**Windows — set permanently via PowerShell:**
+
+```powershell
+[System.Environment]::SetEnvironmentVariable("ANTHROPIC_API_KEY", "sk-ant-...", "User")
+[System.Environment]::SetEnvironmentVariable("FAL_KEY", "...", "User")
+```
+
+**Or pass them directly in your AI client config** (see [Connecting AI Clients](#connecting-ai-clients) below — all client configs include an `env` block for this).
+
+> **Without any API keys:** The base Rhino tools (geometry, Grasshopper, rendering, BIM) work with no keys at all. Only the Studio Pipeline steps (design language, AI renders, PDF export) require external services.
 
 ---
 
@@ -338,14 +374,20 @@ Edit `~/Library/Application Support/Claude/claude_desktop_config.json` (macOS) o
       "env": {
         "RHINO_MCP_BACKEND": "plugin",
         "RHINO_MCP_HOST": "127.0.0.1",
-        "RHINO_MCP_PORT": "1999"
+        "RHINO_MCP_PORT": "1999",
+        "ANTHROPIC_API_KEY": "sk-ant-...",
+        "FAL_KEY": "...",
+        "DOCRAPTOR_API_KEY": "...",
+        "URBAN_AGENT_S3_BUCKET": "my-bucket",
+        "AWS_ACCESS_KEY_ID": "...",
+        "AWS_SECRET_ACCESS_KEY": "..."
       }
     }
   }
 }
 ```
 
-Replace `/path/to/rhino-mcp` with the absolute path to the cloned repo. Restart Claude Desktop after editing.
+Replace `/path/to/rhino-mcp` with the absolute path to the cloned repo. Omit any Studio Pipeline keys you don't need — the pipeline degrades gracefully. Restart Claude Desktop after editing.
 
 ---
 
@@ -362,14 +404,20 @@ Add to your project's `.mcp.json` or `~/.claude/mcp.json`:
       "env": {
         "RHINO_MCP_BACKEND": "plugin",
         "RHINO_MCP_HOST": "127.0.0.1",
-        "RHINO_MCP_PORT": "1999"
+        "RHINO_MCP_PORT": "1999",
+        "ANTHROPIC_API_KEY": "sk-ant-...",
+        "FAL_KEY": "...",
+        "DOCRAPTOR_API_KEY": "...",
+        "URBAN_AGENT_S3_BUCKET": "my-bucket",
+        "AWS_ACCESS_KEY_ID": "...",
+        "AWS_SECRET_ACCESS_KEY": "..."
       }
     }
   }
 }
 ```
 
-Or start Claude Code with the server inline:
+Or start Claude Code with the server inline (API keys picked up from your shell environment):
 
 ```bash
 claude --mcp-server "rhino:uv run --directory /path/to/rhino-mcp python -m rhmcp"
@@ -389,7 +437,13 @@ In Cursor Settings → MCP → Add Server:
     "env": {
       "RHINO_MCP_BACKEND": "plugin",
       "RHINO_MCP_HOST": "127.0.0.1",
-      "RHINO_MCP_PORT": "1999"
+      "RHINO_MCP_PORT": "1999",
+      "ANTHROPIC_API_KEY": "sk-ant-...",
+      "FAL_KEY": "...",
+      "DOCRAPTOR_API_KEY": "...",
+      "URBAN_AGENT_S3_BUCKET": "my-bucket",
+      "AWS_ACCESS_KEY_ID": "...",
+      "AWS_SECRET_ACCESS_KEY": "..."
     }
   }
 }
@@ -403,6 +457,8 @@ In Cursor Settings → MCP → Add Server:
 RHINO_MCP_BACKEND=plugin \
 RHINO_MCP_HOST=127.0.0.1 \
 RHINO_MCP_PORT=1999 \
+ANTHROPIC_API_KEY="sk-ant-..." \
+FAL_KEY="..." \
 codex --mcp-server "uv run --directory /path/to/rhino-mcp python -m rhmcp"
 ```
 
