@@ -26,9 +26,16 @@ where = ["src"]
 "rhmcp" = [
     "data/*.yml",
     "data/*.md",
+    "report_templates/*.jinja2",
+    "report_templates/*.css",
 ]
 
 [tool.pytest.ini_options]
 markers = [
     "integration: tests that require a running Rhino 8 instance with RhinoMCPPlugin loaded",
+]
+
+[dependency-groups]
+dev = [
+    "pytest>=9.0.3",
 ]

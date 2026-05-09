@@ -1,0 +1,148 @@
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&family=JetBrains+Mono:wght@400&display=swap');
+
+:root {
+  --bg: #0F172A;
+  --card: #1E293B;
+  --border: #334155;
+  --accent: #7DD3FC;
+  --text: #F1F5F9;
+  --muted: #94A3B8;
+  --green: #86EFAC;
+}
+
+* { box-sizing: border-box; margin: 0; padding: 0; }
+
+body {
+  font-family: 'Inter', sans-serif;
+  background: var(--bg);
+  color: var(--text);
+  font-size: 13px;
+  line-height: 1.6;
+}
+
+/* Cover page */
+.cover {
+  page-break-after: always;
+  min-height: 297mm;
+  display: flex;
+  flex-direction: column;
+  position: relative;
+  overflow: hidden;
+}
+.cover-hero {
+  flex: 1;
+  background: var(--card);
+  min-height: 180mm;
+}
+.cover-hero img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+.cover-body {
+  padding: 20mm 20mm 14mm;
+  background: var(--bg);
+}
+.cover-title { font-size: 28px; font-weight: 700; color: var(--text); }
+.cover-subtitle { font-size: 16px; color: var(--accent); margin-top: 6px; }
+.cover-meta { color: var(--muted); font-size: 12px; margin-top: 12px; }
+.cover-wordmark {
+  position: absolute; bottom: 10mm; right: 14mm;
+  font-size: 11px; color: var(--muted); letter-spacing: .12em; text-transform: uppercase;
+}
+
+/* Inner pages */
+.page {
+  padding: 14mm 20mm;
+  page-break-inside: avoid;
+}
+
+h2 { font-size: 18px; font-weight: 700; color: var(--text); margin-bottom: 4px; }
+h3 { font-size: 13px; font-weight: 600; color: var(--accent); text-transform: uppercase;
+     letter-spacing: .08em; margin-bottom: 10px; margin-top: 18px; }
+
+.label {
+  font-size: 10px; text-transform: uppercase; letter-spacing: .1em; color: var(--muted);
+}
+
+/* Executive summary */
+.exec-summary {
+  background: var(--card); border-radius: 8px; padding: 14px 16px;
+  border-left: 3px solid var(--accent); margin-bottom: 16px;
+  font-size: 13px; color: var(--text); line-height: 1.7;
+}
+
+/* Stats strip */
+.stats-strip {
+  display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; margin-bottom: 20px;
+}
+.stat-card {
+  background: var(--card); border-radius: 8px; padding: 12px;
+  border: 1px solid var(--border); text-align: center;
+}
+.stat-value { font-size: 22px; font-weight: 700; color: var(--accent); }
+.stat-label { font-size: 10px; text-transform: uppercase; letter-spacing: .08em; color: var(--muted); margin-top: 2px; }
+
+/* Massing views grid */
+.views-grid {
+  display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-bottom: 20px;
+}
+.view-card {
+  background: var(--card); border-radius: 8px; overflow: hidden;
+  border: 1px solid var(--border);
+}
+.view-card img { width: 100%; display: block; }
+.view-label {
+  padding: 6px 10px; font-size: 10px; text-transform: uppercase;
+  letter-spacing: .08em; color: var(--muted);
+}
+
+/* Solar section */
+.solar-grid { display: grid; grid-template-columns: 2fr 1fr; gap: 12px; margin-bottom: 20px; }
+.solar-capture { background: var(--card); border-radius: 8px; overflow: hidden; }
+.solar-capture img { width: 100%; display: block; }
+.solar-metrics { display: flex; flex-direction: column; gap: 8px; }
+.solar-metric {
+  background: var(--card); border-radius: 8px; padding: 12px;
+  border: 1px solid var(--border);
+}
+.solar-metric-value { font-size: 20px; font-weight: 700; color: var(--green); }
+
+/* Design language */
+.vocab-tags { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 12px; }
+.vocab-tag {
+  background: var(--card); border: 1px solid var(--border);
+  border-radius: 4px; padding: 3px 8px; font-size: 11px; color: var(--text);
+}
+.palette { display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 10px; }
+.swatch { border-radius: 6px; overflow: hidden; width: 80px; }
+.swatch-colour { height: 40px; }
+.swatch-label { padding: 4px; font-size: 9px; color: var(--muted); background: var(--card); text-align: center; }
+
+/* Parameters table */
+.params-table {
+  width: 100%; border-collapse: collapse; font-size: 11px;
+  font-family: 'JetBrains Mono', monospace;
+}
+.params-table th {
+  text-align: left; padding: 6px 10px; color: var(--muted);
+  font-size: 10px; text-transform: uppercase; letter-spacing: .08em;
+  border-bottom: 1px solid var(--border);
+}
+.params-table td {
+  padding: 6px 10px; color: var(--text);
+  border-bottom: 1px solid var(--card);
+}
+.params-table tr:nth-child(even) td { background: var(--card); }
+
+/* Page number footer */
+.page-footer {
+  position: fixed; bottom: 8mm; right: 14mm;
+  font-size: 10px; color: var(--muted);
+}
+
+@media print {
+  .page { page-break-inside: avoid; }
+  .cover { page-break-after: always; }
+}

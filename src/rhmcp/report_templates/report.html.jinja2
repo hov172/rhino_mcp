@@ -1,0 +1,159 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>{{ project_name }} — {{ scheme_name }}</title>
+<style>{{ css }}</style>
+</head>
+<body>
+
+<!-- ① Cover -->
+<div class="cover">
+  <div class="cover-hero">
+    {% if renders.get("Perspective") and renders["Perspective"].get("rendered_b64") %}
+      <img src="data:image/png;base64,{{ renders["Perspective"]["rendered_b64"] }}" alt="Perspective render">
+    {% elif renders.get("Perspective") and renders["Perspective"].get("original_b64") %}
+      <img src="data:image/png;base64,{{ renders["Perspective"]["original_b64"] }}" alt="Perspective view">
+    {% endif %}
+  </div>
+  <div class="cover-body">
+    <div class="cover-title">{{ project_name }}</div>
+    <div class="cover-subtitle">{{ scheme_name }}</div>
+    <div class="cover-meta">
+      {% if author %}{{ author }} · {% endif %}{{ date }}
+      {% if design_language.style_name %} · {{ design_language.style_name }}{% endif %}
+    </div>
+  </div>
+  <div class="cover-wordmark">UrbanAgent</div>
+</div>
+
+<!-- ② Executive Summary -->
+<div class="page">
+  <h3>Executive Summary</h3>
+  {% if design_language.executive_summary %}
+  <div class="exec-summary">{{ design_language.executive_summary }}</div>
+  {% endif %}
+  <div class="stats-strip">
+    <div class="stat-card">
+      <div class="stat-value">{{ "{:,.0f}".format(metrics.gfa_m2) }}</div>
+      <div class="stat-label">GFA m²</div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-value">{{ "%.1f"|format(metrics.far) }}</div>
+      <div class="stat-label">FAR</div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-value">{{ metrics.unit_count_est }}</div>
+      <div class="stat-label">Est. Units</div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-value">{{ "%.0f"|format(metrics.open_space_pct) }}%</div>
+      <div class="stat-label">Open Space</div>
+    </div>
+  </div>
+</div>
+
+<!-- ③ Massing Views -->
+<div class="page">
+  <h3>Massing Views</h3>
+  <div class="views-grid">
+    {% for view_name in ["Perspective", "Top", "Front", "Right"] %}
+    {% set r = renders.get(view_name) %}
+    {% if r %}
+    <div class="view-card">
+      {% set img = r.get("rendered_b64") or r.get("original_b64") %}
+      {% if img %}
+        <img src="data:image/png;base64,{{ img }}" alt="{{ view_name }}">
+      {% endif %}
+      <div class="view-label">{{ view_name }}</div>
+    </div>
+    {% endif %}
+    {% endfor %}
+  </div>
+</div>
+
+<!-- ⑤ Solar Analysis (optional) -->
+{% if include_solar and solar %}
+<div class="page">
+  <h3>Solar Analysis</h3>
+  <div class="solar-grid">
+    <div class="solar-capture">
+      {% if solar_capture_b64 %}
+        <img src="data:image/png;base64,{{ solar_capture_b64 }}" alt="Solar radiation mesh">
+      {% endif %}
+    </div>
+    <div class="solar-metrics">
+      <div class="solar-metric">
+        <div class="label">Avg Radiation</div>
+        <div class="solar-metric-value">{{ solar.avg_radiation_kwh_m2 }}</div>
+        <div class="label">kWh/m²</div>
+      </div>
+      <div class="solar-metric">
+        <div class="label">Worst Overshadowing</div>
+        <div class="solar-metric-value">{{ solar.overshadow_hours_worst }}</div>
+        <div class="label">hours</div>
+      </div>
+      {% if solar.epw_used %}
+      <div class="solar-metric">
+        <div class="label">Climate Data</div>
+        <div style="color: var(--muted); font-size: 11px; margin-top: 4px;">{{ solar.epw_used }}</div>
+      </div>
+      {% endif %}
+    </div>
+  </div>
+</div>
+{% endif %}
+
+<!-- ⑥ Design Language (optional) -->
+{% if include_design_language and design_language.style_name %}
+<div class="page">
+  <h3>Design Language</h3>
+  <h2>{{ design_language.style_name }}</h2>
+  {% if design_language.facade_vocabulary %}
+  <div class="vocab-tags" style="margin-top: 10px;">
+    {% for tag in design_language.facade_vocabulary %}
+    <span class="vocab-tag">{{ tag }}</span>
+    {% endfor %}
+  </div>
+  {% endif %}
+  {% if design_language.material_palette %}
+  <div class="label" style="margin-bottom: 6px;">Material Palette</div>
+  <div class="palette">
+    {% for mat in design_language.material_palette %}
+    <div class="swatch">
+      <div class="swatch-colour" style="background: {{ mat.hex }};"></div>
+      <div class="swatch-label">{{ mat.name }}</div>
+    </div>
+    {% endfor %}
+  </div>
+  {% endif %}
+  {% if design_language.landscape_character %}
+  <p style="color: var(--muted); margin-top: 10px;">{{ design_language.landscape_character }}</p>
+  {% endif %}
+</div>
+{% endif %}
+
+<!-- ⑦ Parameters Appendix -->
+{% if params %}
+<div class="page">
+  <h3>Parameters Appendix</h3>
+  <table class="params-table">
+    <thead>
+      <tr><th>Parameter</th><th>Value</th><th>Notes</th></tr>
+    </thead>
+    <tbody>
+      {% for p in params %}
+      <tr>
+        <td>{{ p.name }}</td>
+        <td>{{ p.value }}</td>
+        <td style="color: var(--muted);">{{ p.notes or "" }}</td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+{% endif %}
+
+<div class="page-footer">UrbanAgent</div>
+</body>
+</html>
