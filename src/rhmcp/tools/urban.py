@@ -852,6 +852,14 @@ def register(mcp: FastMCP) -> None:
         _current_site_depth = None
         _current_metrics_cache = None
 
+        try:
+            from rhmcp.tools import urban_design_language, urban_renders, urban_pipeline
+            urban_design_language.reset()
+            urban_renders.reset()
+            urban_pipeline.reset()
+        except ImportError:
+            pass
+
         return {"ok": True, "deleted": deleted}
 
     @mcp.tool(annotations=ToolAnnotations(title="Parse Urban Prompt", readOnlyHint=True))
