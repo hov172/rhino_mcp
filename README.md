@@ -111,6 +111,73 @@ Prerequisites are the plugin backend, Rhino with Grasshopper open, and the urban
 
 ---
 
+## Studio Pipeline
+
+One call takes you from a site brief to a branded PDF report with AI renders.
+
+### Workflow
+
+```
+Brief → urban_generate_design_language → urban_render_views → urban_export_report
+           or run everything at once:
+urban_run_studio_pipeline(project_name, scheme_name, brief, render_views, include_solar)
+```
+
+### Prerequisites
+
+| Feature | Requirement |
+|---|---|
+| Design language | `ANTHROPIC_API_KEY` |
+| AI renders | `FAL_KEY` (fal.ai account) |
+| PDF export | `DOCRAPTOR_API_KEY` (optional — falls back to local HTML) |
+| Cloud storage | `URBAN_AGENT_S3_BUCKET` + AWS credentials (optional — falls back to `~/.urbanagent/reports/`) |
+
+All cloud services are optional. Without them, reports are saved locally and renders are skipped with raw Rhino captures used as fallback.
+
+### Tools
+
+| Tool | Description |
+|---|---|
+| `urban_generate_design_language` | Generate style name, materials, colour story, diffusion prompt from site brief |
+| `urban_update_design_language` | Patch a single field (re-derives diffusion prompt on material/style changes) |
+| `urban_get_design_language` | Read current session design language |
+| `urban_render_views` | Capture Rhino viewports + AI-render via fal.ai FLUX.1 ControlNet |
+| `urban_render_style_preview` | Quick text-to-image mood board preview (no massing needed) |
+| `urban_get_renders` | Read all renders from current session |
+| `urban_export_report` | Export branded PDF report with S3 share link |
+| `urban_preview_report` | Render HTML preview (no PDF/S3, fast iteration) |
+| `urban_list_reports` | List all reports exported this session |
+| `urban_run_studio_pipeline` | Single-call orchestrator: runs all steps in sequence |
+| `urban_pipeline_status` | Check running/completed pipeline status |
+| `urban_list_pipeline_runs` | History of pipeline runs this session |
+
+### Example conversation
+
+```
+User: Design a podium tower for a 100m×80m site in Shoreditch. FAR 3.5, 70% residential.
+
+Claude: [calls urban_generate_massing + urban_generate_design_language]
+        → "Contemporary Brick Residential" — warm brick, dark steel trim, planted podium
+        [calls urban_render_views(["Perspective","Top","Front","Right"])]
+        → 4 AI-rendered views
+        [calls urban_export_report(project_name="Shoreditch", scheme_name="V1")]
+        → https://s3.example.com/reports/Shoreditch/V1/1234567890.pdf
+        "Report ready. Scheme shows 28,000m² GFA, FAR 3.5, ~280 units, 22% open space."
+```
+
+### Env var setup
+
+```bash
+export ANTHROPIC_API_KEY=sk-ant-...
+export FAL_KEY=...
+export DOCRAPTOR_API_KEY=...
+export URBAN_AGENT_S3_BUCKET=my-urbanagent-reports
+export AWS_ACCESS_KEY_ID=...
+export AWS_SECRET_ACCESS_KEY=...
+```
+
+---
+
 ## Architecture Overview
 
 ```
