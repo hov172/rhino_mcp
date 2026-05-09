@@ -527,12 +527,14 @@ public static class RhinoHandlers
         using (var bmp = rawBitmap)
         using (var ms = new MemoryStream())
         {
+#pragma warning disable CA1416
             bmp.Save(ms, ImageFormat.Png);
             base64 = Convert.ToBase64String(ms.ToArray());
 
             // Optional disk save inside the using so bmp is still valid
             if (!string.IsNullOrWhiteSpace(path))
                 bmp.Save(path);
+#pragma warning restore CA1416
         }
 
         return new
@@ -984,7 +986,9 @@ public static class RhinoHandlers
                 var bmp = activeView.CaptureToBitmap(new System.Drawing.Size(width, height));
                 if (bmp != null)
                 {
+#pragma warning disable CA1416
                     bmp.Save(outPath, System.Drawing.Imaging.ImageFormat.Png);
+#pragma warning restore CA1416
                     saved = true;
                 }
             }
@@ -1438,7 +1442,7 @@ public static class RhinoHandlers
         var userStrings = obj.Attributes.GetUserStrings();
         if (userStrings is not null)
         {
-            foreach (string key in userStrings.AllKeys)
+            foreach (string? key in userStrings.AllKeys)
             {
                 if (key is not null)
                     userAttrs[key] = userStrings[key] ?? "";
@@ -1613,7 +1617,7 @@ public static class RhinoHandlers
             color = ColorArray(layer.Color),
             visible = layer.IsVisible,
             locked = layer.IsLocked,
-            object_count = RhinoDoc.ActiveDoc.Objects.Count(o => !o.IsDeleted && o.Attributes.LayerIndex == layer.LayerIndex)
+            object_count = RhinoDoc.ActiveDoc.Objects.Count(o => !o.IsDeleted && o.Attributes.LayerIndex == layer.Index)
         };
     }
 
@@ -2198,7 +2202,7 @@ public static class RhinoHandlers
     private static Guid AddHatch(Dictionary<string, JsonElement> p)
     {
         var doc = RhinoDoc.ActiveDoc;
-        Curve boundary = null;
+        Curve? boundary = null;
         // Use an existing closed curve
         if (p.TryGetValue("curve_id", out var cidEl))
         {
@@ -2710,7 +2714,7 @@ public static class RhinoHandlers
         var pluginIdStr = p.String("plugin_id");
 
         Guid pluginGuid = Guid.Empty;
-        string resolvedName = "";
+        string? resolvedName = "";
 
         if (!string.IsNullOrWhiteSpace(pluginIdStr) && !Guid.TryParse(pluginIdStr, out pluginGuid))
             return new { success = false, message = $"Invalid plugin_id format: '{pluginIdStr}'" };

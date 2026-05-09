@@ -4,10 +4,11 @@
     <EnableDynamicLoading>true</EnableDynamicLoading>
     <Nullable>enable</Nullable>
     <ImplicitUsings>enable</ImplicitUsings>
-    <AssemblyName>RhinoMCPPlugin</AssemblyName>
+    <AssemblyName>rhino-mcp</AssemblyName>
     <TargetExt>.rhp</TargetExt>
     <RootNamespace>RhinoMCPPlugin</RootNamespace>
-    <Version>0.1.0</Version>
+    <Version>0.2.0</Version>
+    <GenerateAssemblyInformationalVersionAttribute>false</GenerateAssemblyInformationalVersionAttribute>
     <Title>rhino-mcp</Title>
     <Company>Rhino MCP Contributors</Company>
     <Description>MCP socket server plug-in for Rhino 7/8 automation.</Description>
@@ -26,6 +27,6 @@
   </ItemGroup>
 
   <Target Name="PostBuild" AfterTargets="PostBuildEvent" Condition="$([MSBuild]::IsOsPlatform('OSX'))">
-    <Exec Command="cp &quot;$(TargetDir)RhinoMCPPlugin.rhp&quot; &quot;/Applications/Rhino 8.app/Contents/PlugIns/&quot;" ContinueOnError="true" />
+    <Exec Command="cp &quot;$(TargetDir)rhino-mcp.rhp&quot; &quot;/Applications/Rhino 8.app/Contents/PlugIns/&quot;" ContinueOnError="true" />
   </Target>
 </Project>
