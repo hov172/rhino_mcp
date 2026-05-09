@@ -48,3 +48,39 @@ class TestUrbanConstants(unittest.TestCase):
         m = u._parse_metrics_panel("")
         self.assertEqual(m["gfa_m2"], 0.0)
         self.assertEqual(m["far"], 0.0)
+
+
+class TestUrbanGetMetrics(unittest.TestCase):
+    @classmethod
+    def setUpClass(cls) -> None:
+        with patch("rhmcp.tools_helpers.backend.plugin_result", return_value={"ok": True}):
+            cls.tools = _register_urban()
+
+    def test_returns_zeros_when_no_definition_open(self) -> None:
+        import rhmcp.tools.urban as u
+        u._current_metrics_guid = None
+        fn = self.tools["urban_get_metrics"]
+        with patch("rhmcp.tools_helpers.backend.plugin_result"):
+            result = fn()
+        self.assertEqual(result["gfa_m2"], 0.0)
+        self.assertEqual(result["far"], 0.0)
+        self.assertEqual(result["unit_count_est"], 0)
+        self.assertEqual(result["open_space_pct"], 0.0)
+
+    def test_parses_panel_output_correctly(self) -> None:
+        import rhmcp.tools.urban as u
+        u._current_metrics_guid = "metrics-guid-123"
+        fn = self.tools["urban_get_metrics"]
+        mock_result = {
+            "ok": True,
+            "result": {
+                "outputs": [{"values": ["GFA: 19200\nFAR: 3.0\nUnits: 192\nOpenSpace: 35"]}]
+            },
+        }
+        with patch("rhmcp.tools_helpers.backend.plugin_result", return_value=mock_result):
+            result = fn()
+        self.assertAlmostEqual(result["gfa_m2"], 19200.0)
+        self.assertAlmostEqual(result["far"], 3.0)
+        self.assertEqual(result["unit_count_est"], 192)
+        self.assertAlmostEqual(result["open_space_pct"], 35.0)
+        u._current_metrics_guid = None  # cleanup

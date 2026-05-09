@@ -220,4 +220,15 @@ def _urban_get_metrics() -> dict[str, object]:
 
 
 def register(mcp: FastMCP) -> None:
-    pass  # tools added in subsequent tasks
+    from mcp.types import ToolAnnotations
+
+    @mcp.tool(annotations=ToolAnnotations(title="Get Urban Massing Metrics", readOnlyHint=True))
+    def urban_get_metrics(rhino_id: str | None = None) -> dict[str, object]:
+        """
+        Read GFA, FAR, estimated unit count, and open space percentage from the
+        currently open Grasshopper massing definition's Metrics output panel.
+
+        Returns {gfa_m2, far, unit_count_est, open_space_pct}.
+        Returns zeros if no massing definition is currently open.
+        """
+        return _urban_get_metrics()
