@@ -48,16 +48,18 @@ The platform is delivered through MCP so customers can access the functionality 
 | FR-9 Project Versioning | Implemented | `save_project_version` writes a timestamped model export plus `version.json` manifest. |
 | FR-10 Authentication and Billing | Platform-ready boundary | The local Rhino MCP server exposes the tool surface; authentication, billing, tenant isolation, and rate limiting belong in the remote MCP gateway layer before commercial deployment. |
 
-## Architecture Target
+## Current Scope vs Future SaaS
 
-The long-term commercial architecture remains remote-first:
+Current scope is the local Rhino MCP MVP: prompt parsing, site/layout/massing tools, Grasshopper definitions, metrics, previews, exports, and version manifests running against the user's Rhino environment.
+
+SaaS is a future possibility, not current implementation scope. If the project moves toward a hosted commercial product, the future architecture can add:
 
 - Client layer: Rhino/Grasshopper, Rhino editor, Claude Desktop/ChatGPT MCP clients, web dashboard.
 - Remote MCP server: tool registry, authentication, orchestration, audit logging, rate limiting.
 - Compute services: FastAPI/Python, Rhino Compute or Rhino.Inside, Grasshopper definitions, optimization engine.
 - Storage: PostgreSQL/PostGIS, object storage, Redis cache.
 
-This repository implements the Rhino-side MVP tool surface and local MCP workflow. Authentication, billing, multi-tenant isolation, and remote deployment are platform-layer responsibilities for the production MCP gateway. The local server is intentionally kept focused on Rhino/Grasshopper execution so the same tools can sit behind a private remote gateway without exposing source code or Grasshopper definitions to customers.
+This repository intentionally keeps authentication, billing, multi-tenant isolation, and hosted remote deployment out of the MVP. Those belong in a later SaaS gateway if the project becomes commercial.
 
 ## MVP Scope
 
@@ -72,7 +74,7 @@ Phase 1:
 - GeoJSON-style site boundary dimensions
 - Version manifests
 
-Phase 2:
+Future SaaS / Phase 2 Possibilities:
 
 - Deeper optimization algorithms
 - Production rendering queues
@@ -84,4 +86,4 @@ Phase 2:
 - Time to first concept under 5 minutes.
 - FAR accuracy within 2 percent for generated schemes.
 - 95 percent successful job completion.
-- Monthly recurring revenue readiness for commercial deployment.
+- Commercial SaaS readiness, if that path is pursued later.
