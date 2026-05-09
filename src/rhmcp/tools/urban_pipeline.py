@@ -81,23 +81,23 @@ def _step_render_views(views: list[str], strength: float) -> list[dict[str, Any]
 
 
 def _step_run_solar(geometry_layer: str, climate_zone: str) -> dict[str, Any]:
-    # Solar analysis via urban module — stub if not available
     try:
-        from rhmcp.tools.urban import _urban_get_metrics
-        # _urban_run_analysis_internal does not exist; fall back to metrics only
-        return {"ok": False, "error": "solar analysis not available"}
-    except (ImportError, AttributeError):
-        return {"ok": False, "error": "solar analysis not available"}
+        from rhmcp.tools.urban import _urban_run_solar_internal
+        return _urban_run_solar_internal(geometry_layer=geometry_layer, climate_zone=climate_zone)
+    except (ImportError, AttributeError) as exc:
+        return {"ok": False, "error": f"solar analysis not available: {exc}"}
 
 
 def _step_export_report(project_name: str, scheme_name: str,
                         include_solar: bool) -> dict[str, Any]:
     from rhmcp.tools import urban_design_language, urban_renders, urban_report
     try:
-        from rhmcp.tools.urban import _urban_get_metrics
+        from rhmcp.tools.urban import _urban_get_metrics, _current_solar
         metrics = _urban_get_metrics()
+        solar = _current_solar if include_solar else None
     except (ImportError, AttributeError):
         metrics = {"gfa_m2": 0.0, "far": 0.0, "unit_count_est": 0, "open_space_pct": 0.0}
+        solar = None
     renders = urban_renders._current_renders
     dl = urban_design_language._current_design_language or {}
     html = urban_report._render_html(
@@ -107,9 +107,9 @@ def _step_export_report(project_name: str, scheme_name: str,
         metrics=metrics,
         renders=renders,
         design_language=dl,
-        solar=None,
+        solar=solar,
         params=[],
-        include_solar=include_solar,
+        include_solar=include_solar and solar is not None,
         include_design_language=bool(dl),
     )
     import os

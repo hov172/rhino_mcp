@@ -94,6 +94,7 @@ _current_params: dict[str, float] = {}
 _current_site_width: float | None = None
 _current_site_depth: float | None = None
 _current_metrics_cache: dict[str, object] | None = None
+_current_solar: dict[str, object] | None = None
 
 
 # ---------------------------------------------------------------------------
@@ -544,6 +545,94 @@ def _urban_get_metrics() -> dict[str, object]:
     return _zero
 
 
+def _urban_run_solar_internal(
+    geometry_layer: str,
+    climate_zone: str = "London",
+    epw_path: str | None = None,
+    analysis_period: str = "Jun 21 9am-5pm",
+    grid_size: float = 1.0,
+) -> dict[str, object]:
+    """Run solar analysis via the analysis_solar.gh definition and cache the result."""
+    global _current_solar
+
+    if epw_path:
+        resolved_epw = epw_path
+    elif climate_zone in _EPW_DEFAULTS:
+        resolved_epw = os.path.join(_EPW_BASE, _EPW_DEFAULTS[climate_zone])
+    else:
+        return {
+            "ok": False,
+            "error": f"Unknown climate_zone '{climate_zone}'. Known: {sorted(_EPW_DEFAULTS)}. "
+                     "Pass epw_path directly for custom locations.",
+        }
+
+    gh_path = _ANALYSIS_GH_MAP.get("solar")
+    if not gh_path:
+        return {"ok": False, "error": "analysis_solar.gh not configured"}
+
+    open_result = _gh("gh_open_document", {"path": gh_path})
+    if not open_result.get("ok"):
+        return {"ok": False, "error": f"Failed to open {gh_path}: {open_result.get('error')}"}
+
+    guid_map = _discover_gh_nicknames()
+
+    for panel_name, text in [
+        ("epw_path", resolved_epw),
+        ("geometry_layer", geometry_layer),
+        ("analysis_period", analysis_period),
+    ]:
+        if panel_name in guid_map:
+            _gh("gh_set_panel", {"instance_guid": guid_map[panel_name], "text": text})
+
+    if "grid_size" in guid_map:
+        _gh("gh_set_slider", {"instance_guid": guid_map["grid_size"], "value": grid_size})
+
+    run_result = _gh("gh_run_solution", {"wait_ms": 120000})
+    if not run_result.get("ok"):
+        return {"ok": False, "error": f"Analysis solve failed: {run_result.get('error')}"}
+
+    if "radiation_mesh" in guid_map:
+        _gh("gh_bake_component", {
+            "instance_guid": guid_map["radiation_mesh"],
+            "layer": f"{geometry_layer}::Analysis::Solar",
+        })
+
+    avg_rad = 0.0
+    overshadow = 0.0
+    for out_name, key in [
+        ("avg_radiation_kwh_m2", "avg_rad"),
+        ("overshadow_hours_worst", "overshadow"),
+    ]:
+        if out_name not in guid_map:
+            continue
+        out = _gh("gh_get_output", {"instance_guid": guid_map[out_name]})
+        if not out.get("ok"):
+            continue
+        outputs = out.get("result", {}).get("outputs", [])
+        for item in outputs:
+            vals = item.get("values", [])
+            if not vals:
+                continue
+            try:
+                value = float(str(vals[0]))
+            except ValueError:
+                continue
+            if key == "avg_rad":
+                avg_rad = value
+            else:
+                overshadow = value
+
+    result: dict[str, object] = {
+        "ok": True,
+        "analysis_type": "solar",
+        "avg_radiation_kwh_m2": avg_rad,
+        "overshadow_hours_worst": overshadow,
+        "epw_used": resolved_epw,
+    }
+    _current_solar = result
+    return result
+
+
 def register(mcp: FastMCP) -> None:
     from mcp.types import ToolAnnotations
 
@@ -719,81 +808,13 @@ def register(mcp: FastMCP) -> None:
                 "ok": False,
                 "error": f"Unknown analysis_type '{analysis_type}'. Supported: {sorted(_ANALYSIS_GH_MAP)}",
             }
-
-        if epw_path:
-            resolved_epw = epw_path
-        elif climate_zone in _EPW_DEFAULTS:
-            resolved_epw = os.path.join(_EPW_BASE, _EPW_DEFAULTS[climate_zone])
-        else:
-            return {
-                "ok": False,
-                "error": f"Unknown climate_zone '{climate_zone}'. Known: {sorted(_EPW_DEFAULTS)}. "
-                         "Pass epw_path directly for custom locations.",
-            }
-
-        gh_path = _ANALYSIS_GH_MAP[analysis_type]
-        open_result = _gh("gh_open_document", {"path": gh_path})
-        if not open_result.get("ok"):
-            return {"ok": False, "error": f"Failed to open {gh_path}: {open_result.get('error')}"}
-
-        guid_map = _discover_gh_nicknames()
-
-        for panel_name, text in [
-            ("epw_path", resolved_epw),
-            ("geometry_layer", geometry_layer),
-            ("analysis_period", analysis_period),
-        ]:
-            if panel_name in guid_map:
-                _gh("gh_set_panel", {"instance_guid": guid_map[panel_name], "text": text})
-
-        if "grid_size" in guid_map:
-            _gh("gh_set_slider", {"instance_guid": guid_map["grid_size"], "value": grid_size})
-
-        run_result = _gh("gh_run_solution", {"wait_ms": 120000})
-        if not run_result.get("ok"):
-            return {"ok": False, "error": f"Analysis solve failed: {run_result.get('error')}"}
-
-        if "radiation_mesh" in guid_map:
-            _gh(
-                "gh_bake_component",
-                {
-                    "instance_guid": guid_map["radiation_mesh"],
-                    "layer": f"{geometry_layer}::Analysis::Solar",
-                },
-            )
-
-        avg_rad = 0.0
-        overshadow = 0.0
-        for out_name, key in [
-            ("avg_radiation_kwh_m2", "avg_rad"),
-            ("overshadow_hours_worst", "overshadow"),
-        ]:
-            if out_name not in guid_map:
-                continue
-            out = _gh("gh_get_output", {"instance_guid": guid_map[out_name]})
-            if not out.get("ok"):
-                continue
-            outputs = out.get("result", {}).get("outputs", [])
-            for item in outputs:
-                vals = item.get("values", [])
-                if not vals:
-                    continue
-                try:
-                    value = float(str(vals[0]))
-                except ValueError:
-                    continue
-                if key == "avg_rad":
-                    avg_rad = value
-                else:
-                    overshadow = value
-
-        return {
-            "ok": True,
-            "analysis_type": analysis_type,
-            "avg_radiation_kwh_m2": avg_rad,
-            "overshadow_hours_worst": overshadow,
-            "epw_used": resolved_epw,
-        }
+        return _urban_run_solar_internal(
+            geometry_layer=geometry_layer,
+            climate_zone=climate_zone,
+            epw_path=epw_path,
+            analysis_period=analysis_period,
+            grid_size=grid_size,
+        )
 
     @mcp.tool(annotations=ToolAnnotations(title="Clear Urban Massing", destructiveHint=True))
     def urban_clear_massing(
@@ -851,6 +872,7 @@ def register(mcp: FastMCP) -> None:
         _current_site_width = None
         _current_site_depth = None
         _current_metrics_cache = None
+        _current_solar = None
 
         try:
             from rhmcp.tools import urban_design_language, urban_renders, urban_pipeline

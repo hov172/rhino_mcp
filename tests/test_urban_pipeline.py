@@ -108,6 +108,68 @@ class TestUrbanRunStudioPipeline(unittest.TestCase):
         mock_exp.assert_not_called()
 
 
+class TestUrbanSolarWiring(unittest.TestCase):
+    """Verify _step_run_solar delegates to _urban_run_solar_internal."""
+
+    def test_step_run_solar_calls_internal(self):
+        import rhmcp.tools.urban_pipeline as m
+        importlib.reload(m)
+        with patch("rhmcp.tools.urban_pipeline._step_run_solar",
+                   wraps=m._step_run_solar) as spy:
+            with patch("rhmcp.tools.urban.urban" if False else
+                       "rhmcp.tools.urban._urban_run_solar_internal",
+                       return_value=_SAMPLE_ANALYSIS) as mock_internal:
+                result = m._step_run_solar("Urban::Massing::Tower", "London")
+        mock_internal.assert_called_once_with(
+            geometry_layer="Urban::Massing::Tower", climate_zone="London")
+        self.assertTrue(result["ok"])
+
+    def test_step_run_solar_import_error_returns_ok_false(self):
+        import rhmcp.tools.urban_pipeline as m
+        importlib.reload(m)
+        with patch("builtins.__import__", side_effect=ImportError("no urban")):
+            result = m._step_run_solar("layer", "London")
+        self.assertFalse(result["ok"])
+        self.assertIn("solar analysis not available", result["error"])
+
+    def test_solar_result_flows_into_pipeline_result(self):
+        tools = _register()
+        solar_data = {"ok": True, "avg_radiation_kwh_m2": 420.0,
+                      "overshadow_hours_worst": 2.5, "epw_used": "GBR.epw"}
+        with patch("rhmcp.tools.urban_pipeline._step_generate_design_language",
+                   return_value=_SAMPLE_DL_RESULT), \
+             patch("rhmcp.tools.urban_pipeline._step_render_views",
+                   return_value=_SAMPLE_RENDERS), \
+             patch("rhmcp.tools.urban_pipeline._step_run_solar",
+                   return_value=solar_data), \
+             patch("rhmcp.tools.urban_pipeline._step_export_report",
+                   return_value=_SAMPLE_EXPORT):
+            r = tools["urban_run_studio_pipeline"](
+                project_name="P", scheme_name="S", render_views=["Perspective"])
+        solar_step = next(s for s in r["step_log"] if s["step"] == "solar")
+        self.assertEqual(solar_step["status"], "ok")
+        self.assertIn("420", solar_step["summary"])
+
+    def test_export_report_reads_current_solar(self):
+        import rhmcp.tools.urban_pipeline as m
+        importlib.reload(m)
+        import rhmcp.tools.urban as urban_mod
+        urban_mod._current_solar = {
+            "ok": True, "avg_radiation_kwh_m2": 380.0,
+            "overshadow_hours_worst": 3.0, "epw_used": "GBR.epw",
+        }
+        with patch("rhmcp.tools.urban_renders._current_renders", {}), \
+             patch("rhmcp.tools.urban_design_language._current_design_language", {}), \
+             patch("rhmcp.tools.urban_report._render_html", return_value="<html/>") as mock_html, \
+             patch("rhmcp.tools.urban_report._save_local",
+                   return_value=("file:///tmp/r.pdf", "file:///tmp/r.html")):
+            m._step_export_report("P", "S", include_solar=True)
+        _, kwargs = mock_html.call_args
+        self.assertIsNotNone(kwargs["solar"])
+        self.assertEqual(kwargs["solar"]["avg_radiation_kwh_m2"], 380.0)
+        urban_mod._current_solar = None
+
+
 class TestUrbanListPipelineRuns(unittest.TestCase):
     def test_accumulates_runs_across_calls(self):
         tools = _register()
