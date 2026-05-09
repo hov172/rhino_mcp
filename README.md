@@ -109,7 +109,7 @@ Then in Rhino: **Tools → Options → Plug-ins → Install** and select the `.r
 #### Step 2 — Clone the repo and install the Python server
 
 ```bash
-git clone https://github.com/your-org/rhino-mcp.git
+git clone https://github.com/hov172/rhino_mcp.git
 cd rhino-mcp
 uv sync          # installs all Python dependencies from uv.lock
 ```
@@ -201,7 +201,7 @@ Same as Path A Step 1 above. The plugin must run inside Rhino on your machine �
 
 ```bash
 # Clone just to get the Dockerfile (or copy it manually)
-git clone https://github.com/your-org/rhino-mcp.git
+git clone https://github.com/hov172/rhino_mcp.git
 cd rhino-mcp
 
 # Build
@@ -448,26 +448,30 @@ The plugin is a `.rhp` file that runs a TCP socket server inside Rhino. There ar
 
 #### Option A — Copy the pre-built `.rhp` directly (fastest)
 
+Download [`rhino-mcp.rhp`](https://github.com/hov172/rhino_mcp/releases/download/v0.3.0/rhino-mcp.rhp) from the latest release, then copy it to the Rhino plug-ins folder:
+
 ```bash
-# macOS
-cp rhino_plugin/package/rhino-mcp.rhp \
-   "/Applications/Rhino 8.app/Contents/PlugIns/"
+# macOS — user plug-ins folder (no admin rights needed)
+mkdir -p "$HOME/Library/Application Support/McNeel/Rhinoceros/8.0/Plug-ins"
+cp rhino-mcp.rhp \
+   "$HOME/Library/Application Support/McNeel/Rhinoceros/8.0/Plug-ins/"
 ```
 
 ```powershell
 # Windows — adjust Rhino version path as needed
-Copy-Item rhino_plugin\package\rhino-mcp.rhp `
-  "C:\Program Files\Rhino 8\Plug-ins\"
+Copy-Item rhino-mcp.rhp `
+  "$env:APPDATA\McNeel\Rhinoceros\8.0\Plug-ins\"
 ```
 
 Then restart Rhino. The plugin loads automatically on startup.
 
 #### Option B — Install via Yak (Rhino's package manager)
 
-1. Open Rhino.
-2. Run the command `_PackageManager` in the Rhino command line.
-3. Click **Install from file…** and select `rhino_plugin/package/rhino-mcp-0.3.0-rh8_30-any.yak`.
-4. Restart Rhino when prompted.
+1. Download [`rhino-mcp-0.3.0-rh8_30-any.yak`](https://github.com/hov172/rhino_mcp/releases/download/v0.3.0/rhino-mcp-0.3.0-rh8_30-any.yak) from the latest release.
+2. Open Rhino.
+3. Run the command `_PackageManager` in the Rhino command line.
+4. Click **Install from file…** and select the downloaded `.yak` file.
+5. Restart Rhino when prompted.
 
 #### Option C — Build from source
 
@@ -484,7 +488,7 @@ The build output is placed at `rhino_plugin/RhinoMCPPlugin/bin/Release/net8.0/rh
 
 ```bash
 # Clone the repo
-git clone https://github.com/your-org/rhino-mcp.git
+git clone https://github.com/hov172/rhino_mcp.git
 cd rhino-mcp
 
 # Install all dependencies (recommended)
