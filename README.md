@@ -6,6 +6,9 @@ Control Rhino 3D from Claude, Cursor, Codex, and any other MCP-capable AI tool. 
 
 ## Table of Contents
 
+- [Quick Start](#quick-start)
+  - [Path A — Manual setup with Claude Desktop](#path-a--manual-setup-with-claude-desktop)
+  - [Path B — Docker setup with Claude Desktop](#path-b--docker-setup-with-claude-desktop)
 - [What You Can Do](#what-you-can-do)
 - [Urban Massing Workflow](#urban-massing-workflow)
 - [Studio Pipeline](#studio-pipeline)
@@ -67,6 +70,198 @@ Control Rhino 3D from Claude, Cursor, Codex, and any other MCP-capable AI tool. 
 - [Building the Plugin from Source](#building-the-plugin-from-source)
 - [Running Tests](#running-tests)
 - [References](#references)
+
+---
+
+## Quick Start
+
+Two paths to get up and running. Both require the Rhino plugin — only the server setup differs.
+
+---
+
+### Path A — Manual setup with Claude Desktop
+
+**Prerequisites:** Rhino 7 or 8, Python 3.10+, [uv](https://docs.astral.sh/uv/) (`pip install uv`), git.
+
+#### Step 1 — Install the Rhino plugin
+
+The plugin runs a socket server inside Rhino that the MCP server talks to.
+
+```bash
+# macOS
+cp rhino_plugin/package/RhinoMCPPlugin.rhp \
+   "/Applications/Rhino 8.app/Contents/PlugIns/"
+```
+
+```powershell
+# Windows
+Copy-Item rhino_plugin\package\RhinoMCPPlugin.rhp `
+  "$env:ProgramFiles\Rhino 8\Plug-ins\"
+```
+
+Then in Rhino: **Tools → Options → Plug-ins → Install** and select the `.rhp` file.
+
+#### Step 2 — Clone the repo and install the Python server
+
+```bash
+git clone https://github.com/your-org/rhino-mcp.git
+cd rhino-mcp
+uv sync          # installs all Python dependencies from uv.lock
+```
+
+Verify it works:
+
+```bash
+uv run python -m rhmcp --help
+```
+
+You should see the argument list printed. If you see it, the server is ready.
+
+#### Step 3 — Tell Claude Desktop how to start the server
+
+This is the key step. Claude Desktop reads a config file and **automatically spawns the MCP server as a child process** every time you open it — you never start the server manually.
+
+Edit the config file:
+
+- **macOS:** `~/Library/Application Support/Claude/claude_desktop_config.json`
+- **Windows:** `%APPDATA%\Claude\claude_desktop_config.json`
+
+Add this (replace `/path/to/rhino-mcp` with the actual path where you cloned the repo):
+
+```json
+{
+  "mcpServers": {
+    "rhino": {
+      "command": "uv",
+      "args": ["run", "--directory", "/path/to/rhino-mcp", "python", "-m", "rhmcp"],
+      "env": {
+        "RHINO_MCP_BACKEND": "plugin",
+        "RHINO_MCP_HOST": "127.0.0.1",
+        "RHINO_MCP_PORT": "1999",
+        "ANTHROPIC_API_KEY": "sk-ant-...",
+        "FAL_KEY": "...",
+        "DOCRAPTOR_API_KEY": "",
+        "URBAN_AGENT_S3_BUCKET": ""
+      }
+    }
+  }
+}
+```
+
+The `command` + `args` lines are literally the shell command Claude Desktop runs to start the server. The `env` block sets environment variables for that process — this is how API keys are passed in without touching your system environment.
+
+> **Minimum required:** only `RHINO_MCP_BACKEND`, `RHINO_MCP_HOST`, and `RHINO_MCP_PORT` are needed for basic Rhino tools. Add `ANTHROPIC_API_KEY` for design language generation and `FAL_KEY` for AI renders. Leave others blank or omit them.
+
+#### Step 4 — Start Rhino and activate the plugin
+
+1. Open Rhino 3D.
+2. In the Rhino command line, type `MCPStart` and press Enter.
+3. You should see: `RhinoMCP: Listening on 127.0.0.1:1999`
+
+> **Tip:** Add `MCPStart` to Rhino's startup commands so it activates automatically:  
+> *Rhino Options → General → Command Lists → startup commands*
+
+#### Step 5 — Restart Claude Desktop and start using it
+
+Fully quit Claude Desktop (don't just close the window) and reopen it. Claude Desktop reads the config on launch, spawns the MCP server in the background, and the 216 Rhino tools become available automatically.
+
+Test it by typing in Claude:
+
+> *"Create a sphere with radius 5 at the origin"*
+
+You should see a sphere appear in Rhino.
+
+**Connection flow:**
+```
+Claude Desktop → spawns → python -m rhmcp (stdio)
+                               ↓
+                          127.0.0.1:1999 (Rhino plugin)
+                               ↓
+                          Rhino 3D geometry
+```
+
+---
+
+### Path B — Docker setup with Claude Desktop
+
+Docker bundles the Python server and all dependencies into a self-contained image. No Python, no uv, no cloning required on the machine running the container.
+
+**Prerequisites:** Rhino 7 or 8, Docker Desktop.
+
+#### Step 1 — Install the Rhino plugin
+
+Same as Path A Step 1 above. The plugin must run inside Rhino on your machine — it cannot be containerized.
+
+#### Step 2 — Build and run the Docker image
+
+```bash
+# Clone just to get the Dockerfile (or copy it manually)
+git clone https://github.com/your-org/rhino-mcp.git
+cd rhino-mcp
+
+# Build
+docker build -t rhino-mcp .
+
+# Run — paste your real API keys
+docker run -d \
+  -p 8000:8000 \
+  -e ANTHROPIC_API_KEY="sk-ant-..." \
+  -e FAL_KEY="..." \
+  --name rhino-mcp \
+  rhino-mcp
+```
+
+The container starts the MCP server in HTTP mode and defaults `RHINO_MCP_HOST=host.docker.internal`, which resolves to the Docker host on macOS and Windows automatically.
+
+**Linux only** — add one extra flag:
+
+```bash
+docker run -d -p 8000:8000 \
+  --add-host=host.docker.internal:host-gateway \
+  -e ANTHROPIC_API_KEY="sk-ant-..." \
+  -e FAL_KEY="..." \
+  --name rhino-mcp \
+  rhino-mcp
+```
+
+Verify the server is up:
+
+```bash
+curl http://localhost:8000/
+```
+
+#### Step 3 — Tell Claude Desktop to connect via URL
+
+In HTTP mode the server is already running — Claude Desktop connects to it rather than spawning it. Edit `claude_desktop_config.json`:
+
+```json
+{
+  "mcpServers": {
+    "rhino": {
+      "url": "http://localhost:8000/"
+    }
+  }
+}
+```
+
+No `command`, no `args`, no `env` — the API keys were set when you ran the container.
+
+#### Step 4 — Start Rhino and activate the plugin
+
+Same as Path A Step 4. Type `MCPStart` in Rhino and confirm it shows `Listening on 127.0.0.1:1999`.
+
+#### Step 5 — Restart Claude Desktop and start using it
+
+Fully quit and reopen Claude Desktop. It connects to the running container and the 216 tools appear.
+
+**Connection flow:**
+```
+Claude Desktop → HTTP → localhost:8000 (Docker container)
+                               ↓
+                    host.docker.internal:1999 (Rhino plugin)
+                               ↓
+                          Rhino 3D geometry
+```
 
 ---
 
