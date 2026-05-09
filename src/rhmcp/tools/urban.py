@@ -13,7 +13,6 @@ import json
 import os
 
 from mcp.server.fastmcp import FastMCP, Image
-from mcp.types import ToolAnnotations
 
 from rhmcp.tools_helpers import backend as rhino
 from rhmcp.tools.view import _CAPTURE_SCRIPT
@@ -38,7 +37,7 @@ _TYPOLOGY_GH_MAP: dict[str, str] = {
 
 _ANALYSIS_GH_MAP: dict[str, str] = {
     "solar": os.path.join(_GH_DIR, "analysis_solar.gh"),
-}
+}  # used by urban_run_analysis (Task 6)
 
 _EPW_BASE = os.path.expanduser("~/ladybug/EPWs")
 
@@ -122,7 +121,11 @@ for obj in doc.Objects:
         nick_to_guid[str(nick)] = str(obj.InstanceGuid)
 result = nick_to_guid
 """
-    raw = rhino.execute_python(code)
+    try:
+        raw = rhino.execute_python(code)
+    except Exception:
+        return {}, None, None
+
     mapping: dict[str, str] = {}
     if isinstance(raw, dict):
         r = raw.get("result", {})
@@ -185,7 +188,12 @@ def _capture_view() -> list[object]:
     b64 = r.get("b64") if isinstance(r, dict) else None
     if not b64:
         return [raw]
-    meta = {"path": None, "saved": False, "width": 1200, "height": 900}
+    meta = {
+        "path": r.get("path"),
+        "saved": r.get("saved", False),
+        "width": r.get("width", 1200),
+        "height": r.get("height", 900),
+    }
     return [meta, Image(data=base64.b64decode(b64), format="png")]
 
 

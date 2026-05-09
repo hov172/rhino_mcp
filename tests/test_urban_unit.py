@@ -7,7 +7,10 @@ from mcp.server.fastmcp import FastMCP
 
 
 def _register_urban() -> dict[str, object]:
-    """Register urban module and return tool-name → callable map."""
+    """
+    Register urban module and return tool-name → callable map.
+    used by TestUrban* classes in subsequent tasks (Tasks 2–7)
+    """
     import importlib
     mod = importlib.import_module("rhmcp.tools.urban")
     mcp = FastMCP("test-urban")
