@@ -198,8 +198,9 @@ class TestMaterialsValidation(unittest.TestCase):
     def test_set_object_material_no_index_no_name_returns_error(self) -> None:
         """Calling set_object_material without index or name must return ok=False."""
         fn = self.tools["set_object_material"]
+        valid_guid = "12345678-1234-1234-1234-123456789abc"
         with patch("rhmcp.tools_helpers.backend.preferred_backend", return_value="rhinocode"):
-            result = fn(id="some-guid-1234")
+            result = fn(id=valid_guid)
         self.assertFalse(result["ok"])
         self.assertIn("material_index", result["error"])
         self.assertIn("material_name", result["error"])
@@ -207,17 +208,19 @@ class TestMaterialsValidation(unittest.TestCase):
     def test_set_object_material_with_index_proceeds(self) -> None:
         """Providing material_index must not trigger the no-identifier error."""
         fn = self.tools["set_object_material"]
+        valid_guid = "12345678-1234-1234-1234-123456789abc"
         with patch("rhmcp.tools_helpers.backend.preferred_backend", return_value="rhinocode"), \
              patch("rhmcp.tools_helpers.backend.execute_python", return_value={"ok": True, "result": {}}):
-            result = fn(id="some-guid-1234", material_index=0)
+            result = fn(id=valid_guid, material_index=0)
         self.assertNotEqual(result.get("ok"), False, "Should not get validation error")
 
     def test_set_object_material_with_name_proceeds(self) -> None:
         """Providing material_name must not trigger the no-identifier error."""
         fn = self.tools["set_object_material"]
+        valid_guid = "12345678-1234-1234-1234-123456789abc"
         with patch("rhmcp.tools_helpers.backend.preferred_backend", return_value="rhinocode"), \
              patch("rhmcp.tools_helpers.backend.execute_python", return_value={"ok": True, "result": {}}):
-            result = fn(id="some-guid-1234", material_name="Wood")
+            result = fn(id=valid_guid, material_name="Wood")
         self.assertNotEqual(result.get("ok"), False, "Should not get validation error")
 
     # --- delete_material ---
@@ -325,22 +328,17 @@ class TestLayersRouting(unittest.TestCase):
         mock_exec.assert_called_once()
         self.assertEqual(result["backend"], "rhinocode")
 
-    def test_manage_rhino_layer_invalid_action_reaches_execute_python(self) -> None:
+    def test_manage_rhino_layer_invalid_action_returns_error(self) -> None:
         """
-        manage_rhino_layer with an unrecognised action forwards the payload to
-        execute_python (where the rhinoscript raises ValueError).  The tool
-        itself must NOT raise — it should return whatever execute_python returns.
+        manage_rhino_layer with an unrecognised action must return ok=False with
+        INVALID_VALUE error_code without reaching execute_python.
         """
         fn = self.tools["manage_rhino_layer"]
-        # Simulate execute_python returning an error dict (as rhinocode would
-        # if the script raised a ValueError).
-        error_response = {"ok": False, "backend": "rhinocode", "error": "Unsupported layer action: fly"}
-        with patch("rhmcp.tools_helpers.backend.preferred_backend", return_value="rhinocode"), \
-             patch("rhmcp.tools_helpers.backend.execute_python", return_value=error_response) as mock_exec:
+        with patch("rhmcp.tools_helpers.backend.execute_python") as mock_exec:
             result = fn(action="fly", name="Phantom")
-        mock_exec.assert_called_once()
-        # The tool should propagate the error dict from execute_python.
+        mock_exec.assert_not_called()
         self.assertFalse(result["ok"])
+        self.assertEqual(result.get("error_code"), "INVALID_VALUE")
 
     def test_delete_layer_falls_back_to_python_when_plugin_unavailable(self) -> None:
         """delete_layer must call execute_python when backend is rhinocode."""

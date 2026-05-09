@@ -104,6 +104,12 @@ def execute_python(code: str, rhino_id: str | None = None, backend_name: str | N
                     l for l in output.splitlines() if not l.startswith(_RESULT_SENTINEL)
                 )
                 break
+    sr = resp.get("script_result")
+    if isinstance(sr, dict) and sr.get("ok") is False:
+        resp["ok"] = False
+        resp.setdefault("error", sr.get("error", "Script returned ok: false"))
+        if "error_code" not in resp and "error_code" in sr:
+            resp["error_code"] = sr["error_code"]
     return resp
 
 
@@ -144,16 +150,18 @@ def run_plugin_or_python(
     Prefer plug-in socket for script-heavy operations; fall back to rhinocode.
     """
     mode = preferred_backend(backend_name)
+    _plugin_error: str | None = None
     if mode in {BACKEND_AUTO, BACKEND_PLUGIN}:
         try:
             return plugin_result(command_type, params)
         except OSError as ex:
             if mode == BACKEND_PLUGIN:
                 return normalize({"ok": False, "backend": BACKEND_PLUGIN, "error": str(ex), "error_code": "SOCKET_UNAVAILABLE"})
-    if mode == BACKEND_PLUGIN:
-        return normalize({"ok": False, "backend": BACKEND_PLUGIN, "error": "Plug-in backend unavailable.", "error_code": "SOCKET_UNAVAILABLE"})
+            _plugin_error = str(ex)
     result = rhinocode.execute_python(python_code, rhino_id=rhino_id)
     resp = normalize({"backend": BACKEND_RHINOCODE, **result})
+    if _plugin_error:
+        resp["plugin_error"] = _plugin_error
     if not resp.get("ok") and result.get("status") == "unknown":
         resp["error_code"] = "RHINOCODE_DISPATCH_FAILED"
         resp.setdefault("error", "Rhino did not execute the script. Ensure MCPStart is running or set RHINO_MCP_BACKEND=plugin.")

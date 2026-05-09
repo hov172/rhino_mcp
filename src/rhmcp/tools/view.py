@@ -11,6 +11,7 @@ from mcp.server.fastmcp import FastMCP, Image
 from mcp.types import ToolAnnotations
 
 from rhmcp.tools_helpers import backend as rhino
+from rhmcp.tools_helpers import validate
 
 
 def register(mcp: FastMCP) -> None:
@@ -27,6 +28,12 @@ def register(mcp: FastMCP) -> None:
 
         Common views include Perspective, Top, Front, Right, and Back.
         """
+        if camera is not None:
+            err = validate.coordinate(camera, "camera")
+            if err: return err
+        if target is not None:
+            err = validate.coordinate(target, "target")
+            if err: return err
         payload = {"view": view, "camera": camera, "target": target, "lens": lens}
         code = "__mcp_view = {!s}\n{}".format(json.dumps(payload), _SET_VIEW_SCRIPT)
         return rhino.execute_python(code, rhino_id=rhino_id)

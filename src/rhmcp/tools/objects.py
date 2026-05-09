@@ -38,6 +38,8 @@ def register(mcp: FastMCP) -> None:
         ``bbox_filter`` is a spatial filter ``[[min_x,min_y,min_z],[max_x,max_y,max_z]]``
         that restricts results to objects whose bounding box overlaps the region.
         """
+        err = validate.positive(limit, "limit") or validate.non_negative(offset, "offset")
+        if err: return err
         payload = {
             "filters": filters or {}, "logic": logic, "limit": limit, "offset": offset,
             "include_hidden": include_hidden, "include_geometry": include_geometry,

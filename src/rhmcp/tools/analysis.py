@@ -104,7 +104,6 @@ def register(mcp: FastMCP) -> None:
 _SCRIPT = r'''
 import rhinoscriptsyntax as rs
 import Rhino
-import math
 
 data = __mcp_analysis
 op   = data["op"]
@@ -112,7 +111,7 @@ op   = data["op"]
 if op == "distance":
     p1 = data["point1"]
     p2 = data["point2"]
-    d  = math.sqrt(sum((a - b) ** 2 for a, b in zip(p1, p2)))
+    d  = rs.Distance(p1, p2)
     result = {"distance": d, "point1": p1, "point2": p2}
 
 elif op == "curve_length":
@@ -124,6 +123,9 @@ elif op == "area":
     area = None
     if rs.IsCurve(oid):
         props = rs.CurveAreaCentroid(oid)
+        area = props[0] if props else None
+    elif rs.IsMesh(oid):
+        props = rs.MeshArea(oid)
         area = props[0] if props else None
     else:
         props = rs.SurfaceArea(oid)
@@ -147,7 +149,7 @@ elif op == "bbox":
             "height": mx[2] - mn[2],
         }
     else:
-        result = {"ok": False, "error": "Could not compute bounding box"}
+        result = {"ok": False, "error": "Could not compute bounding box", "error_code": "COMPUTATION_FAILED"}
 
 elif op == "is_solid":
     oid = data["object_id"]

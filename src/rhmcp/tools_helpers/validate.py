@@ -22,7 +22,7 @@ _GUID_RE = re.compile(
 
 def guid(value: Any, field: str = "id") -> dict[str, Any] | None:
     """Validate a GUID string (xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx)."""
-    if not isinstance(value, str) or not _GUID_RE.match(value.strip()):
+    if not isinstance(value, str) or not _GUID_RE.match(value):
         return {
             "ok": False,
             "error": f"{field} must be a valid GUID string (xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx), got: {value!r}",

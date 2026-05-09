@@ -285,6 +285,7 @@ def register(mcp: FastMCP) -> None:
 
 def _run(operation: str, payload: dict[str, object]) -> dict[str, object]:
     rhino_id = payload.pop("rhino_id", None)
+    payload.pop("err", None)
     plugin_params = {key: value for key, value in payload.items() if value is not None}
     payload["operation"] = operation
     code = "__mcp_curveop = {!s}\n{}".format(json.dumps(payload), _SCRIPT)

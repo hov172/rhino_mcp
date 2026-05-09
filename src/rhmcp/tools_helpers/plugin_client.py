@@ -113,7 +113,6 @@ def health_check(timeout: float = 3.0) -> dict[str, Any]:
     Returns ``{"ok": True, "version": ..., "rhino": ..., "latency_ms": ...}``
     on success, or ``{"ok": False, "error": ..., "error_code": ...}`` on failure.
     """
-    import time
     host, port, _ = connection_settings()
     t0 = time.monotonic()
     try:

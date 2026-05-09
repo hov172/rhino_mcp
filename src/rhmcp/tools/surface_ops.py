@@ -121,7 +121,7 @@ def register(mcp: FastMCP) -> None:
 
         ``u_spans`` / ``v_spans`` control the resolution of the patch.
         """
-        err = validate.guid_list(object_ids, "object_ids")
+        err = validate.guid_list(object_ids, "object_ids") or validate.positive(u_spans, "u_spans") or validate.positive(v_spans, "v_spans")
         if err: return err
         payload = {"op": "patch", "object_ids": object_ids,
                    "u_spans": u_spans, "v_spans": v_spans, "name": name}

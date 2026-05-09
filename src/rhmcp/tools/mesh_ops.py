@@ -8,6 +8,7 @@ from mcp.server.fastmcp import FastMCP
 from mcp.types import ToolAnnotations
 
 from rhmcp.tools_helpers import backend as rhino
+from rhmcp.tools_helpers import validate
 
 
 def register(mcp: FastMCP) -> None:
@@ -37,6 +38,8 @@ def register(mcp: FastMCP) -> None:
         """
         Create a planar mesh from a closed planar curve.
         """
+        err = validate.guid(curve_id, "curve_id")
+        if err: return err
         payload = {"op": "planar", "curve_id": curve_id, "name": name}
         code = "__mcp_mesh = {!r}\n{}".format(payload, _SCRIPT)
         return rhino.execute_python(code, rhino_id=rhino_id)
@@ -50,6 +53,8 @@ def register(mcp: FastMCP) -> None:
         """
         Convert brep/surface objects to meshes using Rhino's default meshing.
         """
+        err = validate.guid_list(object_ids, "object_ids")
+        if err: return err
         payload = {"op": "from_srf", "object_ids": object_ids, "name": name}
         code = "__mcp_mesh = {!r}\n{}".format(payload, _SCRIPT)
         return rhino.execute_python(code, rhino_id=rhino_id)
@@ -64,6 +69,8 @@ def register(mcp: FastMCP) -> None:
         """
         Boolean union of two or more meshes.
         """
+        err = validate.guid_list(mesh_ids, "mesh_ids")
+        if err: return err
         payload = {"op": "bool_union", "mesh_ids": mesh_ids,
                    "delete_input": delete_input, "name": name}
         code = "__mcp_mesh = {!r}\n{}".format(payload, _SCRIPT)
@@ -80,6 +87,8 @@ def register(mcp: FastMCP) -> None:
         """
         Subtract ``subtract_ids`` meshes from ``input_ids`` meshes.
         """
+        err = validate.guid_list(input_ids, "input_ids") or validate.guid_list(subtract_ids, "subtract_ids")
+        if err: return err
         payload = {"op": "bool_diff", "input_ids": input_ids,
                    "subtract_ids": subtract_ids, "delete_input": delete_input, "name": name}
         code = "__mcp_mesh = {!r}\n{}".format(payload, _SCRIPT)
@@ -96,6 +105,8 @@ def register(mcp: FastMCP) -> None:
         """
         Boolean intersection of two sets of meshes.
         """
+        err = validate.guid_list(mesh_ids1, "mesh_ids1") or validate.guid_list(mesh_ids2, "mesh_ids2")
+        if err: return err
         payload = {"op": "bool_intersect", "mesh_ids1": mesh_ids1,
                    "mesh_ids2": mesh_ids2, "delete_input": delete_input, "name": name}
         code = "__mcp_mesh = {!r}\n{}".format(payload, _SCRIPT)
@@ -111,6 +122,8 @@ def register(mcp: FastMCP) -> None:
         """
         Join multiple meshes into a single mesh object.
         """
+        err = validate.guid_list(mesh_ids, "mesh_ids")
+        if err: return err
         payload = {"op": "join", "mesh_ids": mesh_ids,
                    "delete_input": delete_input, "name": name}
         code = "__mcp_mesh = {!r}\n{}".format(payload, _SCRIPT)
@@ -126,6 +139,8 @@ def register(mcp: FastMCP) -> None:
         """
         Convert a mesh to a NURBS polysurface (one face per mesh polygon).
         """
+        err = validate.guid(mesh_id, "mesh_id")
+        if err: return err
         payload = {"op": "to_nurbs", "mesh_id": mesh_id,
                    "delete_input": delete_input, "name": name}
         code = "__mcp_mesh = {!r}\n{}".format(payload, _SCRIPT)
@@ -142,6 +157,8 @@ def register(mcp: FastMCP) -> None:
         """
         Offset a mesh by ``distance`` along its face normals.
         """
+        err = validate.guid(mesh_id, "mesh_id")
+        if err: return err
         payload = {"op": "offset", "mesh_id": mesh_id, "distance": distance,
                    "delete_input": delete_input, "name": name}
         code = "__mcp_mesh = {!r}\n{}".format(payload, _SCRIPT)

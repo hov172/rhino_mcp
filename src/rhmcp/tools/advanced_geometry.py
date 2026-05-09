@@ -10,6 +10,7 @@ from mcp.server.fastmcp import FastMCP
 from mcp.types import ToolAnnotations
 
 from rhmcp.tools_helpers import backend as rhino
+from rhmcp.tools_helpers import validate
 
 
 def register(mcp: FastMCP) -> None:
@@ -20,6 +21,8 @@ def register(mcp: FastMCP) -> None:
 
         ``loft_type`` maps to RhinoScriptSyntax AddLoftSrf loft_type values.
         """
+        err = validate.guid_list(curve_ids, "curve_ids")
+        if err: return err
         return _run("loft", locals())
 
     @mcp.tool(annotations=ToolAnnotations(title="Extrude Rhino Curve", destructiveHint=True))
@@ -27,6 +30,8 @@ def register(mcp: FastMCP) -> None:
         """
         Extrude a curve along a vector. Closed curves can be capped into solids.
         """
+        err = validate.guid(curve_id, "curve_id") or validate.coordinate(direction, "direction")
+        if err: return err
         return _run("extrude_curve", locals())
 
     @mcp.tool(annotations=ToolAnnotations(title="Sweep One Rail", destructiveHint=True))
@@ -34,6 +39,8 @@ def register(mcp: FastMCP) -> None:
         """
         Sweep one or more profile curves along a rail curve.
         """
+        err = validate.guid(rail_id, "rail_id") or validate.guid_list(profile_ids, "profile_ids")
+        if err: return err
         return _run("sweep1", locals())
 
     @mcp.tool(annotations=ToolAnnotations(title="Offset Rhino Curve", destructiveHint=True))
@@ -48,6 +55,8 @@ def register(mcp: FastMCP) -> None:
         """
         Offset a curve by distance. ``corner_style`` follows RhinoScriptSyntax.
         """
+        err = validate.guid(curve_id, "curve_id")
+        if err: return err
         return _run("offset_curve", locals())
 
     @mcp.tool(annotations=ToolAnnotations(title="Pipe Along Curve", destructiveHint=True))
@@ -62,11 +71,14 @@ def register(mcp: FastMCP) -> None:
         """
         Create a pipe along a curve.
         """
+        err = validate.guid(curve_id, "curve_id")
+        if err: return err
         return _run("pipe", locals())
 
 
 def _run(operation: str, payload: dict[str, object]) -> dict[str, object]:
     rhino_id = payload.pop("rhino_id", None)
+    payload.pop("err", None)
     plugin_params = {key: value for key, value in payload.items() if value is not None}
     payload["operation"] = operation
     code = "__mcp_advanced = {!s}\n{}".format(json.dumps(payload), _SCRIPT)
@@ -102,11 +114,13 @@ elif operation == "extrude_curve":
     start = Point3d(0, 0, 0)
     end = start + vector
     oid = rs.ExtrudeCurveStraight(data["curve_id"], start, end)
+    capped_ok = False
     if oid and data.get("cap") and rs.IsCurveClosed(data["curve_id"]):
         capped = rs.CapPlanarHoles(oid)
         if capped:
             oid = capped
-    result = {"result_id": _name([oid], data.get("name"))[0] if oid else None, "message": "Curve extruded"}
+            capped_ok = True
+    result = {"result_id": _name([oid], data.get("name"))[0] if oid else None, "capped": capped_ok, "message": "Curve extruded"}
 elif operation == "sweep1":
     ids = rs.AddSweep1(data["rail_id"], data["profile_ids"], closed=bool(data.get("closed", False)))
     result = {"result_ids": _name(ids or [], data.get("name")), "message": "Sweep created"}

@@ -29,6 +29,9 @@ def register(mcp: FastMCP) -> None:
 
         ``action`` is one of: list, create, update, delete, current.
         """
+        _valid_actions = {"list", "create", "update", "delete", "current"}
+        if action not in _valid_actions:
+            return {"ok": False, "error": "action must be one of {}, got: {!r}".format(sorted(_valid_actions), action), "error_code": "INVALID_VALUE"}
         if action in ("create", "update", "delete", "current") and name is not None:
             err = validate.layer_name(name, "name")
             if err:

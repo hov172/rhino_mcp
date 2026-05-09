@@ -11,6 +11,7 @@ from rhmcp.tools_helpers import backend as rhino
 
 
 def _wrap_with_revert(code: str) -> str:
+    code = code.expandtabs(4)
     indented = "\n".join("    " + line for line in code.splitlines())
     return (
         'import rhinoscriptsyntax as rs\n'

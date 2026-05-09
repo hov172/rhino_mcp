@@ -50,6 +50,7 @@ def register(mcp: FastMCP) -> None:
 
 def _run(operation: str, payload: dict[str, object]) -> dict[str, object]:
     rhino_id = payload.pop("rhino_id", None)
+    payload.pop("err", None)
     command_type = "boolean_" + operation
     plugin_params = {key: value for key, value in payload.items() if value is not None}
     payload["operation"] = operation
@@ -78,10 +79,11 @@ elif operation == "intersection":
     obj_list = list(data["object_ids"])
     if len(obj_list) < 2:
         raise ValueError("boolean_intersection requires at least 2 objects")
-    ids = rs.BooleanIntersection([obj_list[0]], [obj_list[1]], delete_input=delete_sources)
-    for oid in obj_list[2:]:
-        if ids:
-            ids = rs.BooleanIntersection(ids, [oid], delete_input=True)
+    current_results = rs.BooleanIntersection([obj_list[0]], [obj_list[1]], delete_input=delete_sources)
+    for next_obj in obj_list[2:]:
+        if current_results:
+            current_results = rs.BooleanIntersection(current_results, [next_obj], delete_input=True)
+    ids = current_results
 else:
     raise ValueError("Unsupported boolean operation: {}".format(operation))
 

@@ -10,6 +10,7 @@ from mcp.server.fastmcp import FastMCP
 from mcp.types import ToolAnnotations
 
 from rhmcp.tools_helpers import backend as rhino
+from rhmcp.tools_helpers import validate
 
 
 def register(mcp: FastMCP) -> None:
@@ -91,6 +92,8 @@ def register(mcp: FastMCP) -> None:
         material table) or ``material_name`` (string) to look up the material.
         At least one of the two must be supplied.
         """
+        err = validate.guid(id, "id")
+        if err: return err
         if material_index is None and material_name is None:
             return {"ok": False, "error": "Provide either 'material_index' or 'material_name'."}
 
