@@ -568,3 +568,33 @@ class TestUrbanPrdTools(unittest.TestCase):
         self.assertIn("summary", result)
         self.assertEqual(result["metrics"]["far"], 4.5)
         self.assertTrue(any(call[0] == "gh_open_document" for call in plugin_calls))
+
+    def test_create_urban_scheme_uses_geojson_site_boundary_dimensions(self) -> None:
+        fn = self.tools["create_urban_scheme"]
+        site_boundary = {
+            "type": "Polygon",
+            "coordinates": [[
+                [0, 0], [120, 0], [120, 80], [0, 80], [0, 0],
+            ]],
+        }
+        mapping = {
+            "site_width": "guid-sw", "site_depth": "guid-sd",
+            "floor_count": "guid-fc", "block_width": "guid-bw",
+            "residential_pct": "guid-rp", "retail_pct": "guid-retail",
+            "Metrics": "guid-metrics", "BakeTarget": "guid-bake",
+        }
+
+        def capture(cmd, params):
+            if cmd == "gh_get_canvas":
+                return _canvas_result(mapping)
+            if cmd == "gh_get_output":
+                return {"ok": True, "result": {"outputs": [{"values": ["GFA: 19200\nFAR: 2.0\nUnits: 192\nOpenSpace: 0"]}]}}
+            return {"ok": True, "result": {}}
+
+        with patch("rhmcp.tools_helpers.backend.plugin_result", side_effect=capture):
+            result = fn(prompt="Create a 2.0 FAR perimeter block", site_boundary=site_boundary)
+        self.assertTrue(result["ok"])
+        self.assertEqual(result["site_boundary"]["site_width"], 120.0)
+        self.assertEqual(result["site_boundary"]["site_depth"], 80.0)
+        self.assertEqual(result["parsed"]["site_width"], 120.0)
+        self.assertEqual(result["parsed"]["site_depth"], 80.0)

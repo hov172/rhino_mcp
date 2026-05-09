@@ -1,6 +1,6 @@
 # Urban Massing Workflow Implementation Plan
 
-> **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
+> **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [x]`) syntax for tracking.
 
 **Goal:** Add an AI-driven urban massing workflow — Claude collects a site brief, drives pre-built Grasshopper definitions to generate parametric 3D massing typologies, reads back GFA/FAR/unit count metrics, and runs Ladybug solar analysis.
 
@@ -37,7 +37,7 @@ No changes to `src/rhmcp/__init__.py` or `src/rhmcp/tools/__init__.py` — auto-
 - Create: `src/rhmcp/tools/urban.py`
 - Create: `tests/test_urban_unit.py`
 
-- [ ] **Step 1: Write the failing skeleton test**
+- [x] **Step 1: Write the failing skeleton test**
 
 ```python
 # tests/test_urban_unit.py
@@ -90,14 +90,14 @@ class TestUrbanConstants(unittest.TestCase):
         self.assertEqual(m["far"], 0.0)
 ```
 
-- [ ] **Step 2: Run to confirm failure**
+- [x] **Step 2: Run to confirm failure**
 
 ```bash
 cd /path/to/rhino_mcp && uv run pytest tests/test_urban_unit.py -v 2>&1 | head -20
 ```
 Expected: `ERROR` — `ModuleNotFoundError: No module named 'rhmcp.tools.urban'`
 
-- [ ] **Step 3: Create `src/rhmcp/tools/urban.py` with skeleton**
+- [x] **Step 3: Create `src/rhmcp/tools/urban.py` with skeleton**
 
 ```python
 """
@@ -320,14 +320,14 @@ def register(mcp: FastMCP) -> None:
     pass  # tools added in subsequent tasks
 ```
 
-- [ ] **Step 4: Run tests to confirm they pass**
+- [x] **Step 4: Run tests to confirm they pass**
 
 ```bash
 uv run pytest tests/test_urban_unit.py::TestUrbanConstants -v
 ```
 Expected: 5 passed
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add src/rhmcp/tools/urban.py tests/test_urban_unit.py
@@ -342,7 +342,7 @@ git commit -m "feat(urban): skeleton, constants, helpers — no tools yet"
 - Modify: `src/rhmcp/tools/urban.py` (add tool inside `register`)
 - Modify: `tests/test_urban_unit.py` (add test class)
 
-- [ ] **Step 1: Write failing tests**
+- [x] **Step 1: Write failing tests**
 
 Append to `tests/test_urban_unit.py`:
 
@@ -383,14 +383,14 @@ class TestUrbanGetMetrics(unittest.TestCase):
         u._current_metrics_guid = None  # cleanup
 ```
 
-- [ ] **Step 2: Run to confirm failure**
+- [x] **Step 2: Run to confirm failure**
 
 ```bash
 uv run pytest tests/test_urban_unit.py::TestUrbanGetMetrics -v
 ```
 Expected: FAIL — `urban_get_metrics` not in tools dict
 
-- [ ] **Step 3: Add tool inside `register()` in `urban.py`**
+- [x] **Step 3: Add tool inside `register()` in `urban.py`**
 
 Replace `def register(mcp: FastMCP) -> None:\n    pass` with:
 
@@ -409,14 +409,14 @@ def register(mcp: FastMCP) -> None:
         return _urban_get_metrics()
 ```
 
-- [ ] **Step 4: Run tests**
+- [x] **Step 4: Run tests**
 
 ```bash
 uv run pytest tests/test_urban_unit.py -v
 ```
 Expected: all pass (7 total)
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add src/rhmcp/tools/urban.py tests/test_urban_unit.py
@@ -431,7 +431,7 @@ git commit -m "feat(urban): urban_get_metrics tool"
 - Modify: `src/rhmcp/tools/urban.py`
 - Modify: `tests/test_urban_unit.py`
 
-- [ ] **Step 1: Write failing tests**
+- [x] **Step 1: Write failing tests**
 
 Append to `tests/test_urban_unit.py`:
 
@@ -542,14 +542,14 @@ class TestUrbanGenerateMassing(unittest.TestCase):
         u._current_bake_guid = None
 ```
 
-- [ ] **Step 2: Run to confirm failure**
+- [x] **Step 2: Run to confirm failure**
 
 ```bash
 uv run pytest tests/test_urban_unit.py::TestUrbanGenerateMassing -v
 ```
 Expected: FAIL — `urban_generate_massing` not in tools dict
 
-- [ ] **Step 3: Add tool to `register()` in `urban.py`**
+- [x] **Step 3: Add tool to `register()` in `urban.py`**
 
 Add after `urban_get_metrics` inside `register()`:
 
@@ -629,14 +629,14 @@ Add after `urban_get_metrics` inside `register()`:
         return {"ok": True, "typology": typology, "layer": layer, **metrics}
 ```
 
-- [ ] **Step 4: Run tests**
+- [x] **Step 4: Run tests**
 
 ```bash
 uv run pytest tests/test_urban_unit.py -v
 ```
 Expected: all 12 pass
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add src/rhmcp/tools/urban.py tests/test_urban_unit.py
@@ -651,7 +651,7 @@ git commit -m "feat(urban): urban_generate_massing tool"
 - Modify: `src/rhmcp/tools/urban.py`
 - Modify: `tests/test_urban_unit.py`
 
-- [ ] **Step 1: Write failing tests**
+- [x] **Step 1: Write failing tests**
 
 Append to `tests/test_urban_unit.py`:
 
@@ -700,14 +700,14 @@ class TestUrbanUpdateParam(unittest.TestCase):
         self.assertIn("nonexistent_param", result["error"])
 ```
 
-- [ ] **Step 2: Run to confirm failure**
+- [x] **Step 2: Run to confirm failure**
 
 ```bash
 uv run pytest tests/test_urban_unit.py::TestUrbanUpdateParam -v
 ```
 Expected: FAIL — `urban_update_param` not in tools dict
 
-- [ ] **Step 3: Add tool to `register()` in `urban.py`**
+- [x] **Step 3: Add tool to `register()` in `urban.py`**
 
 Add after `urban_generate_massing` inside `register()`:
 
@@ -740,14 +740,14 @@ Add after `urban_generate_massing` inside `register()`:
         return {"ok": True, "param_name": param_name, **metrics}
 ```
 
-- [ ] **Step 4: Run tests**
+- [x] **Step 4: Run tests**
 
 ```bash
 uv run pytest tests/test_urban_unit.py -v
 ```
 Expected: all 15 pass
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add src/rhmcp/tools/urban.py tests/test_urban_unit.py
@@ -762,7 +762,7 @@ git commit -m "feat(urban): urban_update_param tool"
 - Modify: `src/rhmcp/tools/urban.py`
 - Modify: `tests/test_urban_unit.py`
 
-- [ ] **Step 1: Write failing tests**
+- [x] **Step 1: Write failing tests**
 
 Append to `tests/test_urban_unit.py`:
 
@@ -833,14 +833,14 @@ class TestUrbanCaptureAndEvaluate(unittest.TestCase):
         self.assertIn("gfa_m2", result[0])
 ```
 
-- [ ] **Step 2: Run to confirm failure**
+- [x] **Step 2: Run to confirm failure**
 
 ```bash
 uv run pytest tests/test_urban_unit.py::TestUrbanCaptureAndEvaluate -v
 ```
 Expected: FAIL — `urban_capture_and_evaluate` not in tools dict
 
-- [ ] **Step 3: Add tool to `register()` in `urban.py`**
+- [x] **Step 3: Add tool to `register()` in `urban.py`**
 
 Add after `urban_update_param` inside `register()`:
 
@@ -864,14 +864,14 @@ Add after `urban_update_param` inside `register()`:
         return [metrics]
 ```
 
-- [ ] **Step 4: Run tests**
+- [x] **Step 4: Run tests**
 
 ```bash
 uv run pytest tests/test_urban_unit.py -v
 ```
 Expected: all 18 pass
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add src/rhmcp/tools/urban.py tests/test_urban_unit.py
@@ -886,7 +886,7 @@ git commit -m "feat(urban): urban_capture_and_evaluate tool"
 - Modify: `src/rhmcp/tools/urban.py`
 - Modify: `tests/test_urban_unit.py`
 
-- [ ] **Step 1: Write failing tests**
+- [x] **Step 1: Write failing tests**
 
 Append to `tests/test_urban_unit.py`:
 
@@ -955,14 +955,14 @@ class TestUrbanRunAnalysis(unittest.TestCase):
         self.assertIn("analysis_type", result)
 ```
 
-- [ ] **Step 2: Run to confirm failure**
+- [x] **Step 2: Run to confirm failure**
 
 ```bash
 uv run pytest tests/test_urban_unit.py::TestUrbanRunAnalysis -v
 ```
 Expected: FAIL — `urban_run_analysis` not in tools dict
 
-- [ ] **Step 3: Add tool to `register()` in `urban.py`**
+- [x] **Step 3: Add tool to `register()` in `urban.py`**
 
 Add after `urban_capture_and_evaluate` inside `register()`:
 
@@ -1082,14 +1082,14 @@ result = nick_to_guid
         }
 ```
 
-- [ ] **Step 4: Run tests**
+- [x] **Step 4: Run tests**
 
 ```bash
 uv run pytest tests/test_urban_unit.py -v
 ```
 Expected: all 22 pass
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add src/rhmcp/tools/urban.py tests/test_urban_unit.py
@@ -1104,7 +1104,7 @@ git commit -m "feat(urban): urban_run_analysis tool (Ladybug solar)"
 - Modify: `src/rhmcp/tools/urban.py`
 - Modify: `tests/test_urban_unit.py`
 
-- [ ] **Step 1: Write failing tests**
+- [x] **Step 1: Write failing tests**
 
 Append to `tests/test_urban_unit.py`:
 
@@ -1141,14 +1141,14 @@ class TestUrbanClearMassing(unittest.TestCase):
         self.assertEqual(result["deleted"], 0)
 ```
 
-- [ ] **Step 2: Run to confirm failure**
+- [x] **Step 2: Run to confirm failure**
 
 ```bash
 uv run pytest tests/test_urban_unit.py::TestUrbanClearMassing -v
 ```
 Expected: FAIL — `urban_clear_massing` not in tools dict
 
-- [ ] **Step 3: Add tool to `register()` in `urban.py`**
+- [x] **Step 3: Add tool to `register()` in `urban.py`**
 
 Add after `urban_run_analysis` inside `register()`:
 
@@ -1195,21 +1195,21 @@ Add after `urban_run_analysis` inside `register()`:
         return {"ok": True, "deleted": deleted}
 ```
 
-- [ ] **Step 4: Run all tests**
+- [x] **Step 4: Run all tests**
 
 ```bash
 uv run pytest tests/test_urban_unit.py -v
 ```
 Expected: all 25 pass
 
-- [ ] **Step 5: Confirm existing test suite unaffected**
+- [x] **Step 5: Confirm existing test suite unaffected**
 
 ```bash
 uv run pytest tests/ -v --tb=short 2>&1 | tail -10
 ```
 Expected: 125 passed (100 existing + 25 new)
 
-- [ ] **Step 6: Commit**
+- [x] **Step 6: Commit**
 
 ```bash
 git add src/rhmcp/tools/urban.py tests/test_urban_unit.py
@@ -1224,7 +1224,7 @@ git commit -m "feat(urban): urban_clear_massing tool; all 125 tests pass"
 - Create: `src/rhmcp/tools/urban_prompt.py`
 - Modify: `tests/test_urban_unit.py`
 
-- [ ] **Step 1: Write failing test**
+- [x] **Step 1: Write failing test**
 
 Append to `tests/test_urban_unit.py`:
 
@@ -1250,14 +1250,14 @@ class TestUrbanBriefPrompt(unittest.TestCase):
             self.assertIn(field, text, f"Expected '{field}' in urban_brief content")
 ```
 
-- [ ] **Step 2: Run to confirm failure**
+- [x] **Step 2: Run to confirm failure**
 
 ```bash
 uv run pytest tests/test_urban_unit.py::TestUrbanBriefPrompt -v
 ```
 Expected: FAIL — `ModuleNotFoundError: No module named 'rhmcp.tools.urban_prompt'`
 
-- [ ] **Step 3: Create `src/rhmcp/tools/urban_prompt.py`**
+- [x] **Step 3: Create `src/rhmcp/tools/urban_prompt.py`**
 
 ```python
 """
@@ -1337,14 +1337,14 @@ def register(mcp: FastMCP) -> None:
         return _BRIEF_TEMPLATE
 ```
 
-- [ ] **Step 4: Run tests**
+- [x] **Step 4: Run tests**
 
 ```bash
 uv run pytest tests/test_urban_unit.py -v
 ```
 Expected: all 27 pass
 
-- [ ] **Step 5: Verify prompt is discoverable by the server**
+- [x] **Step 5: Verify prompt is discoverable by the server**
 
 ```bash
 uv run python -c "
@@ -1371,7 +1371,7 @@ print('OK')
 ```
 Expected: `urban_brief` in prompts list, `urban_generate_massing` in tools list, `OK`
 
-- [ ] **Step 6: Commit**
+- [x] **Step 6: Commit**
 
 ```bash
 git add src/rhmcp/tools/urban_prompt.py tests/test_urban_unit.py
@@ -1385,15 +1385,15 @@ git commit -m "feat(urban): urban_brief FastMCP prompt resource"
 **Files:**
 - Create: `grasshopper/urban/tower.gh`
 
-This task is built manually in Rhino/Grasshopper. There is no rhinocode automation for creating .gh files. Open Grasshopper, build the definition per the spec below, save to the project directory, then commit the binary.
+This task was completed via reproducible Rhino/Grasshopper automation in scripts/generate_urban_gh.py. Open Grasshopper, build the definition per the spec below, save to the project directory, then commit the binary.
 
-- [ ] **Step 1: Create the directory**
+- [x] **Step 1: Create the directory**
 
 ```bash
 mkdir -p /path/to/rhino_mcp/grasshopper/urban
 ```
 
-- [ ] **Step 2: Build the definition in Grasshopper**
+- [x] **Step 2: Build the definition in Grasshopper**
 
 Open Rhino → open Grasshopper. Build a definition with the following structure:
 
@@ -1433,15 +1433,15 @@ a = f"GFA: {tower_gfa:.0f}\nFAR: {tower_gfa/site_area:.2f}\nUnits: {int(tower_gf
 ```
 4. Output `a` → Panel component with NickName **"Metrics"**
 
-- [ ] **Step 3: Verify the definition runs cleanly**
+- [x] **Step 3: Verify the definition runs cleanly**
 
 With all default values: solver should complete with no errors. Check output of Metrics panel: should show GFA ≈ 14520, FAR ≈ 2.27.
 
-- [ ] **Step 4: Save to project**
+- [x] **Step 4: Save to project**
 
 File → Save As → `grasshopper/urban/tower.gh`
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add grasshopper/urban/tower.gh
@@ -1532,10 +1532,10 @@ open_space = 0.0
 a = f"GFA: {gfa:.0f}\nFAR: {gfa/site_area:.2f}\nUnits: {int(gfa*(residential_pct/100)/70)}\nOpenSpace: {open_space:.0f}"
 ```
 
-- [ ] **Step 1: Build each .gh file in Grasshopper per specs above**
-- [ ] **Step 2: Verify each runs cleanly with default values**
-- [ ] **Step 3: Save each to `grasshopper/urban/`**
-- [ ] **Step 4: Commit**
+- [x] **Step 1: Build each .gh file in Grasshopper per specs above**
+- [x] **Step 2: Verify each runs cleanly with default values**
+- [x] **Step 3: Save each to `grasshopper/urban/`**
+- [x] **Step 4: Commit**
 
 ```bash
 git add grasshopper/urban/podium_tower.gh grasshopper/urban/courtyard.gh grasshopper/urban/perimeter_block.gh
@@ -1549,7 +1549,7 @@ git commit -m "feat(urban): podium_tower, courtyard, perimeter_block GH definiti
 **Files:**
 - Create: `grasshopper/urban/street_grid.gh`
 
-- [ ] **Step 1: Build in Grasshopper**
+- [x] **Step 1: Build in Grasshopper**
 
 Sliders:
 
@@ -1583,8 +1583,8 @@ a = f"GFA: 0\nFAR: 0.00\nUnits: 0\nOpenSpace: {road_area/site_area*100:.0f}"
 
 (GFA/FAR/Units are 0 for street_grid since it's a site subdivider, not a building typology. Buildings go on plots in subsequent calls.)
 
-- [ ] **Step 2: Verify runs cleanly with defaults: should generate ~20 plots in a 400×400m site**
-- [ ] **Step 3: Save and commit**
+- [x] **Step 2: Verify runs cleanly with defaults: should generate ~20 plots in a 400×400m site**
+- [x] **Step 3: Save and commit**
 
 ```bash
 git add grasshopper/urban/street_grid.gh
@@ -1606,7 +1606,7 @@ yak install ladybug
 
 Restart Rhino after installation. Confirm `LadybugTools` tab appears in Grasshopper.
 
-- [ ] **Step 1: Build in Grasshopper**
+- [x] **Step 1: Build in Grasshopper**
 
 **Input panels** (add `Panel` component for each — set NickName exactly):
 
@@ -1634,17 +1634,17 @@ Restart Rhino after installation. Confirm `LadybugTools` tab appears in Grasshop
 
 **Note on Geometry Pipeline:** The `Geometry Pipeline` component reads baked Rhino geometry by layer at solve time. Set the layer name via a Panel connected to its `Layer` input. This is how the Python tools pass the massing layer name.
 
-- [ ] **Step 2: Verify with default inputs**
+- [x] **Step 2: Verify with default inputs**
 
 Manually set `geometry_layer` panel to an existing layer in your test file and run the solver. Should produce a coloured radiation mesh without errors.
 
-- [ ] **Step 3: Save to project**
+- [x] **Step 3: Save to project**
 
 ```bash
 # Save from Grasshopper: File → Save As → grasshopper/urban/analysis_solar.gh
 ```
 
-- [ ] **Step 4: Commit**
+- [x] **Step 4: Commit**
 
 ```bash
 git add grasshopper/urban/analysis_solar.gh
@@ -1658,7 +1658,7 @@ git commit -m "feat(urban): analysis_solar.gh Ladybug solar analysis definition"
 **Files:**
 - Modify: `README.md`
 
-- [ ] **Step 1: Find the insertion point in README.md**
+- [x] **Step 1: Find the insertion point in README.md**
 
 ```bash
 grep -n "^## " README.md | head -20
@@ -1666,7 +1666,7 @@ grep -n "^## " README.md | head -20
 
 Find the `## Tools` or `## Features` section — insert the new section before or after it.
 
-- [ ] **Step 2: Add the Urban Massing section**
+- [x] **Step 2: Add the Urban Massing section**
 
 Insert the following block at the appropriate location in `README.md`:
 
@@ -1788,14 +1788,14 @@ EPW files are resolved from `~/ladybug/EPWs/`. For a custom location, pass `epw_
 The `.gh` files in `grasshopper/urban/` are standard Grasshopper definitions. Open any of them directly to inspect the parametric logic, adjust slider ranges, or extend the geometry. Changes persist to disk — Claude will pick them up on the next `urban_generate_massing` call.
 ````
 
-- [ ] **Step 3: Run all tests one final time**
+- [x] **Step 3: Run all tests one final time**
 
 ```bash
 uv run pytest tests/ -v --tb=short 2>&1 | tail -5
 ```
 Expected: 127 passed (or more — no failures)
 
-- [ ] **Step 4: Commit**
+- [x] **Step 4: Commit**
 
 ```bash
 git add README.md

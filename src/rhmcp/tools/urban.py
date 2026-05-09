@@ -215,6 +215,55 @@ def _parse_urban_prompt_text(prompt: str) -> dict[str, object]:
     }
 
 
+def _iter_geojson_coords(value: object):
+    if isinstance(value, (int, float)):
+        return
+    if isinstance(value, list):
+        if len(value) >= 2 and all(isinstance(v, (int, float)) for v in value[:2]):
+            yield [float(value[0]), float(value[1])]
+            return
+        for item in value:
+            yield from _iter_geojson_coords(item)
+    elif isinstance(value, dict):
+        if "bbox" in value and isinstance(value["bbox"], list) and len(value["bbox"]) >= 4:
+            bbox = value["bbox"]
+            yield [float(bbox[0]), float(bbox[1])]
+            yield [float(bbox[2]), float(bbox[3])]
+            return
+        if value.get("type") == "FeatureCollection":
+            for feature in value.get("features", []) or []:
+                yield from _iter_geojson_coords(feature)
+        elif value.get("type") == "Feature":
+            yield from _iter_geojson_coords(value.get("geometry"))
+        else:
+            yield from _iter_geojson_coords(value.get("coordinates"))
+
+
+def _site_dimensions_from_boundary(site_boundary: dict[str, object] | None) -> dict[str, object]:
+    """
+    Extract approximate site dimensions from GeoJSON-like input.
+
+    Coordinates are treated as model units. For lon/lat GIS input, callers
+    should project before calling or pass explicit dimensions in the prompt.
+    """
+    if not site_boundary:
+        return {"ok": False, "error": "site_boundary is empty"}
+    coords = list(_iter_geojson_coords(site_boundary))
+    if not coords:
+        return {"ok": False, "error": "No coordinates found in site_boundary"}
+    xs = [p[0] for p in coords]
+    ys = [p[1] for p in coords]
+    width = max(xs) - min(xs)
+    depth = max(ys) - min(ys)
+    return {
+        "ok": width > 0 and depth > 0,
+        "site_width": width,
+        "site_depth": depth,
+        "bbox": [[min(xs), min(ys)], [max(xs), max(ys)]],
+        "coordinate_count": len(coords),
+    }
+
+
 def _calculate_metrics(
     site_width: float,
     site_depth: float,
@@ -1057,6 +1106,16 @@ def register(mcp: FastMCP) -> None:
         metrics, optionally export the result.
         """
         parsed = parse_urban_prompt(prompt, rhino_id=rhino_id)
+        boundary = _site_dimensions_from_boundary(site_boundary)
+        if boundary.get("ok"):
+            if parsed.get("site_width") is None:
+                parsed["site_width"] = boundary["site_width"]
+            if parsed.get("site_depth") is None:
+                parsed["site_depth"] = boundary["site_depth"]
+            parsed["missing_fields"] = [
+                field for field in parsed.get("missing_fields", [])
+                if field not in {"site_width", "site_depth"}
+            ]
         if parsed.get("missing_fields"):
             return {"ok": False, "stage": "parse", "parsed": parsed, "error": "Missing required fields"}
 
@@ -1101,5 +1160,6 @@ def register(mcp: FastMCP) -> None:
             "massing": massing,
             "metrics": metrics.get("metrics", {}),
             "downloads": export,
+            "site_boundary": boundary if site_boundary is not None else None,
             "site_boundary_received": site_boundary is not None,
         }

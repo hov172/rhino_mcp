@@ -35,16 +35,18 @@ The platform is delivered through MCP so customers can access the functionality 
 
 ## Functional Requirements
 
-- FR-1 Prompt Parsing
-- FR-2 Site Import: Rhino curves, GeoJSON, GIS
-- FR-3 Layout Generation
-- FR-4 Massing Generation
-- FR-5 Metrics Calculation
-- FR-6 Optimization
-- FR-7 Rendering
-- FR-8 Export
-- FR-9 Project Versioning
-- FR-10 Authentication and Billing
+| Requirement | MVP status | Implementation |
+|---|---|---|
+| FR-1 Prompt Parsing | Implemented | `parse_urban_prompt` extracts FAR, site dimensions, program mix, typology, climate zone, and missing fields. |
+| FR-2 Site Import: Rhino curves, GeoJSON, GIS | Implemented for MVP | `create_urban_scheme` accepts GeoJSON-like `site_boundary` input and derives site dimensions from bbox/coordinates. Rhino geometry import remains available through the existing Rhino object tools. |
+| FR-3 Layout Generation | Implemented | `generate_site_layout` produces parcel/block metadata and can bake a `street_grid` Grasshopper definition. |
+| FR-4 Massing Generation | Implemented | `generate_massing` / `urban_generate_massing` drive packaged Grasshopper typologies and bake geometry. |
+| FR-5 Metrics Calculation | Implemented | `calculate_urban_metrics` and the massing tools calculate GFA, FAR, units, open space, and FAR-target validation. |
+| FR-6 Optimization | Implemented for MVP | `optimize_plan` provides deterministic FAR-fit parameter recommendations and can apply them. |
+| FR-7 Rendering | Implemented for MVP | `render_urban_preview` returns metrics plus a viewport `Image`. Production rendering remains a platform extension. |
+| FR-8 Export | Implemented for MVP | `export_model` supports 3DM, GLB/GLTF, GeoJSON, and PDF export hooks. |
+| FR-9 Project Versioning | Implemented | `save_project_version` writes a timestamped model export plus `version.json` manifest. |
+| FR-10 Authentication and Billing | Platform-ready boundary | The local Rhino MCP server exposes the tool surface; authentication, billing, tenant isolation, and rate limiting belong in the remote MCP gateway layer before commercial deployment. |
 
 ## Architecture Target
 
@@ -55,7 +57,7 @@ The long-term commercial architecture remains remote-first:
 - Compute services: FastAPI/Python, Rhino Compute or Rhino.Inside, Grasshopper definitions, optimization engine.
 - Storage: PostgreSQL/PostGIS, object storage, Redis cache.
 
-This repository implements the Rhino-side MVP tool surface and local MCP workflow. Authentication, billing, multi-tenant isolation, and remote deployment are platform-layer work outside the local Rhino plugin/server.
+This repository implements the Rhino-side MVP tool surface and local MCP workflow. Authentication, billing, multi-tenant isolation, and remote deployment are platform-layer responsibilities for the production MCP gateway. The local server is intentionally kept focused on Rhino/Grasshopper execution so the same tools can sit behind a private remote gateway without exposing source code or Grasshopper definitions to customers.
 
 ## MVP Scope
 
@@ -67,12 +69,14 @@ Phase 1:
 - Metrics
 - 3DM/GLB/GeoJSON/PDF export hooks
 - MCP integration
+- GeoJSON-style site boundary dimensions
+- Version manifests
 
 Phase 2:
 
-- Deeper optimization
-- Production rendering
-- Billing
+- Deeper optimization algorithms
+- Production rendering queues
+- Billing integration
 - Remote tenant infrastructure
 
 ## Success Metrics

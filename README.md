@@ -105,7 +105,7 @@ Supported massing typologies are `tower`, `podium_tower`, `courtyard`, `perimete
 
 Use `urban_get_metrics` after generation to retrieve the active definition's reported `gfa_m2`, `far`, `unit_count_est`, and `open_space_pct`. Use `urban_update_param` for iterative slider changes, `urban_capture_and_evaluate` to pair metrics with a viewport image, `urban_run_analysis` for the Ladybug solar-analysis definition, and `urban_clear_massing` to remove generated layers.
 
-The PRD-facing API is also available with product-level names: `parse_urban_prompt`, `generate_site_layout`, `generate_massing`, `calculate_urban_metrics`, `optimize_plan`, `render_urban_preview`, `export_model`, `save_project_version`, and `create_urban_scheme`.
+The PRD-facing API is also available with product-level names: `parse_urban_prompt`, `generate_site_layout`, `generate_massing`, `calculate_urban_metrics`, `optimize_plan`, `render_urban_preview`, `export_model`, `save_project_version`, and `create_urban_scheme`. The orchestrator accepts GeoJSON-style `site_boundary` input and derives site dimensions from its bbox/coordinates when the prompt does not include explicit dimensions.
 
 Prerequisites are the plugin backend, Rhino with Grasshopper open, and the urban Grasshopper definitions present in `grasshopper/urban/`. Ladybug-based analysis additionally requires Ladybug Tools and local EPW weather files.
 
