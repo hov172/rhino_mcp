@@ -458,7 +458,7 @@ The plugin is a `.rhp` file that runs a TCP socket server inside Rhino. There ar
 
 #### Option A — Copy the pre-built `.rhp` directly (fastest)
 
-Download [`rhino-mcp.rhp`](https://github.com/hov172/rhino_mcp/releases/download/v0.3.0/rhino-mcp.rhp) from the latest release, then copy it to the Rhino plug-ins folder:
+Download [`rhino-mcp.rhp`](https://github.com/hov172/rhino_mcp/releases/download/v0.5.0/rhino-mcp.rhp) from the latest release, then copy it to the Rhino plug-ins folder:
 
 ```bash
 # macOS — user plug-ins folder (no admin rights needed)
@@ -477,16 +477,16 @@ Then restart Rhino. The plugin loads automatically on startup.
 
 #### Option B — Install via Yak CLI
 
-Download [`rhino-mcp-0.3.0-rh8_30-any.yak`](https://github.com/hov172/rhino_mcp/releases/download/v0.3.0/rhino-mcp-0.3.0-rh8_30-any.yak) from the latest release, then run:
+Download [`rhino-mcp-0.5.0-rh8_17-any.yak`](https://github.com/hov172/rhino_mcp/releases/download/v0.5.0/rhino-mcp-0.5.0-rh8_17-any.yak) from the latest release, then run:
 
 ```bash
 # macOS
-"/Applications/Rhino 8.app/Contents/Resources/bin/yak" install --source ~/Downloads/rhino-mcp-0.3.0-rh8_30-any.yak
+"/Applications/Rhino 8.app/Contents/Resources/bin/yak" install --source ~/Downloads/rhino-mcp-0.5.0-rh8_17-any.yak
 ```
 
 ```powershell
 # Windows
-& "C:\Program Files\Rhino 8\System\yak.exe" install --source "$env:USERPROFILE\Downloads\rhino-mcp-0.3.0-rh8_30-any.yak"
+& "C:\Program Files\Rhino 8\System\yak.exe" install --source "$env:USERPROFILE\Downloads\rhino-mcp-0.5.0-rh8_17-any.yak"
 ```
 
 Restart Rhino after the install completes.
