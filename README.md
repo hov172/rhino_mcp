@@ -1753,6 +1753,7 @@ dotnet --version   # should be 8.x
 ```
 
 The `build-plugin.sh` script runs `dotnet build` inside `rhino_plugin/RhinoMCPPlugin/`. On macOS, the PostBuild step automatically copies the `.rhp` to `/Applications/Rhino 8.app/Contents/PlugIns/`. Restart Rhino after each build to load the new version.
+The `package-plugin.sh` script stages release assets in `rhino_plugin/release/` and includes both the direct-install `rhino-mcp.rhp` and the `rhino-mcp-*.yak` package.
 
 ---
 
