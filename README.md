@@ -77,7 +77,7 @@ Control Rhino 3D from Claude, Cursor, Codex, and any other MCP-capable AI tool. 
 | **GH — Human & Elefront** | Bake with full attribute control (layer, name, user text), reference objects by filter, set/get user text on Rhino objects |
 | **GH — Kangaroo** | Set up physics solvers, add and wire physics goals (Length, Angle, Anchor, Spring, Pressure, Load, Hinge, etc.), run simulations |
 | **GH — Ladybug / Honeybee** | Load EPW weather data, sun path, radiation analysis, wind rose, UTCI comfort; create Honeybee rooms, add windows, run energy simulations |
-| **UrbanGPT Platform** | Parse urban prompts, generate site layouts and massing, calculate/validate metrics, optimize FAR, render previews, export models, save versions, and orchestrate full schemes |
+| **UrbanAgent Platform** | Parse urban prompts, generate site layouts and massing, calculate/validate metrics, optimize FAR, render previews, export models, save versions, and orchestrate full schemes |
 | **Geometry** | Create boxes, spheres, cylinders, cones, tori, curves, surfaces, meshes, text, arcs, ellipses, planes, and more |
 | **Modeling** | Boolean union/difference/intersection, loft, extrude, sweep, offset, pipe, project/intersect/split curves |
 | **Objects** | Select, move, rotate, scale, rename, change layer/color, delete, undo/redo |

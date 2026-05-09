@@ -1,6 +1,6 @@
-# UrbanGPT-Style MCP Platform PRD
+# UrbanAgent MCP Platform PRD
 
-Source: `/Users/helpdesk/Downloads/UrbanGPT_MCP_Platform_PRD.rtf`
+Source: original PRD RTF supplied by the user, renamed in-product to UrbanAgent to avoid collision with other similarly named systems.
 
 ## Product Vision
 

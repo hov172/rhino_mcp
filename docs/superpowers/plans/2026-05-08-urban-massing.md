@@ -1675,7 +1675,7 @@ Insert the following block at the appropriate location in `README.md`:
 
 rhino_mcp includes an AI-driven urban massing workflow — describe a site in plain English and Claude generates, iterates, and analyses parametric 3D massing directly in Rhino.
 
-Inspired by [Urban GPT / Alpha Studio (Tim Fu)](https://parametric-architecture.com/urban-gpt-alpha-studio-tim-fu/), this workflow brings the same natural-language-to-3D capability into your local Rhino environment.
+UrbanAgent brings natural-language-to-3D urban massing capability into your local Rhino environment.
 
 ### Prerequisites
 
