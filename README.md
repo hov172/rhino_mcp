@@ -110,7 +110,7 @@ Then in Rhino: **Tools → Options → Plug-ins → Install** and select the `.r
 
 ```bash
 git clone https://github.com/hov172/rhino_mcp.git
-cd rhino-mcp
+cd rhino_mcp
 uv sync          # installs all Python dependencies from uv.lock
 ```
 
@@ -202,7 +202,7 @@ Same as Path A Step 1 above. The plugin must run inside Rhino on your machine �
 ```bash
 # Clone just to get the Dockerfile (or copy it manually)
 git clone https://github.com/hov172/rhino_mcp.git
-cd rhino-mcp
+cd rhino_mcp
 
 # Build
 docker build -t rhino-mcp .
@@ -497,7 +497,7 @@ The build output is placed at `rhino_plugin/RhinoMCPPlugin/bin/Release/net8.0/rh
 ```bash
 # Clone the repo
 git clone https://github.com/hov172/rhino_mcp.git
-cd rhino-mcp
+cd rhino_mcp
 
 # Install all dependencies (recommended)
 uv sync
@@ -719,7 +719,7 @@ Add to your project's `.mcp.json` or `~/.claude/mcp.json` (create the file if it
 }
 ```
 
-> **`DYLD_LIBRARY_PATH`** is required on macOS for SVG-to-PNG rendering (`read_svg`). It points to Homebrew's library directory where libcairo lives. On Linux or Windows omit this variable. Install cairo first if needed: `brew install cairo`.
+> **`DYLD_LIBRARY_PATH`** is required on macOS for SVG-to-PNG rendering (`read_svg`) when running the server **without Docker**. It points to Homebrew's library directory where libcairo lives. Install cairo first if needed: `brew install cairo`. On Linux or Windows omit this variable. **Docker users:** libcairo is bundled in the image — no Homebrew or `DYLD_LIBRARY_PATH` needed.
 
 Or start Claude Code with the server inline (API keys picked up from your shell environment):
 
