@@ -39,7 +39,7 @@ Control Rhino 3D from Claude, Cursor, Codex, and any other MCP-capable AI tool. 
   - [Manual Installation](#manual-installation)
   - [File-based Installation](#file-based-installation)
   - [Checking Plugin Status](#checking-plugin-status)
-- [All 223 Tools](#all-223-tools)
+- [All 314 Tools](#all-314-tools)
   - [Plugin Management](#plugin-management)
   - [Grasshopper — Canvas](#grasshopper--canvas)
   - [Grasshopper — Parameters](#grasshopper--parameters)
@@ -70,6 +70,19 @@ Control Rhino 3D from Claude, Cursor, Codex, and any other MCP-capable AI tool. 
   - [Asset Libraries (Poly Haven & Sketchfab)](#asset-libraries-poly-haven--sketchfab)
   - [VisualARQ (Architectural BIM)](#visualarq-architectural-bim)
   - [Lands Design (Landscape)](#lands-design-landscape)
+  - [Annotations](#annotations)
+  - [Blocks (Instance Definitions)](#blocks-instance-definitions)
+  - [Groups](#groups)
+  - [Analysis & Measurement](#analysis--measurement)
+  - [User Data (Object & Document Attributes)](#user-data-object--document-attributes)
+  - [Surface Operations](#surface-operations)
+  - [Mesh Operations](#mesh-operations)
+  - [Advanced Transforms](#advanced-transforms)
+  - [Extended Curve Operations](#extended-curve-operations)
+  - [Extended Selection](#extended-selection)
+  - [Extended Material Tools](#extended-material-tools)
+  - [Extended View Tools](#extended-view-tools)
+  - [Extended Document Tools](#extended-document-tools)
   - [Reference-Compatible Aliases](#reference-compatible-aliases)
 - [Studio Pipeline Env Vars](#studio-pipeline-env-vars)
 - [Building the Plugin from Source](#building-the-plugin-from-source)
@@ -168,7 +181,7 @@ The `command` + `args` lines are literally the shell command Claude Desktop runs
 
 #### Step 5 — Restart Claude Desktop and start using it
 
-Fully quit Claude Desktop (don't just close the window) and reopen it. Claude Desktop reads the config on launch, spawns the MCP server in the background, and the 223 Rhino tools become available automatically.
+Fully quit Claude Desktop (don't just close the window) and reopen it. Claude Desktop reads the config on launch, spawns the MCP server in the background, and the 314 Rhino tools become available automatically.
 
 Test it by typing in Claude:
 
@@ -257,7 +270,7 @@ Same as Path A Step 4. Type `MCPStart` in Rhino and confirm it shows `Listening 
 
 #### Step 5 — Restart Claude Desktop and start using it
 
-Fully quit and reopen Claude Desktop. It connects to the running container and the 223 tools appear.
+Fully quit and reopen Claude Desktop. It connects to the running container and the 314 tools appear.
 
 **Connection flow:**
 ```
@@ -1274,7 +1287,7 @@ You can also call `check_plugin_loaded(plugin_name="V-Ray")` directly to test wh
 
 ---
 
-## All 223 Tools
+## All 314 Tools
 
 ---
 
@@ -1826,6 +1839,188 @@ Lands Design adds landscape-specific objects (plants, terrain, paths, water) dir
 | `lands_get_plant_database` | `search_query=""`, `category=""` | Browse the Lands Design plant species database. Filter by search term and/or category (e.g. `"Trees"`, `"Shrubs"`, `"Groundcovers"`). Use this to find exact plant names before calling `lands_place_plant`. |
 | `lands_set_season` | `season="summer"` | Set the display season for all Lands Design plants and trees in the scene. `season`: `spring` \| `summer` \| `autumn` \| `winter`. Affects 3D representation and texture. |
 | `lands_export_plant_list` | `output_path`, `format="csv"` | Export a plant schedule (quantity takeoff) from the current model. `format`: `csv` \| `xlsx`. The schedule includes species name, count, size parameters, and location data. |
+
+---
+
+### Annotations
+
+| Tool | Description |
+|---|---|
+| `add_text` | Add a text annotation to the document at a 3D point with font, size, bold/italic options, name, and layer. |
+| `add_text_dot` | Add a text dot (balloon label) at a 3D point with optional font height. |
+| `add_leader` | Add a leader (line with arrowhead and optional text) through a list of 3D points. |
+
+---
+
+### Blocks (Instance Definitions)
+
+| Tool | Description |
+|---|---|
+| `create_block` | Create a block definition from selected objects with a base point. Optionally delete the input geometry. |
+| `insert_block` | Insert an instance of a named block at a point with scale and rotation. |
+| `explode_block` | Explode a block instance back to individual objects. |
+| `delete_block` | Delete a block definition by name. |
+| `list_blocks` | List all block definitions in the document. |
+
+---
+
+### Groups
+
+| Tool | Description |
+|---|---|
+| `create_group` | Create an empty named group, or pass `object_ids` to group objects immediately. |
+| `delete_group` | Delete a group by name. |
+| `add_to_group` | Add objects to an existing group. |
+| `remove_from_group` | Remove objects from a group. |
+| `list_groups` | List all groups in the document with their member counts. |
+| `select_by_group` | Select all objects belonging to a named group. |
+
+---
+
+### Analysis & Measurement
+
+| Tool | Description |
+|---|---|
+| `measure_distance` | Measure the Euclidean distance between two 3D points. |
+| `measure_curve_length` | Return the arc length of a curve. |
+| `measure_area` | Return the area of a closed curve or surface. |
+| `measure_volume` | Return the volume of a closed solid or polysurface. |
+| `get_bounding_box` | Return the axis-aligned bounding box of one or more objects. `world_coordinates=true` returns world-space bounds. |
+| `is_object_solid` | Return whether an object is a closed polysurface or closed mesh. |
+
+---
+
+### User Data (Object & Document Attributes)
+
+| Tool | Description |
+|---|---|
+| `set_user_text` | Set a key-value string pair on an object's user data. |
+| `get_user_text` | Get the value of a user data key on an object. |
+| `delete_user_text` | Delete a user data key from an object. |
+| `set_document_user_text` | Set a document-level key-value string (persisted in the .3dm file). |
+| `get_document_user_text` | Get a document-level user data value by key. |
+
+---
+
+### Surface Operations
+
+| Tool | Description |
+|---|---|
+| `revolve_curve` | Revolve a profile curve around an axis to create a surface of revolution. |
+| `sweep2` | Sweep a profile curve along two rail curves. |
+| `create_planar_surface` | Create a planar surface from a closed flat curve. |
+| `create_edge_surface` | Create a surface from 2–4 edge curves. |
+| `create_network_surface` | Create a surface from a network of crossing curves. |
+| `create_patch` | Fit a patch surface to a set of curves or points. |
+| `offset_surface` | Offset a surface by a distance. |
+| `split_brep` | Split a Brep with a cutting surface. |
+| `fillet_surfaces` | Fillet two surfaces with a given radius. |
+| `cap_planar_holes` | Cap all planar holes in a polysurface to make it solid. |
+| `extrude_curve_along_curve` | Extrude a profile curve along a path curve. |
+| `extrude_curve_to_point` | Extrude a curve to a point to create a cone-like surface. |
+| `duplicate_edge_curves` | Extract the edge curves of a Brep as standalone curve objects. |
+| `duplicate_surface_border` | Extract the outer border curve of a surface. |
+| `join_surfaces` | Join adjacent surfaces/Breps into a single polysurface. |
+| `explode_polysurface` | Explode a polysurface into individual surfaces. |
+| `unroll_surface` | Unroll a developable surface or polysurface to a flat pattern. |
+
+---
+
+### Mesh Operations
+
+| Tool | Description |
+|---|---|
+| `create_mesh` | Create a mesh from explicit vertex coordinates and face index lists. |
+| `create_planar_mesh` | Create a planar mesh from a closed flat curve. |
+| `mesh_from_surface` | Convert surfaces or polysurfaces to mesh objects. |
+| `mesh_boolean_union` | Boolean union two meshes. |
+| `mesh_boolean_difference` | Boolean difference of two meshes. |
+| `mesh_boolean_intersection` | Boolean intersection of two meshes. |
+| `join_meshes` | Join multiple mesh objects into a single mesh. |
+| `mesh_to_nurbs` | Convert a mesh to a NURBS polysurface. |
+| `mesh_offset` | Offset a mesh by a distance (creates a shell). |
+
+---
+
+### Advanced Transforms
+
+| Tool | Description |
+|---|---|
+| `mirror_objects` | Mirror objects about a plane defined by origin and normal. `copy=true` keeps originals. |
+| `copy_objects` | Copy objects by a translation vector. |
+| `array_linear` | Create a linear array of objects along a direction vector. |
+| `array_polar` | Create a polar (circular) array of objects around a center point. |
+| `orient_objects` | Orient objects from a reference plane to a target plane (2-point or 3-point orient). |
+
+---
+
+### Extended Curve Operations
+
+| Tool | Description |
+|---|---|
+| `create_rectangle` | Create a rectangle in a plane. |
+| `create_spiral` | Create a helix or flat spiral. |
+| `create_nurbs_curve` | Create a NURBS curve from control points. |
+| `create_blend_curve` | Create a smooth blend curve between two curves at given parameters. |
+| `fillet_curves` | Fillet two curves with a radius. |
+| `divide_curve` | Divide a curve into N equal segments and return the points. |
+| `divide_curve_length` | Divide a curve at intervals of a given arc length. |
+| `close_curve` | Close an open curve. |
+| `reverse_curve` | Reverse the direction of a curve. |
+| `rebuild_curve` | Rebuild a curve with a target degree and point count. |
+| `curve_closest_point` | Find the closest point on a curve to a test point. |
+| `evaluate_curve` | Evaluate the position, tangent, and curvature of a curve at a parameter. |
+| `curve_start_end_points` | Return the start and end points of a curve. |
+| `join_curves` | Join a set of curves into a single polycurve where endpoints match. |
+| `explode_curves` | Explode a polycurve into its component segments. |
+
+---
+
+### Extended Selection
+
+| Tool | Description |
+|---|---|
+| `select_all_objects` | Select all objects in the document. |
+| `deselect_all_objects` | Deselect all objects. |
+| `invert_selection` | Invert the current selection. |
+| `select_by_type` | Select all objects of a given geometry type (e.g. `Curve`, `Brep`, `Mesh`, `Point`). |
+| `select_by_layer` | Select all objects on a named layer. |
+| `select_by_name` | Select all objects with a given name. |
+| `delete_selected_objects` | Delete all currently selected objects. |
+| `get_last_created_objects` | Return the GUIDs of the most recently created objects. |
+
+---
+
+### Extended Material Tools
+
+| Tool | Description |
+|---|---|
+| `set_material_color` | Set the diffuse color of an object's material using RGB. Creates a new material if the object uses the default. |
+| `set_material_transparency` | Set the transparency (0.0–1.0) of an object's material. |
+| `set_material_shine` | Set the shininess (0.0–255.0) of an object's material. |
+| `add_material_to_layer` | Create a material and assign it to a layer by name. |
+
+---
+
+### Extended View Tools
+
+| Tool | Description |
+|---|---|
+| `zoom_extents` | Zoom the active viewport to show all objects. `all_views=true` zooms all viewports simultaneously. |
+| `zoom_selected` | Zoom the active viewport to fit the current selection. |
+| `get_view_info` | Return camera position, target, lens length, and display mode for a viewport. |
+| `set_display_mode` | Set the display mode of a viewport (`Wireframe`, `Shaded`, `Rendered`, `Ghosted`, `XRay`, etc.). |
+| `add_named_view` | Save the current viewport state as a named view. |
+| `restore_named_view` | Restore a previously saved named view. |
+
+---
+
+### Extended Document Tools
+
+| Tool | Description |
+|---|---|
+| `enable_redraw` | Enable or disable viewport redraw. Disable before batch operations, re-enable when done. |
+| `set_unit_system` | Set the document unit system (`Millimeters`, `Centimeters`, `Meters`, `Inches`, `Feet`, etc.). |
 
 ---
 
