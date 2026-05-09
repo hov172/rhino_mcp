@@ -232,3 +232,77 @@ def register(mcp: FastMCP) -> None:
         Returns zeros if no massing definition is currently open.
         """
         return _urban_get_metrics()
+
+    @mcp.tool(annotations=ToolAnnotations(title="Generate Urban Massing", destructiveHint=True))
+    def urban_generate_massing(
+        typology: str,
+        site_origin: list[float],
+        site_width: float,
+        site_depth: float,
+        params: dict[str, float] | None = None,
+        layer_prefix: str = "Urban",
+        rhino_id: str | None = None,
+    ) -> dict[str, object]:
+        """
+        Generate parametric 3D urban massing in Rhino by driving a pre-built
+        Grasshopper definition.
+
+        typology: One of "tower", "podium_tower", "courtyard", "perimeter_block",
+                  "street_grid".
+        site_origin: [x, y, z] in model units (metres). Baked geometry is moved
+                     here after solving.
+        site_width: Site width in metres.
+        site_depth: Site depth in metres.
+        params: Slider overrides, e.g. {"floor_count": 20, "residential_pct": 75}.
+                Any key from the typology's slider map is valid.
+        layer_prefix: Baked geometry goes to {layer_prefix}::Massing::{typology}.
+        Returns: {ok, typology, layer, gfa_m2, far, unit_count_est, open_space_pct}.
+        """
+        global _current_typology, _current_slider_guids, _current_metrics_guid, _current_bake_guid
+
+        if typology not in _TYPOLOGY_GH_MAP:
+            return {
+                "ok": False,
+                "error": f"Unknown typology '{typology}'. Valid: {sorted(_TYPOLOGY_GH_MAP)}",
+            }
+
+        gh_path = _TYPOLOGY_GH_MAP[typology]
+        open_result = _gh("gh_open_document", {"path": gh_path})
+        if not open_result.get("ok"):
+            return {"ok": False, "error": f"Failed to open {gh_path}: {open_result.get('error')}"}
+
+        slider_guids, metrics_guid, bake_guid = _resolve_slider_guids(typology)
+        _current_typology = typology
+        _current_slider_guids = slider_guids
+        _current_metrics_guid = metrics_guid
+        _current_bake_guid = bake_guid
+
+        combined: dict[str, float] = {"site_width": site_width, "site_depth": site_depth}
+        if params:
+            combined.update(params)
+        for key, value in combined.items():
+            if key in slider_guids:
+                _gh("gh_set_slider", {"instance_guid": slider_guids[key], "value": value})
+
+        run_result = _gh("gh_run_solution", {"wait_ms": 15000})
+        if not run_result.get("ok"):
+            return {"ok": False, "error": f"GH solution failed: {run_result.get('error')}"}
+
+        layer = f"{layer_prefix}::Massing::{typology}"
+        if bake_guid:
+            _gh("gh_bake", {"instance_guid": bake_guid, "layer": layer})
+
+        # Move baked geometry to site_origin if non-zero
+        ox, oy = float(site_origin[0]), float(site_origin[1])
+        oz = float(site_origin[2]) if len(site_origin) > 2 else 0.0
+        if ox != 0.0 or oy != 0.0 or oz != 0.0:
+            move_code = (
+                "import rhinoscriptsyntax as rs\n"
+                f"objs = rs.ObjectsByLayer('{layer}')\n"
+                f"if objs: rs.MoveObjects(objs, ({ox}, {oy}, {oz}))\n"
+                "result = {'moved': len(objs) if objs else 0}"
+            )
+            rhino.execute_python(move_code)
+
+        metrics = _urban_get_metrics()
+        return {"ok": True, "typology": typology, "layer": layer, **metrics}
