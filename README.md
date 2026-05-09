@@ -28,6 +28,7 @@ Control Rhino 3D from Claude, Cursor, Codex, and any other MCP-capable AI tool. 
   - [Windsurf](#windsurf)
   - [GitHub Copilot (VS Code)](#github-copilot-vs-code)
   - [Codex CLI](#codex-cli)
+  - [Gemini CLI](#gemini-cli)
   - [Docker / HTTP Transport](#docker--http-transport)
 - [Backend Selection](#backend-selection)
   - [Session & Instance Management](#session--instance-management)
@@ -775,17 +776,7 @@ Edit `~/Library/Application Support/ChatGPT/mcp.json` (macOS) or `%APPDATA%\Chat
 
 Replace `/path/to/rhino-mcp` with the absolute path to the cloned repo. Restart ChatGPT Desktop after saving.
 
-With Docker running, use the URL form instead:
-
-```json
-{
-  "mcpServers": {
-    "rhino": {
-      "url": "http://localhost:8000/"
-    }
-  }
-}
-```
+> **Note:** Requires ChatGPT Desktop 1.2025.x or newer with MCP enabled.
 
 ---
 
@@ -843,8 +834,6 @@ Edit `~/.codeium/windsurf/mcp_config.json` (macOS/Linux) or `%APPDATA%\Codeium\w
 
 Or via Windsurf Settings → MCP Servers → Add. Restart Windsurf after saving.
 
-With Docker: add a server with type `sse` and URL `http://localhost:8000/`.
-
 ---
 
 ### GitHub Copilot (VS Code)
@@ -893,20 +882,55 @@ Add to your workspace `.vscode/mcp.json` (per-project) or user `settings.json` (
 }
 ```
 
-With Docker running, use `"type": "http"` and `"url": "http://localhost:8000/"` instead of `command`/`args`.
-
 ---
 
 ### Codex CLI
 
-```bash
-RHINO_MCP_BACKEND=plugin \
-RHINO_MCP_HOST=127.0.0.1 \
-RHINO_MCP_PORT=1999 \
-ANTHROPIC_API_KEY="sk-ant-..." \
-FAL_KEY="..." \
-codex --mcp-server "uv run --directory /path/to/rhino-mcp python -m rhmcp"
+Add to `~/.codex/config.toml` (create the file if it doesn't exist):
+
+```toml
+[mcp_servers.rhino]
+command = "uv"
+args = ["run", "--directory", "/path/to/rhino-mcp", "python", "-m", "rhmcp"]
+
+[mcp_servers.rhino.env]
+RHINO_MCP_BACKEND = "plugin"
+RHINO_MCP_HOST = "127.0.0.1"
+RHINO_MCP_PORT = "1999"
+ANTHROPIC_API_KEY = "sk-ant-..."
+FAL_KEY = "..."
 ```
+
+Replace `/path/to/rhino-mcp` with the absolute path to the cloned repo. Codex reads this config automatically on start.
+
+---
+
+### Gemini CLI
+
+Add to `~/.gemini/settings.json` (create the file if it doesn't exist):
+
+```json
+{
+  "mcpServers": {
+    "rhino": {
+      "command": "uv",
+      "args": ["run", "--directory", "/path/to/rhino-mcp", "python", "-m", "rhmcp"],
+      "env": {
+        "RHINO_MCP_BACKEND": "plugin",
+        "RHINO_MCP_HOST": "127.0.0.1",
+        "RHINO_MCP_PORT": "1999",
+        "FAL_KEY": "...",
+        "DOCRAPTOR_API_KEY": "...",
+        "URBAN_AGENT_S3_BUCKET": "my-bucket",
+        "AWS_ACCESS_KEY_ID": "...",
+        "AWS_SECRET_ACCESS_KEY": "..."
+      }
+    }
+  }
+}
+```
+
+Replace `/path/to/rhino-mcp` with the absolute path to the cloned repo. Restart Gemini CLI after saving.
 
 ---
 
