@@ -1,87 +1,182 @@
-<claude-mem-context>
-# Memory Context
+# AGENTS.md — rhino-mcp Developer Guide for AI Agents
 
-# [rhino_mcp] recent context, 2026-05-09 2:13am EDT
+This file gives AI coding agents (Claude, Codex, Gemini, etc.) the context needed to work effectively in this codebase.
 
-Legend: 🎯session 🔴bugfix 🟣feature 🔄refactor ✅change 🔵discovery ⚖️decision 🚨security_alert 🔐security_note
-Format: ID TIME TYPE TITLE
-Fetch details: get_observations([IDs]) | Search: mem-search skill
+---
 
-Stats: 50 obs (17,651t read) | 614,525t work | 97% savings
+## What This Project Is
 
-### May 8, 2026
-2077 10:06p ✅ Task 1 Complete: Dependencies Committed (commit 45f394d)
-2078 10:07p 🟣 Task 38 Started: Design Language Generator Tests Written (TDD Red Phase)
-2079 10:08p 🔵 pytest Removed from venv After uv sync — Not a Declared Dependency
-2080 " 🔴 pytest Added as Dev Dependency; TDD Red Phase Confirmed for urban_design_language
-2081 " 🟣 urban_design_language.py Created — Full Implementation (TDD Green Phase)
-2082 " 🟣 urban_design_language Tests All Green — 145 Total Tests Passing
-2083 10:09p 🟣 Task 38 Complete: Design Language Generator Shipped (commit 0c1c305)
-2084 " 🔵 Spec Review: urban_design_language Largely Compliant — 3 Minor Deviations Found
-2085 10:10p 🟣 Task 39 Starting: AI Render Pipeline Implementation Underway
-2086 " 🔵 urban_design_language Not Yet Registered in MCP Server Entry Point
-2087 11:07p 🟣 Comprehensive Integration Test Suite for 12 Studio Pipeline MCP Tools
-2088 11:08p 🔵 Test/Implementation Key Mismatch in urban_preview_report Return Value
-2089 " 🔵 Pipeline Orchestrator Step Abort vs Continue Logic Confirmed
-2090 " 🔵 New Integration Test DL Abort Scenario Will Not Actually Abort Pipeline
-2091 " 🔴 Fixed 3 Test Assertion Bugs; Integration Test Now Passes 106/106
-2092 11:11p 🔵 Production Pipeline Has Silent Failure Bug When ANTHROPIC_API_KEY Missing
-2093 " 🔴 Pipeline Now Aborts on ok:False Return from Design Language Step
-2094 " ✅ Integration Test DL Abort Scenario Updated to Test Real Production Code Path
-2095 " 🟣 Pytest Suite Updated to Cover Both DL Abort Paths; All 9 Tests Pass
-2096 11:13p 🔵 Full pytest Suite: 157 Tests Pass After Pipeline Bug Fix
-2097 11:24p 🔵 rhino_mcp README Structure and Current Documentation State
-2098 " 🔵 rhino_mcp Python Package Dependencies and Claude Desktop Config
-2099 " ✅ README.md: Added API Key Setup Section and Fixed Install Command
-2100 11:25p ✅ Claude Desktop Config Example Updated with Full API Key env Block
-2101 " ✅ Claude Code CLI Config Example Updated with API Keys; Shell Env Note Added
-2102 " ✅ All Four AI Client Configs Now Include Studio Pipeline API Keys; README Verified
-2103 11:36p 🔵 RhinoMCP README Contains Full Step-by-Step Startup Instructions
-2104 " 🔵 RhinoMCP README Structure: 1454 Lines, No Quick Start Section
-2105 11:37p 🔵 RhinoMCP Requirements and Plugin Installation Method
-2106 " ✅ Quick Start Added to README Table of Contents
-2107 " 🟣 Quick Start Section Added to RhinoMCP README
-2108 11:43p 🔵 RhinoMCP Repo Has Uncommitted Changes and Untracked Test File
-2109 " ✅ test_studio_pipeline.py Moved to tests/ Directory
-2110 " 🔵 test_studio_pipeline_integration.py Is a Script, Not a pytest File
-2111 " 🔵 Solar Analysis Step in Studio Pipeline Is a Non-Functional Stub
-2112 " ✅ Housekeeping Commit: Test File Moved, uv.lock and AGENTS.md Updated
-2113 11:45p 🔵 urban_run_analysis Tool Already Implements Solar Analysis in urban.py
-2114 " 🔵 Solar Analysis Full Implementation Details: EPW Cities, GH Map, Report Template Fields
-2115 11:46p 🔵 urban.py Internal State Architecture: _urban_get_metrics Helper and No Solar Cache
-2116 " 🟣 _current_solar Session State Added to urban.py
-2117 " 🔵 _urban_get_metrics Helper Pattern Confirmed for Parallel Solar Helper
-2118 " 🟣 _urban_run_solar_internal Private Helper Added to urban.py
-2119 11:47p 🔵 urban_run_analysis Still Has Duplicate Solar Logic; urban_clear_massing Needs _current_solar Reset
-2120 " 🔄 urban_run_analysis Refactored to Delegate to _urban_run_solar_internal
-### May 9, 2026
-2121 12:00a 🔴 C# Nullable Reference Warning Fixes in RhinoHandlers.cs
-2122 " 🔵 CS8600 Warning: TryGetValue out Parameter Assigns Nullable to Non-Nullable string
-2123 " 🔴 CS8600 Warning Fix: GetPluginCommands resolvedName Changed to Nullable string?
-S907 Determining which git commits postdate the Docker image build and whether a rebuild is needed (May 9 at 12:08 AM)
-S908 Verify Docker container has the correct solar analysis wiring by inspecting live container code (May 9 at 12:08 AM)
-S909 Docker image verification: confirm solar analysis wiring and all urban tool files are baked into the container image — no rebuild needed (May 9 at 12:08 AM)
-S910 Survey all Markdown files in the project to identify documentation that may need updating (May 9 at 12:08 AM)
-S911 Audit README.md and rhino_plugin/README.md for remaining stale content — checking for old tool counts, old framework targets, and other outdated references (May 9 at 12:11 AM)
-S912 Full README.md and project file audit — checking pyproject.toml version, Dockerfile, manifest.yml, and rhino_plugin/README.md for stale content (May 9 at 12:11 AM)
-S913 Full project-wide audit of stale content across all documentation and config files (May 9 at 12:12 AM)
-S914 Full documentation audit and stale-content cleanup for rhino_mcp project — fixing version mismatches, framework targets, plugin filenames, test counts, and solar stub references (May 9 at 12:12 AM)
-S915 Create a private GitHub repository and push local code to remote (May 9 at 12:16 AM)
-2124 12:25a 🟣 Private Git Repository Created and Pushed
-2125 12:26a 🔵 macOS .DS_Store Files Staged for Commit in rhino_mcp Repo
-2126 " 🔴 .DS_Store Files Excluded via .gitignore in rhino_mcp
-S916 Create a private GitHub repo, push code, and clean up .DS_Store files from version control (May 9 at 12:26 AM)
-**Investigated**: Working directory /Users/helpdesk/Developer/GitHub/rhino_mcp was examined for git status after initial push, revealing .DS_Store files had been staged for commit.
+**rhino-mcp** is an MCP (Model Context Protocol) server that lets AI assistants control Rhino 3D. It has two components:
 
-**Learned**: .DS_Store files were not excluded by .gitignore prior to this session. The initial push included a tracked .DS_Store at the repo root. Adding `**/.DS_Store` to .gitignore prevents recursive future tracking but does not untrack already-committed files.
+1. **Python MCP server** (`src/rhmcp/`) — FastMCP-based server exposing 320 tools to AI clients
+2. **C# Rhino plugin** (`rhino_plugin/`) — TCP socket server inside Rhino (port 1999) that receives and executes commands
 
-**Completed**: - Private GitHub repo `hov172/rhino_mcp` created and initial code pushed to `main` branch.
-    - `.DS_Store` files unstaged before committing.
-    - `.gitignore` updated with `.DS_Store` and `**/.DS_Store` patterns (commit `33abc70`).
-    - .gitignore change pushed to `origin/main`. Repo is clean and synced at https://github.com/hov172/rhino_mcp.
+Current version: **0.7.0**
 
-**Next Steps**: No further steps indicated — repo setup and cleanup are complete.
+---
 
+## Architecture
 
-Access 615k tokens of past work via get_observations([IDs]) or mem-search skill.
-</claude-mem-context>
+```
+AI client (Claude Desktop / Claude Code / Cursor / Codex)
+    ↓ MCP protocol
+Python MCP server (src/rhmcp/)
+    ↓ TCP JSON (port 1999)           ↓ rhinocode CLI (fallback)
+C# plugin (rhino-mcp.rhp)         rhinocode subprocess
+    ↓
+Rhino 3D document
+```
+
+**Dual backend**: `plugin_client.py` tries the TCP socket first; if unavailable, `rhinocode.py` falls back to the `rhinocode` CLI. Controlled by `RHINO_MCP_BACKEND` env var (`auto` | `plugin` | `rhinocode`).
+
+---
+
+## Key Files
+
+| Path | Purpose |
+|---|---|
+| `src/rhmcp/server.py` | MCP server entry point, registers all tool modules |
+| `src/rhmcp/tools/` | 50+ tool modules, each with a `register(mcp)` function |
+| `src/rhmcp/tools_helpers/backend.py` | Backend router: `execute_python`, `run_plugin_or_python`, `run_command` |
+| `src/rhmcp/tools_helpers/plugin_client.py` | TCP socket client with exponential backoff retry |
+| `src/rhmcp/tools_helpers/rhinocode.py` | rhinocode CLI fallback, temp-file polling for results |
+| `src/rhmcp/tools_helpers/validate.py` | Shared input validators returning error-dicts or None |
+| `src/rhmcp/tools_helpers/errors.py` | `normalize()` — ensures consistent `ok`/`error` shape |
+| `rhino_plugin/RhinoMCPPlugin/` | C# Rhino plugin source |
+| `rhino_plugin/package/manifest.yml` | Yak package manifest |
+| `rhino_plugin/release/` | Built artifacts (.rhp, .yak) — gitignored |
+| `tests/` | Unit, smoke, script-syntax, and integration tests |
+| `scripts/package-plugin.sh` | Build .rhp and .yak from source |
+
+---
+
+## Tool Module Pattern
+
+Every tool module follows this pattern:
+
+```python
+from rhmcp.tools_helpers import backend as rhino
+from rhmcp.tools_helpers import validate
+
+def register(mcp: FastMCP) -> None:
+    @mcp.tool(annotations=ToolAnnotations(title="...", readOnlyHint=True))
+    def my_tool(object_id: str, ...) -> dict[str, object]:
+        err = validate.guid(object_id, "object_id")
+        if err: return err
+        payload = {"op": "my_op", "object_id": object_id, ...}
+        code = "__mcp_data = {!r}\n{}".format(payload, _SCRIPT)
+        return rhino.execute_python(code, rhino_id=rhino_id)
+
+_SCRIPT = r'''
+import rhinoscriptsyntax as rs
+data = __mcp_data
+# ... rhinoscript code ...
+result = {"key": value}   # must assign result
+'''
+```
+
+**Rules:**
+- Always validate inputs with `validate.*` before building payloads
+- Always assign `result` in `_SCRIPT` blocks — it's captured and returned via `__MCP_RESULT__:` sentinel
+- Use `if err: return err` (E701 — intentional single-line pattern, not a bug)
+- Tools that call `_run("op", locals())` must have `payload.pop("err", None)` in `_run()` to avoid locals() pollution
+
+---
+
+## Validators (`validate.py`)
+
+| Function | What it checks |
+|---|---|
+| `validate.guid(v, field)` | UUID format `xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx` |
+| `validate.guid_list(v, field)` | Non-empty list of valid GUIDs |
+| `validate.coordinate(v, field)` | `[x, y, z]` list of 3 numbers |
+| `validate.color(v, field)` | `[r, g, b]` or `[r, g, b, a]` integers 0–255 |
+| `validate.layer_name(v, field)` | Non-empty string |
+| `validate.positive(v, field)` | Number > 0 |
+| `validate.non_negative(v, field)` | Number >= 0 |
+
+All return `{"ok": False, "error": "...", "error_code": "..."}` on failure, `None` on success.
+
+---
+
+## Running Tests
+
+```bash
+# Unit + smoke + script-syntax (no Rhino needed)
+uv run pytest tests/test_tools_unit.py tests/test_smoke.py tests/test_script_syntax.py -v -m "not integration"
+
+# Integration tests (requires Rhino running with plugin loaded)
+uv run pytest tests/test_integration.py -v -m integration
+
+# Lint
+uvx ruff check src/rhmcp --select=E,W,F --ignore=E501,E701,E402,E741
+```
+
+**137 unit/smoke/syntax tests** must pass before any commit. The CI workflow (`.github/workflows/ci.yml`) runs these on Python 3.10/3.11/3.12.
+
+---
+
+## Building Packages
+
+```bash
+# Build .rhp and .yak (requires Rhino 8 installed on macOS)
+bash scripts/package-plugin.sh
+
+# Build Python wheel and sdist
+uv build
+```
+
+Artifacts land in `rhino_plugin/release/` (gitignored — upload to GitHub releases manually).
+
+---
+
+## Version Bumping Checklist
+
+When bumping the version (e.g. `0.7.0` → `0.8.0`):
+
+1. `pyproject.toml` — `version = "..."`
+2. `rhino_plugin/RhinoMCPPlugin/RhinoMCPPlugin.csproj` — `<Version>...</Version>`
+3. `rhino_plugin/package/manifest.yml` — `version: ...`
+4. `rhino_plugin/release/manifest.yml` — `version: ...`
+5. `README.md` — download links and yak filename
+6. `CHANGELOG.md` — add new entry at top
+
+Tool count: verify with `uv run python -c "..."` (see below) before updating docs.
+
+```bash
+uv run python -c "
+from mcp.server.fastmcp import FastMCP
+import rhmcp.tools as t, pkgutil, importlib
+mcp = FastMCP('c')
+for _, n, _ in pkgutil.iter_modules(t.__path__):
+    m = importlib.import_module(f'rhmcp.tools.{n}')
+    if hasattr(m, 'register'): m.register(mcp)
+print(len(mcp._tool_manager._tools))
+"
+```
+
+---
+
+## Error Response Shape
+
+All tools must return consistent shapes via `errors.normalize()`:
+
+```python
+# Success
+{"ok": True, "result": {...}, "backend": "plugin"|"rhinocode"}
+
+# Failure
+{"ok": False, "error": "human-readable message", "error_code": "SNAKE_CASE_CODE"}
+```
+
+Common error codes: `INVALID_GUID`, `INVALID_COLOR`, `INVALID_COORDINATE`, `INVALID_VALUE`, `INVALID_GUID_LIST`, `SOCKET_UNAVAILABLE`, `RHINOCODE_DISPATCH_FAILED`, `COMPUTATION_FAILED`.
+
+---
+
+## CI / GitHub Actions
+
+`.github/workflows/ci.yml` runs on every push/PR to `main`:
+- **test** job: Python 3.10, 3.11, 3.12 — `uv sync --group dev` then pytest (no integration tests)
+- **lint** job: ruff with `--select=E,W,F --ignore=E501,E701,E402,E741`
+
+The `E701` ignore is intentional — `if err: return err` is the project's validation pattern.
