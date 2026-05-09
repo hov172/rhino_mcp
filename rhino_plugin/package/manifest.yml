@@ -3,7 +3,7 @@ version: 0.5.0
 authors:
   - Rhino MCP Contributors
 description: >
-  MCP socket server plug-in for Rhino 7/8. Exposes 319 tools covering
+  MCP socket server plug-in for Rhino 7/8. Exposes 321 tools covering
   geometry creation, Grasshopper automation, layers, materials, rendering,
   BIM (VisualARQ/Lands Design), AI 3D generation, and the UrbanAgent Studio
   Pipeline (design language, AI renders, solar analysis, PDF report export).
