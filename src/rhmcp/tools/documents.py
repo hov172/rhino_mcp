@@ -37,11 +37,11 @@ def _configure_cairo_path() -> None:
     os.environ["DYLD_LIBRARY_PATH"] = ":".join(p for p in parts if p)
 
 _configure_cairo_path()
-from pathlib import Path
-from typing import Any
+from pathlib import Path  # noqa: E402
+from typing import Any  # noqa: E402
 
-from mcp.server.fastmcp import FastMCP
-from mcp.types import ToolAnnotations
+from mcp.server.fastmcp import FastMCP  # noqa: E402
+from mcp.types import ToolAnnotations  # noqa: E402
 
 # ---------------------------------------------------------------------------
 # Helpers
@@ -420,8 +420,6 @@ def register(mcp: FastMCP) -> None:
         # Parse metadata
         try:
             root = _ET.fromstring(svg_text)
-            ns = {"svg": "http://www.w3.org/2000/svg"}
-            tag = root.tag.split("}")[-1] if "}" in root.tag else root.tag
 
             width  = root.get("width", "")
             height = root.get("height", "")

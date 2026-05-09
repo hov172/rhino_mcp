@@ -466,7 +466,7 @@ catch (Exception ex)
                             with open(fpath, "wb") as fh:
                                 for blob in stream.iter_bytes(chunk_size=65536):
                                     fh.write(blob)
-                    except Exception as exc:  # noqa: BLE001
+                    except Exception:  # noqa: BLE001
                         continue  # skip channels that fail to download
 
                 channel_paths[ch_label] = fpath

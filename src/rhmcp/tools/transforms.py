@@ -27,7 +27,7 @@ def register(mcp: FastMCP) -> None:
         ``copy=True`` keeps the originals. Uses selected objects when ``ids`` is omitted.
         """
         if ids is not None:
-            err = validate.guid_list(ids, "ids");
+            err = validate.guid_list(ids, "ids")
             if err: return err
         err = validate.coordinate(plane_origin, "plane_origin") or validate.coordinate(plane_normal, "plane_normal")
         if err: return err

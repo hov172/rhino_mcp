@@ -5,7 +5,6 @@ Tools for Rhino document inspection and file operations.
 from __future__ import annotations
 
 import json
-from typing import Any
 
 from mcp.server.fastmcp import FastMCP
 from mcp.types import ToolAnnotations

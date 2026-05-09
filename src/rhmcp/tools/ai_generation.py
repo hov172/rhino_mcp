@@ -14,7 +14,6 @@ Typical workflow:
 
 from __future__ import annotations
 
-import base64
 import mimetypes
 import os
 import tempfile
@@ -539,7 +538,7 @@ def _rodin_poll(job_id: str, api_key: str | None) -> dict[str, object]:
             resp = client.post(_RODIN_POLL_URL, json=payload, headers=headers)
             resp.raise_for_status()
             data: dict[str, Any] = resp.json()
-    except httpx.HTTPStatusError as exc:
+    except httpx.HTTPStatusError:
         # Fall back to simpler GET poll
         return _rodin_poll_simple_get(job_id, task_uuid, output_format, headers)
     except httpx.RequestError as exc:

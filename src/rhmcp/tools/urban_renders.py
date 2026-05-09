@@ -180,7 +180,7 @@ def register(mcp: FastMCP) -> None:
                 rendered_b64, request_id, seed_used = _fal_img2img(
                     original_b64, prompt, negative, strength, seed
                 )
-            except Exception as first_err:
+            except Exception:
                 try:
                     rendered_b64, request_id, seed_used = _fal_img2img(
                         original_b64, prompt, negative, max(0.1, strength - 0.1), seed

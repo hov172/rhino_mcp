@@ -57,7 +57,7 @@ def register(mcp: FastMCP) -> None:
         err = _check()
         if err:
             return {"success": False, "message": err}
-        code = f"""
+        code = """
 import rhinoscriptsyntax as rs
 import Rhino
 Rhino.RhinoApp.RunScript("_-Render", False)

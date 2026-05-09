@@ -25,9 +25,10 @@ def _step_generate_design_language(
     from rhmcp.tools.urban_design_language import _current_design_language
     if not brief and _current_design_language:
         return {"ok": True, **_current_design_language}
-    import rhmcp.tools.urban_design_language as m
     from rhmcp.tools import urban_design_language
-    import anthropic, json, os
+    import anthropic
+    import json
+    import os
     api_key = os.environ.get("ANTHROPIC_API_KEY")
     if not api_key:
         return {"ok": False, "error": "ANTHROPIC_API_KEY not set"}
