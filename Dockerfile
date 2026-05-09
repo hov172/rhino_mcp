@@ -1,4 +1,23 @@
-FROM python:3.12-slim
+FROM python:3.13-slim
+
+LABEL org.opencontainers.image.title="rhino-mcp" \
+      org.opencontainers.image.version="0.3.0" \
+      org.opencontainers.image.description="MCP server for Rhino 3D — 223 tools" \
+      org.opencontainers.image.source="https://github.com/hov172/rhino_mcp"
+
+# System libraries required by Python dependencies:
+#   cairosvg  → libcairo2, libpango, libgdk-pixbuf2.0, shared-mime-info
+#   pillow-heif → libheif1
+#   pymupdf   → libmupdf (bundled wheel — no extra system dep needed)
+RUN apt-get update && apt-get install -y --no-install-recommends \
+        libcairo2 \
+        libpango-1.0-0 \
+        libpangocairo-1.0-0 \
+        libgdk-pixbuf2.0-0 \
+        libffi8 \
+        shared-mime-info \
+        libheif1 \
+    && rm -rf /var/lib/apt/lists/*
 
 # Install uv
 COPY --from=ghcr.io/astral-sh/uv:latest /uv /uvx /usr/local/bin/
@@ -13,14 +32,22 @@ RUN uv sync --frozen --no-install-project
 
 # Copy source and install the project
 COPY src/ ./src/
+
+# Copy data files (prompts, templates, notes)
+COPY src/rhmcp/data/ ./src/rhmcp/data/
+COPY src/rhmcp/report_templates/ ./src/rhmcp/report_templates/ 2>/dev/null || true
+
 RUN uv sync --frozen
 
-# Default: connect to Rhino plugin running on the Docker host
+# Connect to the Rhino plugin running on the Docker host
 ENV RHINO_MCP_HOST=host.docker.internal
 ENV RHINO_MCP_PORT=1999
+ENV RHINO_MCP_BACKEND=auto
 
 EXPOSE 8000
 
-# HTTP transport so multiple AI clients can connect simultaneously.
-# Pass API keys at runtime: docker run -e ANTHROPIC_API_KEY=... -e FAL_KEY=...
+# HTTP transport — multiple AI clients can connect simultaneously.
+# Pass API keys at runtime:
+#   docker run -e ANTHROPIC_API_KEY=... -e FAL_KEY=... -e DOCRAPTOR_API_KEY=... \
+#              -p 8000:8000 rhino-mcp
 CMD ["uv", "run", "python", "-m", "rhmcp", "--transport", "http", "--host", "0.0.0.0", "--port", "8000"]

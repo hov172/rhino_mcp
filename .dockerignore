@@ -21,3 +21,8 @@ test_*.py
 *.cs
 yak_*.py
 live_results.txt
+*.3dm
+*.yak
+*.rhp
+.mcp.json
+.pytest_cache
