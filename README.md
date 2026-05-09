@@ -174,7 +174,7 @@ The `command` + `args` lines are literally the shell command Claude Desktop runs
 
 1. Open Rhino 3D.
 2. The plugin starts its socket server automatically — you should see `Rhino MCP listening on 127.0.0.1:1999` in the command history.
-3. If the auto-start message doesn't appear, type `MCPStart` manually. Use `MCPStatus` to verify at any time.
+3. If the auto-start message doesn't appear, type `MCPStart` manually. Use `MCPStatus` to verify at any time. Type `MCPHelp` to open the full documentation in your browser.
 
 #### Step 5 — Restart Claude Desktop and start using it
 
@@ -263,7 +263,7 @@ No `command`, no `args`, no `env` — the API keys were set when you ran the con
 
 #### Step 4 — Start Rhino and activate the plugin
 
-Same as Path A Step 4. Open Rhino — the plugin auto-starts and prints `Rhino MCP listening on 127.0.0.1:1999`. Run `MCPStatus` to confirm.
+Same as Path A Step 4. Open Rhino — the plugin auto-starts and prints `Rhino MCP listening on 127.0.0.1:1999`. Run `MCPStatus` to confirm. Type `MCPHelp` to open the docs.
 
 #### Step 5 — Restart Claude Desktop and start using it
 
@@ -614,7 +614,7 @@ Once running, point your AI client at `http://localhost:8000/` — see [Docker /
    MCPStart
    ```
 
-   Use `MCPStatus` at any time to confirm the server is running. If you see `already listening`, the auto-start succeeded and no further action is needed.
+   Use `MCPStatus` at any time to confirm the server is running. If you see `already listening`, the auto-start succeeded and no further action is needed. Type `MCPHelp` to open the full documentation in your browser.
 
 4. *(Optional — for Grasshopper tools)* Open Grasshopper:
 
@@ -623,6 +623,15 @@ Once running, point your AI client at `http://localhost:8000/` — see [Docker /
    ```
 
    Grasshopper must be open at least once before GH tools will work. After the first open, `gh_new_definition` will open it automatically on demand.
+
+### Rhino plugin commands
+
+| Command | Description |
+|---|---|
+| `MCPStart` | Start the socket server manually (fallback if auto-start fails) |
+| `MCPStop` | Stop the socket server |
+| `MCPStatus` | Print the current server status and bind address |
+| `MCPHelp` | Open the full documentation in your browser |
 
 ---
 
