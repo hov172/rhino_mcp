@@ -193,6 +193,16 @@ def register(mcp: FastMCP) -> None:
                     pass
                 dl_result = _step_generate_design_language(
                     brief_text, typology, far, "London", style_hints)
+                if not dl_result.get("ok"):
+                    err = dl_result.get("error", "design language generation failed")
+                    step_log.append({"step": "design_language", "status": "failed",
+                                     "duration_s": round(time.time() - t0, 2),
+                                     "summary": err})
+                    _current_run["running"] = False
+                    return {"ok": False, "run_id": run_id, "report_url": "",
+                            "renders": [], "metrics": {}, "design_language": {},
+                            "step_log": step_log, "elapsed_s": round(time.time() - t_start, 2),
+                            "errors": [f"design_language: {err}"]}
                 step_log.append({"step": "design_language", "status": "ok",
                                  "duration_s": round(time.time() - t0, 2),
                                  "summary": f"Design language: {dl_result.get('style_name', '')}"})

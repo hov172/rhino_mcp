@@ -85,11 +85,27 @@ class TestUrbanRunStudioPipeline(unittest.TestCase):
     def test_design_language_failure_aborts_pipeline(self):
         tools = _register()
         with patch("rhmcp.tools.urban_pipeline._step_generate_design_language",
-                   side_effect=Exception("API error")):
+                   return_value={"ok": False, "error": "ANTHROPIC_API_KEY not set"}), \
+             patch("rhmcp.tools.urban_pipeline._step_render_views") as mock_rv, \
+             patch("rhmcp.tools.urban_pipeline._step_export_report") as mock_exp:
             r = tools["urban_run_studio_pipeline"](
                 project_name="P", scheme_name="S", render_views=["Perspective"])
         self.assertFalse(r["ok"])
         self.assertFalse(r.get("report_url", ""))
+        mock_rv.assert_not_called()
+        mock_exp.assert_not_called()
+
+    def test_design_language_exception_aborts_pipeline(self):
+        tools = _register()
+        with patch("rhmcp.tools.urban_pipeline._step_generate_design_language",
+                   side_effect=Exception("network error")), \
+             patch("rhmcp.tools.urban_pipeline._step_render_views") as mock_rv, \
+             patch("rhmcp.tools.urban_pipeline._step_export_report") as mock_exp:
+            r = tools["urban_run_studio_pipeline"](
+                project_name="P", scheme_name="S", render_views=["Perspective"])
+        self.assertFalse(r["ok"])
+        mock_rv.assert_not_called()
+        mock_exp.assert_not_called()
 
 
 class TestUrbanListPipelineRuns(unittest.TestCase):
