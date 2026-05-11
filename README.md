@@ -111,35 +111,43 @@ Two paths to get up and running. Both require the Rhino plugin — only the serv
 
 **Prerequisites:** Rhino 7 or 8, Python 3.10+, [uv](https://docs.astral.sh/uv/) (`pip install uv`), git.
 
-#### Step 1 — Install the Rhino plugin
-
-Download [`rhino-mcp.rhp`](https://github.com/hov172/rhino_mcp/releases/download/v0.8.0/rhino-mcp.rhp) from the latest release and copy it to the Rhino plug-ins folder:
-
-```bash
-# macOS — user plug-ins folder (no admin rights needed)
-mkdir -p "$HOME/Library/Application Support/McNeel/Rhinoceros/8.0/Plug-ins"
-cp ~/Downloads/rhino-mcp.rhp \
-   "$HOME/Library/Application Support/McNeel/Rhinoceros/8.0/Plug-ins/"
-```
-
-```powershell
-# Windows
-Copy-Item "$env:USERPROFILE\Downloads\rhino-mcp.rhp" `
-  "$env:APPDATA\McNeel\Rhinoceros\8.0\Plug-ins\"
-```
-
-Restart Rhino. The plugin loads automatically and starts its socket server on `127.0.0.1:1999`.
-
-> **This is the only file that goes into Rhino.** The Python server (Step 2) is completely separate and never touches Rhino's plug-ins folder.
-
-#### Step 2 — Clone the repo and install the Python MCP server
-
-> **This is the MCP server — not another plugin.** It runs as a separate Python process outside Rhino and exposes the 334 tools to your AI client. Claude Desktop spawns it automatically from this folder.
+#### Step 1 — Clone the repo
 
 ```bash
 git clone https://github.com/hov172/rhino_mcp.git
 cd rhino_mcp
 uv sync          # installs all Python dependencies from uv.lock
+```
+
+#### Step 2 — Install the Rhino plugin
+
+The plugin file is included in the repo at `rhino_plugin/package/rhino-mcp.rhp`. Copy it to the Rhino plug-ins folder:
+
+```bash
+# macOS — user plug-ins folder (no admin rights needed)
+mkdir -p "$HOME/Library/Application Support/McNeel/Rhinoceros/8.0/Plug-ins"
+cp rhino_plugin/package/rhino-mcp.rhp \
+   "$HOME/Library/Application Support/McNeel/Rhinoceros/8.0/Plug-ins/"
+```
+
+```powershell
+# Windows
+Copy-Item rhino_plugin\package\rhino-mcp.rhp `
+  "$env:APPDATA\McNeel\Rhinoceros\8.0\Plug-ins\"
+```
+
+Restart Rhino. The plugin loads automatically and starts its socket server on `127.0.0.1:1999`.
+
+> **This is the only file that goes into Rhino.** The `rhino_plugin/package/rhino-mcp.rhp` file is the Rhino plugin binary. The rest of the repo (the `src/` folder) is the Python MCP server — a completely separate process that never touches Rhino's plug-ins folder.
+>
+> **Don't have the repo yet?** You can also download [`rhino-mcp.rhp`](https://github.com/hov172/rhino_mcp/releases/download/v0.8.0/rhino-mcp.rhp) directly from the latest release and copy it from `~/Downloads/` instead.
+
+#### Step 3 — Verify the Python MCP server
+
+> **This is the MCP server — not another plugin.** It runs as a separate Python process outside Rhino and exposes the 334 tools to your AI client. Claude Desktop spawns it automatically from the cloned folder.
+
+```bash
+uv run python -m rhmcp --help
 ```
 
 Verify it works:
@@ -150,7 +158,7 @@ uv run python -m rhmcp --help
 
 You should see the argument list printed. If you see it, the server is ready.
 
-#### Step 3 — Tell Claude Desktop how to start the server
+#### Step 4 — Tell Claude Desktop how to start the server
 
 This is the key step. Claude Desktop reads a config file and **automatically spawns the MCP server as a child process** every time you open it — you never start the server manually.
 
@@ -185,13 +193,13 @@ The `command` + `args` lines are literally the shell command Claude Desktop runs
 
 > **Minimum required:** only `RHINO_MCP_BACKEND`, `RHINO_MCP_HOST`, and `RHINO_MCP_PORT` are needed for basic Rhino tools. Add `ANTHROPIC_API_KEY` for design language generation and `FAL_KEY` for AI renders. Leave others blank or omit them.
 
-#### Step 4 — Start Rhino
+#### Step 5 — Start Rhino
 
 1. Open Rhino 3D.
 2. The plugin starts its socket server automatically — you should see `Rhino MCP listening on 127.0.0.1:1999` in the command history.
 3. If the auto-start message doesn't appear, type `MCPStart` manually. Use `MCPStatus` to verify at any time. Type `MCPHelp` to open the full documentation in your browser.
 
-#### Step 5 — Restart Claude Desktop and start using it
+#### Step 6 — Restart Claude Desktop and start using it
 
 Fully quit Claude Desktop (don't just close the window) and reopen it. Claude Desktop reads the config on launch, spawns the MCP server in the background, and the 334 Rhino tools become available automatically.
 
