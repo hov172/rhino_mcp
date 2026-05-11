@@ -977,6 +977,8 @@ for obj in doc.Objects:
 
 normalized = 0
 skipped = 0
+color_mat_cache = {}
+
 for obj_id, layer_idx, obj_name in candidates:
     obj = doc.Objects.Find(obj_id)
     if obj is None or obj.IsDeleted:
@@ -984,15 +986,41 @@ for obj_id, layer_idx, obj_name in candidates:
         continue
     geo = obj.Geometry
     otype = obj.ObjectType.ToString()
+
+    # Preserve the original diffuse color so the scene matches the source file.
+    orig_mat = doc.Materials[obj.Attributes.MaterialIndex]
+    dc = orig_mat.DiffuseColor
+    color_key = (dc.R, dc.G, dc.B)
+
+    if color_key not in color_mat_cache:
+        mat_name = "MCP_Color_{:02X}{:02X}{:02X}".format(*color_key)
+        mat_idx = -1
+        for i, m in enumerate(doc.Materials):
+            if not m.IsDeleted and m.Name == mat_name:
+                mat_idx = i
+                break
+        if mat_idx == -1:
+            mat_idx = doc.Materials.Add()
+            new_mat = doc.Materials[mat_idx]
+            new_mat.Name = mat_name
+            new_mat.DiffuseColor = dc
+            new_mat.CommitChanges()
+        color_mat_cache[color_key] = mat_idx
+    clean_mat_idx = color_mat_cache[color_key]
+
     new_geo = geo.DuplicateMesh() if otype == "Mesh" else geo.Duplicate()
     if new_geo is None:
         skipped += 1
         continue
+
     oa = Rhino.DocObjects.ObjectAttributes()
     oa.LayerIndex = layer_idx
     oa.Name = obj_name
-    oa.ColorSource = Rhino.DocObjects.ObjectColorSource.ColorFromLayer
-    oa.MaterialSource = Rhino.DocObjects.ObjectMaterialSource.MaterialFromParent
+    oa.ColorSource = Rhino.DocObjects.ObjectColorSource.ColorFromObject
+    oa.ObjectColor = dc
+    oa.MaterialSource = Rhino.DocObjects.ObjectMaterialSource.MaterialFromObject
+    oa.MaterialIndex = clean_mat_idx
+
     doc.Objects.Delete(obj_id, True)
     if otype == "Mesh":
         doc.Objects.AddMesh(new_geo, oa)
@@ -1005,6 +1033,7 @@ for obj_id, layer_idx, obj_name in candidates:
     else:
         doc.Objects.Add(new_geo, oa)
     normalized += 1
+
 doc.Views.Redraw()
-result = {"normalized": normalized, "skipped": skipped}
+result = {"normalized": normalized, "skipped": skipped, "unique_colors": len(color_mat_cache)}
 '''

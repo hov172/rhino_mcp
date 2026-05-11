@@ -310,6 +310,9 @@ else:
     skipped = 0
 
     if _mcp_normalize:
+        # Cache of color_key -> material_index to share one material per unique RGB.
+        color_mat_cache = {}
+
         for obj in new_objs:
             if obj.ObjectType.ToString() == "Light":
                 continue
@@ -322,6 +325,31 @@ else:
             layer_idx = obj.Attributes.LayerIndex
             obj_name = obj.Attributes.Name or ""
 
+            # Read the original material's diffuse color BEFORE deleting.
+            # This is what the online viewer sees — we preserve it so the
+            # imported scene looks the same as the source file intended.
+            orig_mat = doc.Materials[obj.Attributes.MaterialIndex]
+            dc = orig_mat.DiffuseColor
+            color_key = (dc.R, dc.G, dc.B)
+
+            # Find or create a clean MCP_Color material for this RGB so it
+            # works in both Shaded and Rendered mode (not just wireframe).
+            if color_key not in color_mat_cache:
+                mat_name = "MCP_Color_{:02X}{:02X}{:02X}".format(*color_key)
+                mat_idx = -1
+                for i, m in enumerate(doc.Materials):
+                    if not m.IsDeleted and m.Name == mat_name:
+                        mat_idx = i
+                        break
+                if mat_idx == -1:
+                    mat_idx = doc.Materials.Add()
+                    new_mat = doc.Materials[mat_idx]
+                    new_mat.Name = mat_name
+                    new_mat.DiffuseColor = dc
+                    new_mat.CommitChanges()
+                color_mat_cache[color_key] = mat_idx
+            clean_mat_idx = color_mat_cache[color_key]
+
             new_geo = geo.DuplicateMesh() if otype == "Mesh" else geo.Duplicate()
             if new_geo is None:
                 skipped += 1
@@ -332,8 +360,10 @@ else:
             oa = Rhino.DocObjects.ObjectAttributes()
             oa.LayerIndex = layer_idx
             oa.Name = obj_name
-            oa.ColorSource = Rhino.DocObjects.ObjectColorSource.ColorFromLayer
-            oa.MaterialSource = Rhino.DocObjects.ObjectMaterialSource.MaterialFromParent
+            oa.ColorSource = Rhino.DocObjects.ObjectColorSource.ColorFromObject
+            oa.ObjectColor = dc
+            oa.MaterialSource = Rhino.DocObjects.ObjectMaterialSource.MaterialFromObject
+            oa.MaterialIndex = clean_mat_idx
 
             if otype == "Mesh":
                 doc.Objects.AddMesh(new_geo, oa)
@@ -513,6 +543,7 @@ for obj in doc.Objects:
 
 normalized = 0
 skipped = 0
+color_mat_cache = {}
 
 for obj_id, layer_idx in candidates:
     obj = doc.Objects.Find(obj_id)
@@ -523,7 +554,28 @@ for obj_id, layer_idx in candidates:
     geo = obj.Geometry
     otype = obj.ObjectType.ToString()
 
-    # Duplicate the geometry so we have a fresh copy after deletion.
+    # Preserve the original diffuse color from the baked material so the
+    # scene looks the same as in the source file / online viewers.
+    orig_mat = doc.Materials[obj.Attributes.MaterialIndex]
+    dc = orig_mat.DiffuseColor
+    color_key = (dc.R, dc.G, dc.B)
+
+    if color_key not in color_mat_cache:
+        mat_name = "MCP_Color_{:02X}{:02X}{:02X}".format(*color_key)
+        mat_idx = -1
+        for i, m in enumerate(doc.Materials):
+            if not m.IsDeleted and m.Name == mat_name:
+                mat_idx = i
+                break
+        if mat_idx == -1:
+            mat_idx = doc.Materials.Add()
+            new_mat = doc.Materials[mat_idx]
+            new_mat.Name = mat_name
+            new_mat.DiffuseColor = dc
+            new_mat.CommitChanges()
+        color_mat_cache[color_key] = mat_idx
+    clean_mat_idx = color_mat_cache[color_key]
+
     if otype == "Mesh":
         new_geo = geo.DuplicateMesh()
     else:
@@ -533,12 +585,13 @@ for obj_id, layer_idx in candidates:
         skipped += 1
         continue
 
-    # Build clean attributes: inherit color and material from layer.
     oa = Rhino.DocObjects.ObjectAttributes()
     oa.LayerIndex = layer_idx
-    oa.ColorSource = Rhino.DocObjects.ObjectColorSource.ColorFromLayer
-    oa.MaterialSource = Rhino.DocObjects.ObjectMaterialSource.MaterialFromParent
     oa.Name = obj.Attributes.Name or ""
+    oa.ColorSource = Rhino.DocObjects.ObjectColorSource.ColorFromObject
+    oa.ObjectColor = dc
+    oa.MaterialSource = Rhino.DocObjects.ObjectMaterialSource.MaterialFromObject
+    oa.MaterialIndex = clean_mat_idx
 
     doc.Objects.Delete(obj_id, True)
 
@@ -563,9 +616,11 @@ result = {
     "ok": True,
     "normalized": normalized,
     "skipped": skipped,
+    "unique_colors_preserved": len(color_mat_cache),
     "note": (
-        "Objects re-added with MaterialFromParent + ColorFromLayer. "
-        "You can now set object colors and materials freely via standard attribute APIs."
+        "Original material colors preserved as MCP_Color materials. "
+        "Colors now display correctly in Shaded and Rendered modes. "
+        "Use set_object_display_color to change colors if needed."
     ),
 }
 '''
