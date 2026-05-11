@@ -61,11 +61,12 @@ def register(mcp: FastMCP) -> None:
     def import_file(
         path: str,
         normalize_materials: bool = True,
+        show_textures_in_viewport: bool = False,
         rhino_id: str | None = None,
     ) -> dict[str, object]:
         """
         Import a file into the active Rhino document and immediately fix any
-        import-baked material overrides so colors work correctly afterward.
+        import-baked material overrides so colors and textures work correctly.
 
         Supports any format Rhino can open: ``.3ds``, ``.obj``, ``.fbx``,
         ``.stl``, ``.iges``, ``.step``, ``.dxf``, ``.dwg``, ``.3dm``, etc.
@@ -80,15 +81,28 @@ def register(mcp: FastMCP) -> None:
         so ``set_object_display_color`` and all other color APIs work immediately
         after import.
 
+        **Texture handling:** When texture image files exist alongside the source
+        file (or in ``textures/``, ``maps/``, ``tex/``, ``images/`` subdirs),
+        they are automatically resolved and applied to the new clean materials.
+        Diffuse color, specular, shine, transparency, bump maps, and bitmap
+        textures are all preserved from the original materials.  Textures only
+        display in ``Rendered`` viewport mode — set ``show_textures_in_viewport``
+        to ``True`` to switch automatically.
+
         :param path: Absolute path to the file to import.
         :param normalize_materials: When ``True`` (default), automatically
             normalize import-baked materials on newly imported objects.
-            Set to ``False`` only if you want to preserve the source-file
-            materials for rendering.
+            Set to ``False`` only if you want to keep raw importer state.
+        :param show_textures_in_viewport: Switch the active viewport to
+            ``Rendered`` mode after import so texture maps are visible.
+            Only meaningful when texture files are present alongside the source.
         """
-        code = "_mcp_import_path = {}\n_mcp_normalize = {!r}\n{}".format(
-            json.dumps(path), normalize_materials, _IMPORT_SCRIPT
-        )
+        code = (
+            "_mcp_import_path = {}\n"
+            "_mcp_normalize = {!r}\n"
+            "_mcp_show_textures = {!r}\n"
+            "{}"
+        ).format(json.dumps(path), normalize_materials, show_textures_in_viewport, _IMPORT_SCRIPT)
         return rhino.execute_python(code, rhino_id=rhino_id)
 
     @mcp.tool(annotations=ToolAnnotations(title="Set Object Display Color", destructiveHint=True))
@@ -243,14 +257,16 @@ for layer in doc.Layers:
 views = [view.ActiveViewport.Name for view in doc.Views]
 
 # Detect objects whose material was baked at import time.
-# These objects will ignore ObjectColor changes until normalized.
+# Exclude MCP_ materials — those were already normalized by this tool.
 baked_ids = []
 for obj in doc.Objects:
     if obj.IsDeleted:
         continue
     if (obj.Attributes.MaterialSource.ToString() == "MaterialFromObject"
             and obj.Attributes.MaterialIndex >= 0):
-        baked_ids.append(str(obj.Id))
+        mat = doc.Materials[obj.Attributes.MaterialIndex]
+        if not mat.IsDeleted and not mat.Name.startswith("MCP_"):
+            baked_ids.append(str(obj.Id))
 
 warnings = []
 if baked_ids:
@@ -286,56 +302,84 @@ result = {"saved": bool(ok), "path": doc.Path}
 '''
 
 _IMPORT_SCRIPT = r'''
+import os
+import re
 import rhinoscriptsyntax as rs
 import Rhino
 import Rhino.Geometry as rg
 
 doc = Rhino.RhinoDoc.ActiveDoc
 
-# Snapshot IDs that exist before the import.
 ids_before = set(str(o.Id) for o in doc.Objects if not o.IsDeleted)
-
-# Run the import via Rhino command; False = don't echo to command line.
 cmd = '_-Import "{}" _Enter'.format(_mcp_import_path)
 ok = rs.Command(cmd, False)
 
 if not ok:
     result = {"ok": False, "error": "Import command failed for: {}".format(_mcp_import_path)}
 else:
-    # Identify objects that were just added.
     new_objs = [o for o in doc.Objects
                 if not o.IsDeleted and str(o.Id) not in ids_before]
-
     normalized = 0
     skipped = 0
+    textures_applied = 0
 
     if _mcp_normalize:
-        # Cache of color_key -> material_index to share one material per unique RGB.
-        color_mat_cache = {}
+        # Build texture search dirs from the source file location.
+        _src_dir = os.path.dirname(_mcp_import_path) if _mcp_import_path else ""
+        _search_dirs = [_src_dir] + [os.path.join(_src_dir, s)
+                        for s in ("textures", "maps", "tex", "images")]
+
+        def _resolve_tex(raw):
+            if not raw:
+                return ""
+            if os.path.isfile(raw):
+                return raw
+            base = os.path.basename(raw)
+            if not base:
+                return ""
+            for d in _search_dirs:
+                c = os.path.join(d, base)
+                if os.path.isfile(c):
+                    return c
+            return ""
+
+        mat_cache = {}  # (R,G,B,bitmap,bump) -> mat_idx
 
         for obj in new_objs:
             if obj.ObjectType.ToString() == "Light":
                 continue
             src = obj.Attributes.MaterialSource.ToString()
             if not (src == "MaterialFromObject" and obj.Attributes.MaterialIndex >= 0):
-                continue  # already clean
+                continue
 
             geo = obj.Geometry
             otype = obj.ObjectType.ToString()
             layer_idx = obj.Attributes.LayerIndex
             obj_name = obj.Attributes.Name or ""
 
-            # Read the original material's diffuse color BEFORE deleting.
-            # This is what the online viewer sees — we preserve it so the
-            # imported scene looks the same as the source file intended.
             orig_mat = doc.Materials[obj.Attributes.MaterialIndex]
             dc = orig_mat.DiffuseColor
-            color_key = (dc.R, dc.G, dc.B)
+            shine = orig_mat.Shine
+            transparency = orig_mat.Transparency
+            specular = orig_mat.SpecularColor
+            emission = orig_mat.EmissionColor
 
-            # Find or create a clean MCP_Color material for this RGB so it
-            # works in both Shaded and Rendered mode (not just wireframe).
-            if color_key not in color_mat_cache:
-                mat_name = "MCP_Color_{:02X}{:02X}{:02X}".format(*color_key)
+            _bt = orig_mat.GetBitmapTexture()
+            _nt = orig_mat.GetBumpTexture()
+            bitmap_path = _resolve_tex(_bt.FileReference.FullPath if _bt is not None else "")
+            bump_path   = _resolve_tex(_nt.FileReference.FullPath if _nt is not None else "")
+
+            mat_key = (dc.R, dc.G, dc.B, bitmap_path, bump_path)
+
+            if mat_key not in mat_cache:
+                _hex = "{:02X}{:02X}{:02X}".format(dc.R, dc.G, dc.B)
+                if bitmap_path:
+                    _bname = re.sub(r'[^A-Za-z0-9]', '_',
+                                    os.path.splitext(os.path.basename(bitmap_path))[0])[:14]
+                    mat_name = "MCP_Tex_{}_{}".format(_hex, _bname)
+                else:
+                    mat_name = "MCP_Color_{}".format(_hex)
+
                 mat_idx = -1
                 for i, m in enumerate(doc.Materials):
                     if not m.IsDeleted and m.Name == mat_name:
@@ -343,12 +387,26 @@ else:
                         break
                 if mat_idx == -1:
                     mat_idx = doc.Materials.Add()
-                    new_mat = doc.Materials[mat_idx]
-                    new_mat.Name = mat_name
-                    new_mat.DiffuseColor = dc
-                    new_mat.CommitChanges()
-                color_mat_cache[color_key] = mat_idx
-            clean_mat_idx = color_mat_cache[color_key]
+                    nm = doc.Materials[mat_idx]
+                    nm.Name = mat_name
+                    nm.DiffuseColor = dc
+                    nm.Shine = shine
+                    nm.Transparency = transparency
+                    nm.SpecularColor = specular
+                    nm.EmissionColor = emission
+                    if bitmap_path:
+                        try:
+                            nm.SetBitmapTexture(bitmap_path)
+                        except Exception:
+                            pass
+                    if bump_path:
+                        try:
+                            nm.SetBumpTexture(bump_path)
+                        except Exception:
+                            pass
+                    nm.CommitChanges()
+                mat_cache[mat_key] = mat_idx
+            clean_mat_idx = mat_cache[mat_key]
 
             new_geo = geo.DuplicateMesh() if otype == "Mesh" else geo.Duplicate()
             if new_geo is None:
@@ -377,6 +435,11 @@ else:
                 doc.Objects.Add(new_geo, oa)
 
             normalized += 1
+            if bitmap_path:
+                textures_applied += 1
+
+    if _mcp_show_textures and textures_applied > 0:
+        rs.Command("_SetDisplayMode _Mode=Rendered", False)
 
     doc.Views.Redraw()
 
@@ -385,8 +448,13 @@ else:
         "path": _mcp_import_path,
         "objects_imported": len(new_objs),
         "materials_normalized": normalized,
+        "textures_applied": textures_applied,
         "skipped": skipped,
         "normalize_materials": _mcp_normalize,
+        "tip": (
+            "Switch viewport to Rendered mode to see texture maps."
+            if textures_applied > 0 and not _mcp_show_textures else ""
+        ),
     }
 '''
 
@@ -510,14 +578,36 @@ result = {
 '''
 
 _NORMALIZE_SCRIPT = r'''
+import os
+import re
 import Rhino
 import Rhino.Geometry as rg
 
 doc = Rhino.RhinoDoc.ActiveDoc
 
+# Build texture search dirs from the open document's location (if saved).
+_doc_dir = os.path.dirname(doc.Path) if doc.Path else ""
+_search_dirs = ([_doc_dir] + [os.path.join(_doc_dir, s)
+                for s in ("textures", "maps", "tex", "images")]
+                if _doc_dir else [])
+
+def _resolve_tex(raw):
+    if not raw:
+        return ""
+    if os.path.isfile(raw):
+        return raw
+    base = os.path.basename(raw)
+    if not base:
+        return ""
+    for d in _search_dirs:
+        c = os.path.join(d, base)
+        if os.path.isfile(c):
+            return c
+    return ""
+
 # Resolve target layer indices.  None means all layers.
 if _mcp_layer_names is None:
-    target_layer_indices = None  # sentinel: match everything
+    target_layer_indices = None
 else:
     target_layer_indices = set()
     for lname in _mcp_layer_names:
@@ -525,25 +615,23 @@ else:
         if lyr is not None:
             target_layer_indices.add(lyr.Index)
 
-# Snapshot the IDs so we can iterate safely while deleting.
 candidates = []
 for obj in doc.Objects:
-    if obj.IsDeleted:
-        continue
-    if obj.ObjectType.ToString() == "Light":
+    if obj.IsDeleted or obj.ObjectType.ToString() == "Light":
         continue
     if target_layer_indices is not None:
         if obj.Attributes.LayerIndex not in target_layer_indices:
             continue
-    # Only objects whose material source is baked from import need fixing.
-    # MaterialFromObject with an index >= 0 is the tell-tale sign.
     src = obj.Attributes.MaterialSource.ToString()
     if src == "MaterialFromObject" and obj.Attributes.MaterialIndex >= 0:
-        candidates.append((obj.Id, obj.Attributes.LayerIndex))
+        mat = doc.Materials[obj.Attributes.MaterialIndex]
+        if not mat.IsDeleted and not mat.Name.startswith("MCP_"):
+            candidates.append((obj.Id, obj.Attributes.LayerIndex))
 
 normalized = 0
 skipped = 0
-color_mat_cache = {}
+textures_applied = 0
+mat_cache = {}  # (R,G,B,bitmap,bump) -> mat_idx
 
 for obj_id, layer_idx in candidates:
     obj = doc.Objects.Find(obj_id)
@@ -554,14 +642,29 @@ for obj_id, layer_idx in candidates:
     geo = obj.Geometry
     otype = obj.ObjectType.ToString()
 
-    # Preserve the original diffuse color from the baked material so the
-    # scene looks the same as in the source file / online viewers.
     orig_mat = doc.Materials[obj.Attributes.MaterialIndex]
     dc = orig_mat.DiffuseColor
-    color_key = (dc.R, dc.G, dc.B)
+    shine = orig_mat.Shine
+    transparency = orig_mat.Transparency
+    specular = orig_mat.SpecularColor
+    emission = orig_mat.EmissionColor
 
-    if color_key not in color_mat_cache:
-        mat_name = "MCP_Color_{:02X}{:02X}{:02X}".format(*color_key)
+    _bt = orig_mat.GetBitmapTexture()
+    _nt = orig_mat.GetBumpTexture()
+    bitmap_path = _resolve_tex(_bt.FileReference.FullPath if _bt is not None else "")
+    bump_path   = _resolve_tex(_nt.FileReference.FullPath if _nt is not None else "")
+
+    mat_key = (dc.R, dc.G, dc.B, bitmap_path, bump_path)
+
+    if mat_key not in mat_cache:
+        _hex = "{:02X}{:02X}{:02X}".format(dc.R, dc.G, dc.B)
+        if bitmap_path:
+            _bname = re.sub(r'[^A-Za-z0-9]', '_',
+                            os.path.splitext(os.path.basename(bitmap_path))[0])[:14]
+            mat_name = "MCP_Tex_{}_{}".format(_hex, _bname)
+        else:
+            mat_name = "MCP_Color_{}".format(_hex)
+
         mat_idx = -1
         for i, m in enumerate(doc.Materials):
             if not m.IsDeleted and m.Name == mat_name:
@@ -569,18 +672,28 @@ for obj_id, layer_idx in candidates:
                 break
         if mat_idx == -1:
             mat_idx = doc.Materials.Add()
-            new_mat = doc.Materials[mat_idx]
-            new_mat.Name = mat_name
-            new_mat.DiffuseColor = dc
-            new_mat.CommitChanges()
-        color_mat_cache[color_key] = mat_idx
-    clean_mat_idx = color_mat_cache[color_key]
+            nm = doc.Materials[mat_idx]
+            nm.Name = mat_name
+            nm.DiffuseColor = dc
+            nm.Shine = shine
+            nm.Transparency = transparency
+            nm.SpecularColor = specular
+            nm.EmissionColor = emission
+            if bitmap_path:
+                try:
+                    nm.SetBitmapTexture(bitmap_path)
+                except Exception:
+                    pass
+            if bump_path:
+                try:
+                    nm.SetBumpTexture(bump_path)
+                except Exception:
+                    pass
+            nm.CommitChanges()
+        mat_cache[mat_key] = mat_idx
+    clean_mat_idx = mat_cache[mat_key]
 
-    if otype == "Mesh":
-        new_geo = geo.DuplicateMesh()
-    else:
-        new_geo = geo.Duplicate()
-
+    new_geo = geo.DuplicateMesh() if otype == "Mesh" else geo.Duplicate()
     if new_geo is None:
         skipped += 1
         continue
@@ -609,18 +722,20 @@ for obj_id, layer_idx in candidates:
         doc.Objects.Add(new_geo, oa)
 
     normalized += 1
+    if bitmap_path:
+        textures_applied += 1
 
 doc.Views.Redraw()
 
 result = {
     "ok": True,
     "normalized": normalized,
+    "textures_applied": textures_applied,
     "skipped": skipped,
-    "unique_colors_preserved": len(color_mat_cache),
-    "note": (
-        "Original material colors preserved as MCP_Color materials. "
-        "Colors now display correctly in Shaded and Rendered modes. "
-        "Use set_object_display_color to change colors if needed."
+    "unique_materials": len(mat_cache),
+    "tip": (
+        "Switch viewport to Rendered mode to see texture maps."
+        if textures_applied > 0 else ""
     ),
 }
 '''

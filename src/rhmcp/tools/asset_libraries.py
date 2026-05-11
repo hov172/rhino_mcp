@@ -963,21 +963,46 @@ output.AppendLine(ok ? "Imported: " + filePath : "Failed: " + filePath);
 
 
 _NORMALIZE_ALL_BAKED_SCRIPT = r'''
+import os
+import re
 import Rhino
 import Rhino.Geometry as rg
 
 doc = Rhino.RhinoDoc.ActiveDoc
+
+_doc_dir = os.path.dirname(doc.Path) if doc.Path else ""
+_search_dirs = ([_doc_dir] + [os.path.join(_doc_dir, s)
+                for s in ("textures", "maps", "tex", "images")]
+                if _doc_dir else [])
+
+def _resolve_tex(raw):
+    if not raw:
+        return ""
+    if os.path.isfile(raw):
+        return raw
+    base = os.path.basename(raw)
+    if not base:
+        return ""
+    for d in _search_dirs:
+        c = os.path.join(d, base)
+        if os.path.isfile(c):
+            return c
+    return ""
+
 candidates = []
 for obj in doc.Objects:
     if obj.IsDeleted or obj.ObjectType.ToString() == "Light":
         continue
     src = obj.Attributes.MaterialSource.ToString()
     if src == "MaterialFromObject" and obj.Attributes.MaterialIndex >= 0:
-        candidates.append((obj.Id, obj.Attributes.LayerIndex, obj.Attributes.Name or ""))
+        mat = doc.Materials[obj.Attributes.MaterialIndex]
+        if not mat.IsDeleted and not mat.Name.startswith("MCP_"):
+            candidates.append((obj.Id, obj.Attributes.LayerIndex, obj.Attributes.Name or ""))
 
 normalized = 0
 skipped = 0
-color_mat_cache = {}
+textures_applied = 0
+mat_cache = {}
 
 for obj_id, layer_idx, obj_name in candidates:
     obj = doc.Objects.Find(obj_id)
@@ -987,13 +1012,29 @@ for obj_id, layer_idx, obj_name in candidates:
     geo = obj.Geometry
     otype = obj.ObjectType.ToString()
 
-    # Preserve the original diffuse color so the scene matches the source file.
     orig_mat = doc.Materials[obj.Attributes.MaterialIndex]
     dc = orig_mat.DiffuseColor
-    color_key = (dc.R, dc.G, dc.B)
+    shine = orig_mat.Shine
+    transparency = orig_mat.Transparency
+    specular = orig_mat.SpecularColor
+    emission = orig_mat.EmissionColor
 
-    if color_key not in color_mat_cache:
-        mat_name = "MCP_Color_{:02X}{:02X}{:02X}".format(*color_key)
+    _bt = orig_mat.GetBitmapTexture()
+    _nt = orig_mat.GetBumpTexture()
+    bitmap_path = _resolve_tex(_bt.FileReference.FullPath if _bt is not None else "")
+    bump_path   = _resolve_tex(_nt.FileReference.FullPath if _nt is not None else "")
+
+    mat_key = (dc.R, dc.G, dc.B, bitmap_path, bump_path)
+
+    if mat_key not in mat_cache:
+        _hex = "{:02X}{:02X}{:02X}".format(dc.R, dc.G, dc.B)
+        if bitmap_path:
+            _bname = re.sub(r'[^A-Za-z0-9]', '_',
+                            os.path.splitext(os.path.basename(bitmap_path))[0])[:14]
+            mat_name = "MCP_Tex_{}_{}".format(_hex, _bname)
+        else:
+            mat_name = "MCP_Color_{}".format(_hex)
+
         mat_idx = -1
         for i, m in enumerate(doc.Materials):
             if not m.IsDeleted and m.Name == mat_name:
@@ -1001,12 +1042,26 @@ for obj_id, layer_idx, obj_name in candidates:
                 break
         if mat_idx == -1:
             mat_idx = doc.Materials.Add()
-            new_mat = doc.Materials[mat_idx]
-            new_mat.Name = mat_name
-            new_mat.DiffuseColor = dc
-            new_mat.CommitChanges()
-        color_mat_cache[color_key] = mat_idx
-    clean_mat_idx = color_mat_cache[color_key]
+            nm = doc.Materials[mat_idx]
+            nm.Name = mat_name
+            nm.DiffuseColor = dc
+            nm.Shine = shine
+            nm.Transparency = transparency
+            nm.SpecularColor = specular
+            nm.EmissionColor = emission
+            if bitmap_path:
+                try:
+                    nm.SetBitmapTexture(bitmap_path)
+                except Exception:
+                    pass
+            if bump_path:
+                try:
+                    nm.SetBumpTexture(bump_path)
+                except Exception:
+                    pass
+            nm.CommitChanges()
+        mat_cache[mat_key] = mat_idx
+    clean_mat_idx = mat_cache[mat_key]
 
     new_geo = geo.DuplicateMesh() if otype == "Mesh" else geo.Duplicate()
     if new_geo is None:
@@ -1033,7 +1088,14 @@ for obj_id, layer_idx, obj_name in candidates:
     else:
         doc.Objects.Add(new_geo, oa)
     normalized += 1
+    if bitmap_path:
+        textures_applied += 1
 
 doc.Views.Redraw()
-result = {"normalized": normalized, "skipped": skipped, "unique_colors": len(color_mat_cache)}
+result = {
+    "normalized": normalized,
+    "textures_applied": textures_applied,
+    "skipped": skipped,
+    "unique_materials": len(mat_cache),
+}
 '''
