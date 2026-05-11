@@ -57,6 +57,40 @@ def register(mcp: FastMCP) -> None:
         code = "__mcp_units = {!r}\n{}".format(unit_system, _UNITS_SCRIPT)
         return rhino.execute_python(code, rhino_id=rhino_id)
 
+    @mcp.tool(annotations=ToolAnnotations(title="Import File", destructiveHint=True))
+    def import_file(
+        path: str,
+        normalize_materials: bool = True,
+        rhino_id: str | None = None,
+    ) -> dict[str, object]:
+        """
+        Import a file into the active Rhino document and immediately fix any
+        import-baked material overrides so colors work correctly afterward.
+
+        Supports any format Rhino can open: ``.3ds``, ``.obj``, ``.fbx``,
+        ``.stl``, ``.iges``, ``.step``, ``.dxf``, ``.dwg``, ``.3dm``, etc.
+
+        **Why normalize_materials matters:** 3DS, FBX, and OBJ importers stamp
+        every mesh with ``MaterialFromObject`` from the source file.  Any
+        subsequent attempt to set ``ObjectColor`` or assign a new material via
+        ``ModifyAttributes`` will be silently ignored because Rhino's display
+        cache retains the import-time material color.  With ``normalize_materials``
+        enabled (the default) this tool detects newly added objects with baked
+        materials and re-adds them with clean ``ObjectAttributes`` automatically,
+        so ``set_object_display_color`` and all other color APIs work immediately
+        after import.
+
+        :param path: Absolute path to the file to import.
+        :param normalize_materials: When ``True`` (default), automatically
+            normalize import-baked materials on newly imported objects.
+            Set to ``False`` only if you want to preserve the source-file
+            materials for rendering.
+        """
+        code = "_mcp_import_path = {}\n_mcp_normalize = {!r}\n{}".format(
+            json.dumps(path), normalize_materials, _IMPORT_SCRIPT
+        )
+        return rhino.execute_python(code, rhino_id=rhino_id)
+
     @mcp.tool(annotations=ToolAnnotations(title="Set Object Display Color", destructiveHint=True))
     def set_object_display_color(
         color: list[int],
@@ -249,6 +283,81 @@ if _mcp_path:
 else:
     ok = doc.Save()
 result = {"saved": bool(ok), "path": doc.Path}
+'''
+
+_IMPORT_SCRIPT = r'''
+import rhinoscriptsyntax as rs
+import Rhino
+import Rhino.Geometry as rg
+
+doc = Rhino.RhinoDoc.ActiveDoc
+
+# Snapshot IDs that exist before the import.
+ids_before = set(str(o.Id) for o in doc.Objects if not o.IsDeleted)
+
+# Run the import via Rhino command; False = don't echo to command line.
+cmd = '_-Import "{}" _Enter'.format(_mcp_import_path)
+ok = rs.Command(cmd, False)
+
+if not ok:
+    result = {"ok": False, "error": "Import command failed for: {}".format(_mcp_import_path)}
+else:
+    # Identify objects that were just added.
+    new_objs = [o for o in doc.Objects
+                if not o.IsDeleted and str(o.Id) not in ids_before]
+
+    normalized = 0
+    skipped = 0
+
+    if _mcp_normalize:
+        for obj in new_objs:
+            if obj.ObjectType.ToString() == "Light":
+                continue
+            src = obj.Attributes.MaterialSource.ToString()
+            if not (src == "MaterialFromObject" and obj.Attributes.MaterialIndex >= 0):
+                continue  # already clean
+
+            geo = obj.Geometry
+            otype = obj.ObjectType.ToString()
+            layer_idx = obj.Attributes.LayerIndex
+            obj_name = obj.Attributes.Name or ""
+
+            new_geo = geo.DuplicateMesh() if otype == "Mesh" else geo.Duplicate()
+            if new_geo is None:
+                skipped += 1
+                continue
+
+            doc.Objects.Delete(obj.Id, True)
+
+            oa = Rhino.DocObjects.ObjectAttributes()
+            oa.LayerIndex = layer_idx
+            oa.Name = obj_name
+            oa.ColorSource = Rhino.DocObjects.ObjectColorSource.ColorFromLayer
+            oa.MaterialSource = Rhino.DocObjects.ObjectMaterialSource.MaterialFromParent
+
+            if otype == "Mesh":
+                doc.Objects.AddMesh(new_geo, oa)
+            elif otype == "Brep":
+                doc.Objects.AddBrep(new_geo, oa)
+            elif otype == "Surface":
+                doc.Objects.AddSurface(new_geo, oa)
+            elif otype == "Curve":
+                doc.Objects.AddCurve(new_geo, oa)
+            else:
+                doc.Objects.Add(new_geo, oa)
+
+            normalized += 1
+
+    doc.Views.Redraw()
+
+    result = {
+        "ok": True,
+        "path": _mcp_import_path,
+        "objects_imported": len(new_objs),
+        "materials_normalized": normalized,
+        "skipped": skipped,
+        "normalize_materials": _mcp_normalize,
+    }
 '''
 
 _SET_COLOR_SCRIPT = r'''

@@ -17,6 +17,7 @@ import httpx
 from mcp.server.fastmcp import FastMCP
 from mcp.types import ToolAnnotations
 
+from rhmcp.tools_helpers import backend as rhino
 from rhmcp.tools_helpers import plugin_client
 
 # ---------------------------------------------------------------------------
@@ -945,6 +946,65 @@ output.AppendLine(ok ? "Imported: " + filePath : "Failed: " + filePath);
             "execute_rhinocommon_csharp_code", {"code": csharp_code}
         )
         result.setdefault("ok", result.get("status") not in {"error"})
-        return result
     except OSError as exc:
         return {"ok": False, "error": f"Plugin socket unavailable: {exc}"}
+
+    # Normalize import-baked materials so ObjectColor and material changes
+    # work correctly after this import.  3DS/FBX/OBJ importers stamp every
+    # mesh with MaterialFromObject; ModifyAttributes alone won't fix the
+    # display cache — only delete+readd clears it.
+    if result.get("ok"):
+        norm = rhino.execute_python(_NORMALIZE_ALL_BAKED_SCRIPT)
+        result["materials_normalized"] = (
+            norm.get("script_result", {}).get("normalized", 0)
+        )
+
+    return result
+
+
+_NORMALIZE_ALL_BAKED_SCRIPT = r'''
+import Rhino
+import Rhino.Geometry as rg
+
+doc = Rhino.RhinoDoc.ActiveDoc
+candidates = []
+for obj in doc.Objects:
+    if obj.IsDeleted or obj.ObjectType.ToString() == "Light":
+        continue
+    src = obj.Attributes.MaterialSource.ToString()
+    if src == "MaterialFromObject" and obj.Attributes.MaterialIndex >= 0:
+        candidates.append((obj.Id, obj.Attributes.LayerIndex, obj.Attributes.Name or ""))
+
+normalized = 0
+skipped = 0
+for obj_id, layer_idx, obj_name in candidates:
+    obj = doc.Objects.Find(obj_id)
+    if obj is None or obj.IsDeleted:
+        skipped += 1
+        continue
+    geo = obj.Geometry
+    otype = obj.ObjectType.ToString()
+    new_geo = geo.DuplicateMesh() if otype == "Mesh" else geo.Duplicate()
+    if new_geo is None:
+        skipped += 1
+        continue
+    oa = Rhino.DocObjects.ObjectAttributes()
+    oa.LayerIndex = layer_idx
+    oa.Name = obj_name
+    oa.ColorSource = Rhino.DocObjects.ObjectColorSource.ColorFromLayer
+    oa.MaterialSource = Rhino.DocObjects.ObjectMaterialSource.MaterialFromParent
+    doc.Objects.Delete(obj_id, True)
+    if otype == "Mesh":
+        doc.Objects.AddMesh(new_geo, oa)
+    elif otype == "Brep":
+        doc.Objects.AddBrep(new_geo, oa)
+    elif otype == "Surface":
+        doc.Objects.AddSurface(new_geo, oa)
+    elif otype == "Curve":
+        doc.Objects.AddCurve(new_geo, oa)
+    else:
+        doc.Objects.Add(new_geo, oa)
+    normalized += 1
+doc.Views.Redraw()
+result = {"normalized": normalized, "skipped": skipped}
+'''
