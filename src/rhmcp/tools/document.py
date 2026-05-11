@@ -57,6 +57,50 @@ def register(mcp: FastMCP) -> None:
         code = "__mcp_units = {!r}\n{}".format(unit_system, _UNITS_SCRIPT)
         return rhino.execute_python(code, rhino_id=rhino_id)
 
+    @mcp.tool(annotations=ToolAnnotations(title="Set Object Display Color", destructiveHint=True))
+    def set_object_display_color(
+        color: list[int],
+        object_ids: list[str] | None = None,
+        layer_names: list[str] | None = None,
+        rhino_id: str | None = None,
+    ) -> dict[str, object]:
+        """
+        Set the display color of objects so it shows correctly in **both**
+        Shaded and Rendered viewport modes.
+
+        **Why a dedicated tool is needed:** Rhino's color pipeline has three
+        priority levels.  ``ObjectColor`` alone only controls wireframe edges;
+        face fill in Shaded mode uses the assigned material's diffuse color
+        instead.  Rendered mode always uses the material and ignores
+        ``ObjectColor`` entirely.  This tool sets both the object color and a
+        matching render material in one call, so the result is consistent
+        across all display modes.
+
+        If any targeted object still has an import-baked material
+        (``MaterialFromObject`` from a 3DS/FBX/OBJ import), this tool
+        normalizes it automatically before applying the color — no need to
+        call ``normalize_imported_objects`` first.
+
+        :param color: RGB values as ``[R, G, B]`` integers 0–255.
+        :param object_ids: GUIDs of specific objects to recolor.  Pass
+            ``null`` to target by layer instead.
+        :param layer_names: Layer names whose objects should be recolored.
+            Ignored when ``object_ids`` is provided.  Pass ``null`` for both
+            parameters to recolor every object in the document.
+        """
+        code = (
+            "_mcp_color = {}\n"
+            "_mcp_object_ids = {}\n"
+            "_mcp_layer_names = {}\n"
+            "{}"
+        ).format(
+            json.dumps(color),
+            json.dumps(object_ids),
+            json.dumps(layer_names),
+            _SET_COLOR_SCRIPT,
+        )
+        return rhino.execute_python(code, rhino_id=rhino_id)
+
     @mcp.tool(annotations=ToolAnnotations(title="Normalize Imported Object Materials", destructiveHint=True))
     def normalize_imported_objects(
         layer_names: list[str] | None = None,
@@ -163,6 +207,25 @@ for layer in doc.Layers:
     })
 
 views = [view.ActiveViewport.Name for view in doc.Views]
+
+# Detect objects whose material was baked at import time.
+# These objects will ignore ObjectColor changes until normalized.
+baked_ids = []
+for obj in doc.Objects:
+    if obj.IsDeleted:
+        continue
+    if (obj.Attributes.MaterialSource.ToString() == "MaterialFromObject"
+            and obj.Attributes.MaterialIndex >= 0):
+        baked_ids.append(str(obj.Id))
+
+warnings = []
+if baked_ids:
+    warnings.append(
+        "{} object(s) have import-baked materials (MaterialFromObject). "
+        "ObjectColor changes will NOT display correctly until you call "
+        "normalize_imported_objects() to fix them.".format(len(baked_ids))
+    )
+
 result = {
     "name": doc.Name,
     "path": doc.Path,
@@ -172,6 +235,8 @@ result = {
     "materials": [mat.Name for mat in doc.Materials if not mat.IsDeleted],
     "views": views,
     "unit_system": doc.ModelUnitSystem.ToString(),
+    "baked_import_material_count": len(baked_ids),
+    "warnings": warnings,
 }
 '''
 
@@ -184,6 +249,125 @@ if _mcp_path:
 else:
     ok = doc.Save()
 result = {"saved": bool(ok), "path": doc.Path}
+'''
+
+_SET_COLOR_SCRIPT = r'''
+import Rhino
+import Rhino.Geometry as rg
+import System
+
+doc = Rhino.RhinoDoc.ActiveDoc
+r_val, g_val, b_val = int(_mcp_color[0]), int(_mcp_color[1]), int(_mcp_color[2])
+target_color = System.Drawing.Color.FromArgb(r_val, g_val, b_val)
+
+# ── Find or create a shared render material for this exact RGB ────────────────
+mat_name = "MCP_Color_{:02X}{:02X}{:02X}".format(r_val, g_val, b_val)
+mat_idx = -1
+for i, m in enumerate(doc.Materials):
+    if not m.IsDeleted and m.Name == mat_name:
+        mat_idx = i
+        break
+
+if mat_idx == -1:
+    mat_idx = doc.Materials.Add()
+    mat = doc.Materials[mat_idx]
+    mat.Name = mat_name
+    mat.DiffuseColor = target_color
+    mat.CommitChanges()
+
+# ── Resolve which objects to target ──────────────────────────────────────────
+import System as _Sys
+
+def _collect_targets():
+    if _mcp_object_ids is not None:
+        ids = set()
+        for s in _mcp_object_ids:
+            try:
+                ids.add(_Sys.Guid(s))
+            except Exception:
+                pass
+        return [obj for obj in doc.Objects
+                if not obj.IsDeleted and obj.Id in ids]
+
+    if _mcp_layer_names is not None:
+        idxs = set()
+        for lname in _mcp_layer_names:
+            lyr = doc.Layers.FindName(lname)
+            if lyr is not None:
+                idxs.add(lyr.Index)
+        return [obj for obj in doc.Objects
+                if not obj.IsDeleted
+                and obj.Attributes.LayerIndex in idxs]
+
+    return [obj for obj in doc.Objects if not obj.IsDeleted]
+
+targets = _collect_targets()
+
+# ── Apply color, normalizing any import-baked objects first ──────────────────
+normalized = 0
+colored = 0
+
+for obj in targets:
+    if obj.ObjectType.ToString() == "Light":
+        continue
+
+    src = obj.Attributes.MaterialSource.ToString()
+    baked = (src == "MaterialFromObject" and obj.Attributes.MaterialIndex >= 0
+             and doc.Materials[obj.Attributes.MaterialIndex].Name != mat_name)
+
+    if baked:
+        # Must delete + readd to bust the display cache from the importer.
+        geo = obj.Geometry
+        otype = obj.ObjectType.ToString()
+        layer_idx = obj.Attributes.LayerIndex
+        obj_name = obj.Attributes.Name or ""
+
+        new_geo = geo.DuplicateMesh() if otype == "Mesh" else geo.Duplicate()
+        if new_geo is None:
+            continue
+
+        doc.Objects.Delete(obj.Id, True)
+
+        oa = Rhino.DocObjects.ObjectAttributes()
+        oa.LayerIndex = layer_idx
+        oa.Name = obj_name
+        oa.ColorSource = Rhino.DocObjects.ObjectColorSource.ColorFromObject
+        oa.ObjectColor = target_color
+        oa.MaterialSource = Rhino.DocObjects.ObjectMaterialSource.MaterialFromObject
+        oa.MaterialIndex = mat_idx
+
+        if otype == "Mesh":
+            doc.Objects.AddMesh(new_geo, oa)
+        elif otype == "Brep":
+            doc.Objects.AddBrep(new_geo, oa)
+        elif otype == "Surface":
+            doc.Objects.AddSurface(new_geo, oa)
+        elif otype == "Curve":
+            doc.Objects.AddCurve(new_geo, oa)
+        else:
+            doc.Objects.Add(new_geo, oa)
+
+        normalized += 1
+        colored += 1
+    else:
+        attr = obj.Attributes.Duplicate()
+        attr.ColorSource = Rhino.DocObjects.ObjectColorSource.ColorFromObject
+        attr.ObjectColor = target_color
+        attr.MaterialSource = Rhino.DocObjects.ObjectMaterialSource.MaterialFromObject
+        attr.MaterialIndex = mat_idx
+        doc.Objects.ModifyAttributes(obj, attr, True)
+        colored += 1
+
+doc.Views.Redraw()
+
+result = {
+    "ok": True,
+    "colored": colored,
+    "auto_normalized": normalized,
+    "material_name": mat_name,
+    "material_index": mat_idx,
+    "color_rgb": [r_val, g_val, b_val],
+}
 '''
 
 _NORMALIZE_SCRIPT = r'''
