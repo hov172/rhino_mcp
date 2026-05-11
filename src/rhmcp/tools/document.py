@@ -57,6 +57,37 @@ def register(mcp: FastMCP) -> None:
         code = "__mcp_units = {!r}\n{}".format(unit_system, _UNITS_SCRIPT)
         return rhino.execute_python(code, rhino_id=rhino_id)
 
+    @mcp.tool(annotations=ToolAnnotations(title="Normalize Imported Object Materials", destructiveHint=True))
+    def normalize_imported_objects(
+        layer_names: list[str] | None = None,
+        rhino_id: str | None = None,
+    ) -> dict[str, object]:
+        """
+        Fix display colors on objects imported from 3DS, FBX, OBJ, and similar
+        formats whose materials are baked at import time.
+
+        **Why this is needed:** Rhino's 3DS/FBX/OBJ importers stamp every mesh
+        with ``MaterialFromObject`` pointing at a source-file material.  Calling
+        ``ModifyAttributes`` afterward updates the data structure but does *not*
+        invalidate Rhino's display cache for those objects, so the viewport keeps
+        showing the original import color regardless of what attributes you set.
+        The only reliable fix is to delete each object and re-add its geometry as
+        a fresh document object with clean ``ObjectAttributes``
+        (``MaterialFromParent``, ``ColorFromLayer``).
+
+        This tool performs that delete-and-readd pass in bulk.  After it runs,
+        you can freely set object colors, materials, and layers through the normal
+        attribute APIs and they will display correctly.
+
+        :param layer_names: Layer names to normalize.  Pass ``null`` / omit to
+            normalize every object in the document.  Use layer full-paths for
+            nested layers, e.g. ``"Buildings::Residential"``.
+        """
+        code = "_mcp_layer_names = {}\n{}".format(
+            json.dumps(layer_names), _NORMALIZE_SCRIPT
+        )
+        return rhino.execute_python(code, rhino_id=rhino_id)
+
     @mcp.tool(annotations=ToolAnnotations(title="Export Rhino Document", destructiveHint=True))
     def export_rhino_document(path: str, select_all: bool = True, rhino_id: str | None = None) -> dict[str, object]:
         """
@@ -153,4 +184,95 @@ if _mcp_path:
 else:
     ok = doc.Save()
 result = {"saved": bool(ok), "path": doc.Path}
+'''
+
+_NORMALIZE_SCRIPT = r'''
+import Rhino
+import Rhino.Geometry as rg
+
+doc = Rhino.RhinoDoc.ActiveDoc
+
+# Resolve target layer indices.  None means all layers.
+if _mcp_layer_names is None:
+    target_layer_indices = None  # sentinel: match everything
+else:
+    target_layer_indices = set()
+    for lname in _mcp_layer_names:
+        lyr = doc.Layers.FindName(lname)
+        if lyr is not None:
+            target_layer_indices.add(lyr.Index)
+
+# Snapshot the IDs so we can iterate safely while deleting.
+candidates = []
+for obj in doc.Objects:
+    if obj.IsDeleted:
+        continue
+    if obj.ObjectType.ToString() == "Light":
+        continue
+    if target_layer_indices is not None:
+        if obj.Attributes.LayerIndex not in target_layer_indices:
+            continue
+    # Only objects whose material source is baked from import need fixing.
+    # MaterialFromObject with an index >= 0 is the tell-tale sign.
+    src = obj.Attributes.MaterialSource.ToString()
+    if src == "MaterialFromObject" and obj.Attributes.MaterialIndex >= 0:
+        candidates.append((obj.Id, obj.Attributes.LayerIndex))
+
+normalized = 0
+skipped = 0
+
+for obj_id, layer_idx in candidates:
+    obj = doc.Objects.Find(obj_id)
+    if obj is None or obj.IsDeleted:
+        skipped += 1
+        continue
+
+    geo = obj.Geometry
+    otype = obj.ObjectType.ToString()
+
+    # Duplicate the geometry so we have a fresh copy after deletion.
+    if otype == "Mesh":
+        new_geo = geo.DuplicateMesh()
+    else:
+        new_geo = geo.Duplicate()
+
+    if new_geo is None:
+        skipped += 1
+        continue
+
+    # Build clean attributes: inherit color and material from layer.
+    oa = Rhino.DocObjects.ObjectAttributes()
+    oa.LayerIndex = layer_idx
+    oa.ColorSource = Rhino.DocObjects.ObjectColorSource.ColorFromLayer
+    oa.MaterialSource = Rhino.DocObjects.ObjectMaterialSource.MaterialFromParent
+    oa.Name = obj.Attributes.Name or ""
+
+    doc.Objects.Delete(obj_id, True)
+
+    if otype == "Mesh":
+        doc.Objects.AddMesh(new_geo, oa)
+    elif otype == "Brep":
+        doc.Objects.AddBrep(new_geo, oa)
+    elif otype == "Surface":
+        doc.Objects.AddSurface(new_geo, oa)
+    elif otype == "Curve":
+        doc.Objects.AddCurve(new_geo, oa)
+    elif otype == "Point":
+        doc.Objects.AddPoint(new_geo.Location, oa)
+    else:
+        doc.Objects.Add(new_geo, oa)
+
+    normalized += 1
+
+doc.Views.Redraw()
+
+result = {
+    "ok": True,
+    "normalized": normalized,
+    "skipped": skipped,
+    "note": (
+        "Objects re-added with MaterialFromParent + ColorFromLayer. "
+        "You can now set object colors and materials freely via standard attribute APIs."
+    ),
+}
 '''
