@@ -21,3 +21,4 @@ test_live.py
 live_results.txt
 .DS_Store
 **/.DS_Store
+*.3dm
