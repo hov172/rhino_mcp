@@ -5,6 +5,32 @@ Versioning follows [Semantic Versioning](https://semver.org/).
 
 ---
 
+## [0.9.0] — 2026-05-11
+
+### Added
+
+- `import_file` gains `post_import_display` parameter — automatically configures viewport display
+  mode, background, grid, and zoom on every import based on file extension:
+  - `dwg` / `dxf` / `svg` / `pdf` / `eps` → Wireframe mode, solid black background, grid and axes
+    hidden, black/near-black layers and per-object colours flipped to white so AutoCAD layer
+    colours are immediately visible with no manual steps.
+  - `fbx` / `obj` / `3ds` / `stl` / `3mf` / `ply` / `wrl` → Shaded mode, zoom to extents.
+  - `iges` / `step` / `3dm` / `skp` → Shaded mode, zoom to extents.
+  - Pass `"none"` to skip. Default is `"auto"` (detect from extension).
+
+### Fixed
+
+- **`System.Byte` hex format bug** — material names generated as `MCP_Color_722X722X752X` due to
+  `{:02X}.format(System.Byte)` producing decimal output in IronPython. Fixed in `_IMPORT_SCRIPT`
+  and `_NORMALIZE_SCRIPT` to use `"%02X" % int(channel)`.
+- **Plugin version strings out of sync** — `AssemblyInformationalVersion` was hardcoded to `0.2.0`
+  (causing a yak build warning on every release) and the `ping` response reported `0.6.0`. Both
+  now track the release version.
+- **Docker base image compatibility** — `libgdk-pixbuf2.0-0` renamed to
+  `libgdk-pixbuf-xlib-2.0-0` in Debian Trixie (`python:3.13-slim`); Dockerfile updated.
+
+---
+
 ## [0.8.0] — 2026-05-10
 
 ### Added
