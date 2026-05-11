@@ -326,7 +326,7 @@ Claude Desktop → HTTP → localhost:8000 (Docker container)
 | **V-Ray** | Start/stop IPR, render to file, create and apply V-Ray materials, add lights (Rectangle/Sphere/IES/Dome/Sun), set HDRI environment, configure GI presets, export `.vrscene` |
 | **Enscape** | Launch Enscape window, capture screenshots, export 360° panoramas, export standalone executables, set time of day and atmosphere, save named views |
 | **Views** | Capture the active viewport — **Claude receives the image and can see the scene**; set named views, camera position, target, and lens length; save PNG to disk |
-| **Files** | Save and export to `.3dm`, `.obj`, `.stl`, `.fbx`, `.step`, `.iges`, `.dwg` |
+| **Files** | Save and export to `.3dm`, `.obj`, `.stl`, `.fbx`, `.step`, `.iges`, `.dwg`. Import any Rhino-supported format with automatic display setup: DWG/DXF → Wireframe + black background + AutoCAD colours; FBX/OBJ/STL/STEP → Shaded mode. Zoom to extents applied on every import. |
 | **Scripting** | Run arbitrary Rhino Python (RhinoScriptSyntax / RhinoCommon) or C# (Roslyn) directly. Python scripts auto-revert newly added objects if the script raises an exception. Use `verified_functions` to suppress the API-hallucination warning |
 | **AI Generation** | Generate 3D models from text or images via Hunyuan3D, import results into Rhino |
 | **Asset Libraries** | Search and import Poly Haven textures/HDRIs, download Sketchfab models |
@@ -1686,7 +1686,7 @@ Requires [Enscape](https://enscape3d.com) to be installed and licensed. Each too
 | `get_rhino_document_summary` | Return document metadata: object count by type and layer, materials, units, tolerance, and named views. |
 | `save_rhino_document` | Save the active document to its current path. Pass `path` to save-as a new file. |
 | `export_rhino_document` | Export to a specified file format. Supported: `.3dm`, `.obj`, `.stl`, `.fbx`, `.step`, `.iges`, `.stp`, `.dxf`, `.dwg`, `.pdf`. `select_all=true` (default) exports the whole document; set `false` to export only selected objects. |
-| `import_file` | Import any file Rhino supports (3DS, FBX, OBJ, STL, STEP, IGES, DXF, DWG, 3DM) and automatically normalize import-baked materials so colors and textures display correctly in Shaded and Rendered modes immediately. |
+| `import_file` | Import any file Rhino supports (3DS, FBX, OBJ, STL, STEP, IGES, DXF, DWG, 3DM) with automatic material normalization and display setup. DWG/DXF/SVG/PDF → Wireframe mode, black background, grid hidden, black layers flipped to white. FBX/OBJ/3DS/STL/3MF/STEP/IGES/3DM → Shaded mode. Zoom to extents applied automatically. Override with `post_import_display`. |
 | `normalize_imported_objects` | Fix display colors on objects imported from 3DS, FBX, OBJ and similar formats. Preserves original material colors, shine, transparency, specular, emission, and texture maps (bitmap, bump, environment, transparency channels). |
 | `set_object_display_color` | Set object color so it shows correctly in both Shaded and Rendered viewport modes. Creates a matching render material (MCP_Color_RRGGBB) — ObjectColor alone only affects wireframe edges. Handles import-baked objects automatically. |
 
