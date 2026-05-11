@@ -62,11 +62,14 @@ def register(mcp: FastMCP) -> None:
         path: str,
         normalize_materials: bool = True,
         show_textures_in_viewport: bool = False,
+        post_import_display: str = "auto",
         rhino_id: str | None = None,
     ) -> dict[str, object]:
         """
         Import a file into the active Rhino document and immediately fix any
         import-baked material overrides so colors and textures work correctly.
+        Viewport display mode, background, and grid are configured automatically
+        based on the file type so the result looks correct on the first import.
 
         Supports any format Rhino can open: ``.3ds``, ``.obj``, ``.fbx``,
         ``.stl``, ``.iges``, ``.step``, ``.dxf``, ``.dwg``, ``.3dm``, etc.
@@ -89,6 +92,15 @@ def register(mcp: FastMCP) -> None:
         display in ``Rendered`` viewport mode — set ``show_textures_in_viewport``
         to ``True`` to switch automatically.
 
+        **Automatic display presets (post_import_display="auto"):**
+
+        - ``dwg`` / ``dxf`` / ``svg`` / ``ai`` / ``pdf`` → Wireframe mode,
+          black background, grid and axes hidden, black/near-black objects and
+          layers flipped to white so AutoCAD layer colours are visible.
+        - ``fbx`` / ``obj`` / ``3ds`` / ``stl`` / ``3mf`` / ``ply`` → Shaded mode.
+        - ``iges`` / ``igs`` / ``step`` / ``stp`` / ``3dm`` / ``skp`` → Shaded mode.
+        - All presets zoom to extents automatically.
+
         :param path: Absolute path to the file to import.
         :param normalize_materials: When ``True`` (default), automatically
             normalize import-baked materials on newly imported objects.
@@ -96,13 +108,24 @@ def register(mcp: FastMCP) -> None:
         :param show_textures_in_viewport: Switch the active viewport to
             ``Rendered`` mode after import so texture maps are visible.
             Only meaningful when texture files are present alongside the source.
+        :param post_import_display: Display preset applied after import.
+            ``"auto"`` (default) picks the preset from the file extension.
+            Pass ``"wireframe_dark"``, ``"shaded"``, ``"rendered"``, or
+            ``"none"`` to override.
         """
         code = (
             "_mcp_import_path = {}\n"
             "_mcp_normalize = {!r}\n"
             "_mcp_show_textures = {!r}\n"
+            "_mcp_display_preset = {!r}\n"
             "{}"
-        ).format(json.dumps(path), normalize_materials, show_textures_in_viewport, _IMPORT_SCRIPT)
+        ).format(
+            json.dumps(path),
+            normalize_materials,
+            show_textures_in_viewport,
+            post_import_display,
+            _IMPORT_SCRIPT,
+        )
         return rhino.execute_python(code, rhino_id=rhino_id)
 
     @mcp.tool(annotations=ToolAnnotations(title="Set Object Display Color", destructiveHint=True))
@@ -143,8 +166,8 @@ def register(mcp: FastMCP) -> None:
             "{}"
         ).format(
             json.dumps(color),
-            json.dumps(object_ids),
-            json.dumps(layer_names),
+            "None" if object_ids is None else json.dumps(object_ids),
+            "None" if layer_names is None else json.dumps(layer_names),
             _SET_COLOR_SCRIPT,
         )
         return rhino.execute_python(code, rhino_id=rhino_id)
@@ -176,7 +199,7 @@ def register(mcp: FastMCP) -> None:
             nested layers, e.g. ``"Buildings::Residential"``.
         """
         code = "_mcp_layer_names = {}\n{}".format(
-            json.dumps(layer_names), _NORMALIZE_SCRIPT
+            "None" if layer_names is None else json.dumps(layer_names), _NORMALIZE_SCRIPT
         )
         return rhino.execute_python(code, rhino_id=rhino_id)
 
@@ -307,6 +330,8 @@ import re
 import rhinoscriptsyntax as rs
 import Rhino
 import Rhino.Geometry as rg
+import System
+import System.Drawing
 
 doc = Rhino.RhinoDoc.ActiveDoc
 
@@ -324,7 +349,6 @@ else:
     textures_applied = 0
 
     if _mcp_normalize:
-        # Build texture search dirs from the source file location.
         _src_dir = os.path.dirname(_mcp_import_path) if _mcp_import_path else ""
         _search_dirs = [_src_dir] + [os.path.join(_src_dir, s)
                         for s in ("textures", "maps", "tex", "images")]
@@ -343,7 +367,7 @@ else:
                     return c
             return ""
 
-        mat_cache = {}  # (R,G,B,bitmap,bump) -> mat_idx
+        mat_cache = {}
 
         for obj in new_objs:
             if obj.ObjectType.ToString() == "Light":
@@ -376,7 +400,7 @@ else:
             mat_key = (dc.R, dc.G, dc.B, bitmap_path, bump_path, env_path, trans_path)
 
             if mat_key not in mat_cache:
-                _hex = "{:02X}{:02X}{:02X}".format(dc.R, dc.G, dc.B)
+                _hex = "%02X%02X%02X" % (int(dc.R), int(dc.G), int(dc.B))
                 if bitmap_path:
                     _bname = re.sub(r'[^A-Za-z0-9]', '_',
                                     os.path.splitext(os.path.basename(bitmap_path))[0])[:14]
@@ -443,8 +467,100 @@ else:
             if bitmap_path:
                 textures_applied += 1
 
+    # ── Post-import display setup ─────────────────────────────────────────────
+    _ext = os.path.splitext(_mcp_import_path)[1].lower().lstrip(".")
+    _WIREFRAME_DARK = {"dwg", "dxf", "svg", "ai", "pdf", "eps"}
+    _SHADED = {
+        "fbx", "obj", "3ds", "stl", "3mf", "ply", "wrl", "vrml",
+        "iges", "igs", "step", "stp", "3dm", "skp", "rhp",
+    }
+
+    if _mcp_display_preset == "auto":
+        _preset = ("wireframe_dark" if _ext in _WIREFRAME_DARK
+                   else "shaded" if _ext in _SHADED
+                   else None)
+    elif _mcp_display_preset in ("none", ""):
+        _preset = None
+    else:
+        _preset = _mcp_display_preset
+
+    # Textures found and explicitly requested → force Rendered
     if _mcp_show_textures and textures_applied > 0:
-        rs.Command("_SetDisplayMode _Mode=Rendered", False)
+        _preset = "rendered"
+
+    _display_applied = None
+    _flipped_layers = 0
+    _flipped_objects = 0
+
+    if _preset == "wireframe_dark":
+        # 1. Set Wireframe display mode background to solid black
+        _wire_dm = Rhino.Display.DisplayModeDescription.FindByName("Wireframe")
+        if _wire_dm:
+            _wa = _wire_dm.DisplayAttributes
+            _FM = Rhino.Display.DisplayPipelineAttributes.FrameBufferFillMode
+            _wa.SetFill(
+                System.Drawing.Color.Black,
+                System.Drawing.Color.Black,
+                System.Drawing.Color.Black,
+                System.Drawing.Color.Black,
+            )
+            _wa.FillMode = _FM.SolidColor
+            Rhino.Display.DisplayModeDescription.UpdateDisplayMode(_wire_dm)
+
+        # 2. Switch all viewports to Wireframe, hide grid and axes
+        _wm = Rhino.Display.DisplayModeDescription.FindByName("Wireframe")
+        for _view in doc.Views:
+            _vp = _view.ActiveViewport
+            if _wm:
+                _vp.DisplayMode = _wm
+            _vp.ConstructionAxesVisible = False
+            _vp.ConstructionGridVisible = False
+            _vp.WorldAxesVisible = False
+
+        # 3. Flip black/near-black layer colours → white
+        #    AutoCAD colour 7 (black/white) imports as (0,0,0) on a light theme.
+        for _layer in doc.Layers:
+            if _layer.IsDeleted:
+                continue
+            _lc = _layer.Color
+            _luma = int(_lc.R) * 299 + int(_lc.G) * 587 + int(_lc.B) * 114
+            if _luma < 30000:
+                _layer.Color = System.Drawing.Color.White
+                _layer.CommitChanges()
+                _flipped_layers += 1
+
+        # 4. Flip black/near-black per-object colour overrides → white
+        _ids_after = set(str(o.Id) for o in doc.Objects if not o.IsDeleted)
+        _new_ids = _ids_after - ids_before
+        for _nid in _new_ids:
+            try:
+                _no = doc.Objects.Find(System.Guid(_nid))
+            except Exception:
+                continue
+            if _no is None or _no.IsDeleted:
+                continue
+            if _no.Attributes.ColorSource.ToString() != "ColorFromObject":
+                continue
+            _oc = _no.Attributes.ObjectColor
+            _luma = int(_oc.R) * 299 + int(_oc.G) * 587 + int(_oc.B) * 114
+            if _luma < 30000:
+                _oa2 = _no.Attributes.Duplicate()
+                _oa2.ObjectColor = System.Drawing.Color.White
+                doc.Objects.ModifyAttributes(_no, _oa2, True)
+                _flipped_objects += 1
+
+        _display_applied = "wireframe_dark"
+
+    elif _preset in ("shaded", "rendered"):
+        _mode_name = "Rendered" if _preset == "rendered" else "Shaded"
+        _dm2 = Rhino.Display.DisplayModeDescription.FindByName(_mode_name)
+        if _dm2:
+            for _view in doc.Views:
+                _view.ActiveViewport.DisplayMode = _dm2
+        _display_applied = _preset
+
+    if _preset:
+        Rhino.RhinoApp.RunScript("_ZoomExtentsAll", False)
 
     doc.Views.Redraw()
 
@@ -455,8 +571,12 @@ else:
         "materials_normalized": normalized,
         "textures_applied": textures_applied,
         "skipped": skipped,
-        "normalize_materials": _mcp_normalize,
     }
+    if _display_applied:
+        _res["display_preset"] = _display_applied
+        if _preset == "wireframe_dark":
+            _res["flipped_layers"] = _flipped_layers
+            _res["flipped_objects"] = _flipped_objects
     if textures_applied > 0 and not _mcp_show_textures:
         _res["tip"] = "Switch viewport to Rendered mode to see texture maps."
     result = _res
@@ -670,7 +790,7 @@ for obj_id, layer_idx in candidates:
     mat_key = (dc.R, dc.G, dc.B, bitmap_path, bump_path, env_path, trans_path)
 
     if mat_key not in mat_cache:
-        _hex = "{:02X}{:02X}{:02X}".format(dc.R, dc.G, dc.B)
+        _hex = "%02X%02X%02X" % (int(dc.R), int(dc.G), int(dc.B))
         if bitmap_path:
             _bname = re.sub(r'[^A-Za-z0-9]', '_',
                             os.path.splitext(os.path.basename(bitmap_path))[0])[:14]
