@@ -94,6 +94,15 @@ Control Rhino 3D from Claude, Cursor, Codex, and any other MCP-capable AI tool. 
 
 ## Quick Start
 
+> **Two separate pieces — both are required:**
+>
+> | Piece | What it is | Where it runs |
+> |---|---|---|
+> | `rhino-mcp.rhp` | Rhino plugin — opens a socket on port 1999 | Inside Rhino 3D |
+> | This repo (`rhmcp`) | Python MCP server — talks to AI clients | Outside Rhino, as a separate process |
+>
+> The plugin and the Python server communicate over a local TCP socket. Neither works without the other.
+
 Two paths to get up and running. Both require the Rhino plugin — only the server setup differs.
 
 ---
@@ -104,23 +113,28 @@ Two paths to get up and running. Both require the Rhino plugin — only the serv
 
 #### Step 1 — Install the Rhino plugin
 
-The plugin runs a socket server inside Rhino that the MCP server talks to.
+Download [`rhino-mcp.rhp`](https://github.com/hov172/rhino_mcp/releases/download/v0.8.0/rhino-mcp.rhp) from the latest release and copy it to the Rhino plug-ins folder:
 
 ```bash
-# macOS
-cp rhino_plugin/package/rhino-mcp.rhp \
-   "/Applications/Rhino 8.app/Contents/PlugIns/"
+# macOS — user plug-ins folder (no admin rights needed)
+mkdir -p "$HOME/Library/Application Support/McNeel/Rhinoceros/8.0/Plug-ins"
+cp ~/Downloads/rhino-mcp.rhp \
+   "$HOME/Library/Application Support/McNeel/Rhinoceros/8.0/Plug-ins/"
 ```
 
 ```powershell
 # Windows
-Copy-Item rhino_plugin\package\rhino-mcp.rhp `
-  "$env:ProgramFiles\Rhino 8\Plug-ins\"
+Copy-Item "$env:USERPROFILE\Downloads\rhino-mcp.rhp" `
+  "$env:APPDATA\McNeel\Rhinoceros\8.0\Plug-ins\"
 ```
 
-Then in Rhino: **Tools → Options → Plug-ins → Install** and select the `.rhp` file.
+Restart Rhino. The plugin loads automatically and starts its socket server on `127.0.0.1:1999`.
 
-#### Step 2 — Clone the repo and install the Python server
+> **This is the only file that goes into Rhino.** The Python server (Step 2) is completely separate and never touches Rhino's plug-ins folder.
+
+#### Step 2 — Clone the repo and install the Python MCP server
+
+> **This is the MCP server — not another plugin.** It runs as a separate Python process outside Rhino and exposes the 334 tools to your AI client. Claude Desktop spawns it automatically from this folder.
 
 ```bash
 git clone https://github.com/hov172/rhino_mcp.git
@@ -453,9 +467,9 @@ A `rhinocode` fallback path (Rhino 8.11+ only) is also available for most non-Gr
 
 ## Installation
 
-### 1. Install the Rhino Plugin
+### 1. Install the Rhino Plugin (`rhino-mcp.rhp`)
 
-The plugin is a `.rhp` file that runs a TCP socket server inside Rhino. There are three ways to install it.
+The plugin is a `.rhp` file that runs a TCP socket server inside Rhino on port 1999. **It has no MCP protocol knowledge** — it only listens for commands from the Python server. There are three ways to install it.
 
 #### Option A — Copy the pre-built `.rhp` directly (fastest)
 
@@ -503,7 +517,9 @@ The build output is placed at `rhino_plugin/RhinoMCPPlugin/bin/Release/net8.0/rh
 
 ---
 
-### 2. Install the Python MCP Server
+### 2. Install the Python MCP Server (this repo)
+
+> **This is not a Rhino plugin.** It is a standalone Python process that your AI client (Claude Desktop, Cursor, etc.) launches or connects to. It translates MCP tool calls into socket commands and sends them to the Rhino plugin on port 1999.
 
 ```bash
 # Clone the repo
