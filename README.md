@@ -140,7 +140,7 @@ Restart Rhino. The plugin loads automatically and starts its socket server on `1
 
 > **This is the only file that goes into Rhino.** The `rhino_plugin/package/rhino-mcp.rhp` file is the Rhino plugin binary. The rest of the repo (the `src/` folder) is the Python MCP server — a completely separate process that never touches Rhino's plug-ins folder.
 >
-> **Don't have the repo yet?** You can also download [`rhino-mcp.rhp`](https://github.com/hov172/rhino_mcp/releases/download/v0.8.0/rhino-mcp.rhp) directly from the latest release and copy it from `~/Downloads/` instead.
+> **Don't have the repo yet?** You can also download [`rhino-mcp.rhp`](https://github.com/hov172/rhino_mcp/releases/download/v0.9.0/rhino-mcp.rhp) directly from the latest release and copy it from `~/Downloads/` instead.
 
 #### Step 3 — Verify the Python MCP server
 
@@ -481,7 +481,7 @@ The plugin is a `.rhp` file that runs a TCP socket server inside Rhino on port 1
 
 #### Option A — Copy the pre-built `.rhp` directly (fastest)
 
-Download [`rhino-mcp.rhp`](https://github.com/hov172/rhino_mcp/releases/download/v0.8.0/rhino-mcp.rhp) from the latest release, then copy it to the Rhino plug-ins folder:
+Download [`rhino-mcp.rhp`](https://github.com/hov172/rhino_mcp/releases/download/v0.9.0/rhino-mcp.rhp) from the latest release, then copy it to the Rhino plug-ins folder:
 
 ```bash
 # macOS — user plug-ins folder (no admin rights needed)
@@ -500,16 +500,16 @@ Then restart Rhino. The plugin loads automatically on startup.
 
 #### Option B — Install via Yak CLI
 
-Download [`rhino-mcp-0.8.0-rh8_17-any.yak`](https://github.com/hov172/rhino_mcp/releases/download/v0.8.0/rhino-mcp-0.8.0-rh8_17-any.yak) from the latest release, then run:
+Download [`rhino-mcp-0.9.0-rh8_17-any.yak`](https://github.com/hov172/rhino_mcp/releases/download/v0.9.0/rhino-mcp-0.9.0-rh8_17-any.yak) from the latest release, then run:
 
 ```bash
 # macOS
-"/Applications/Rhino 8.app/Contents/Resources/bin/yak" install --source ~/Downloads/rhino-mcp-0.8.0-rh8_17-any.yak
+"/Applications/Rhino 8.app/Contents/Resources/bin/yak" install --source ~/Downloads/rhino-mcp-0.9.0-rh8_17-any.yak
 ```
 
 ```powershell
 # Windows
-& "C:\Program Files\Rhino 8\System\yak.exe" install --source "$env:USERPROFILE\Downloads\rhino-mcp-0.8.0-rh8_17-any.yak"
+& "C:\Program Files\Rhino 8\System\yak.exe" install --source "$env:USERPROFILE\Downloads\rhino-mcp-0.9.0-rh8_17-any.yak"
 ```
 
 Restart Rhino after the install completes.
