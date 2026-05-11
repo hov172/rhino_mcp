@@ -361,6 +361,60 @@ _COMMON = r'''
 import math
 import rhinoscriptsyntax as rs
 import Rhino
+import System
+
+def _set_color_with_material(doc, oid, r_val, g_val, b_val):
+    """Assign color so it renders correctly in Shaded and Rendered modes.
+    For import-baked objects the display cache requires delete+readd."""
+    _hex = "{:02X}{:02X}{:02X}".format(r_val, g_val, b_val)
+    _mat_name = "MCP_Color_{}".format(_hex)
+    _mat_idx = -1
+    for _i, _m in enumerate(doc.Materials):
+        if not _m.IsDeleted and _m.Name == _mat_name:
+            _mat_idx = _i
+            break
+    if _mat_idx == -1:
+        _mat_idx = doc.Materials.Add()
+        _nm = doc.Materials[_mat_idx]
+        _nm.Name = _mat_name
+        _nm.DiffuseColor = System.Drawing.Color.FromArgb(r_val, g_val, b_val)
+        _nm.CommitChanges()
+    _sys_color = System.Drawing.Color.FromArgb(r_val, g_val, b_val)
+    _obj = doc.Objects.FindId(System.Guid(str(oid)))
+    if _obj is None:
+        return
+    _src = _obj.Attributes.MaterialSource.ToString()
+    _midx = _obj.Attributes.MaterialIndex
+    _baked = (_src == "MaterialFromObject" and _midx >= 0
+              and not doc.Materials[_midx].Name.startswith("MCP_"))
+    if _baked:
+        _geo = _obj.Geometry
+        _otype = _obj.ObjectType.ToString()
+        _ng = _geo.DuplicateMesh() if _otype == "Mesh" else _geo.Duplicate()
+        if _ng is not None:
+            _oa = Rhino.DocObjects.ObjectAttributes()
+            _oa.LayerIndex = _obj.Attributes.LayerIndex
+            _oa.Name = _obj.Attributes.Name or ""
+            _oa.ColorSource = Rhino.DocObjects.ObjectColorSource.ColorFromObject
+            _oa.ObjectColor = _sys_color
+            _oa.MaterialSource = Rhino.DocObjects.ObjectMaterialSource.MaterialFromObject
+            _oa.MaterialIndex = _mat_idx
+            doc.Objects.Delete(_obj.Id, True)
+            if _otype == "Mesh":
+                doc.Objects.AddMesh(_ng, _oa)
+            elif _otype == "Brep":
+                doc.Objects.AddBrep(_ng, _oa)
+            elif _otype == "Surface":
+                doc.Objects.AddSurface(_ng, _oa)
+            else:
+                doc.Objects.Add(_ng, _oa)
+    else:
+        _attr = _obj.Attributes.Duplicate()
+        _attr.ColorSource = Rhino.DocObjects.ObjectColorSource.ColorFromObject
+        _attr.ObjectColor = _sys_color
+        _attr.MaterialSource = Rhino.DocObjects.ObjectMaterialSource.MaterialFromObject
+        _attr.MaterialIndex = _mat_idx
+        doc.Objects.ModifyAttributes(_obj, _attr, True)
 
 def _objects(ids, selected):
     if ids:
@@ -588,7 +642,8 @@ for oid in objects:
     if layer:
         rs.ObjectLayer(oid, layer)
     if data.get("color") is not None:
-        rs.ObjectColor(oid, _color(data.get("color")))
+        _c = _color(data.get("color"))
+        _set_color_with_material(Rhino.RhinoDoc.ActiveDoc, oid, _c[0], _c[1], _c[2])
     if data.get("visible") is True:
         rs.ShowObject(oid)
     elif data.get("visible") is False:

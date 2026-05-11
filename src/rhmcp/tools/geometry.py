@@ -17,6 +17,8 @@ from rhmcp.tools_helpers import validate
 _GEOMETRY_SCRIPT = r'''
 import math
 import rhinoscriptsyntax as rs
+import Rhino
+import System
 
 def _pt(value, default=(0, 0, 0)):
     if value is None:
@@ -37,6 +39,31 @@ def _ensure_layer(name, color=None):
         rs.AddLayer(name, color=_color(color) or (200, 200, 200))
     return name
 
+def _assign_color_material(doc, object_id, r_val, g_val, b_val):
+    """Create/find MCP_Color material and assign to object so it shows in Shaded mode."""
+    _hex = "{:02X}{:02X}{:02X}".format(r_val, g_val, b_val)
+    _mat_name = "MCP_Color_{}".format(_hex)
+    _mat_idx = -1
+    for _i, _m in enumerate(doc.Materials):
+        if not _m.IsDeleted and _m.Name == _mat_name:
+            _mat_idx = _i
+            break
+    if _mat_idx == -1:
+        _mat_idx = doc.Materials.Add()
+        _nm = doc.Materials[_mat_idx]
+        _nm.Name = _mat_name
+        _nm.DiffuseColor = System.Drawing.Color.FromArgb(r_val, g_val, b_val)
+        _nm.CommitChanges()
+    _sys_color = System.Drawing.Color.FromArgb(r_val, g_val, b_val)
+    _obj = doc.Objects.FindId(object_id)
+    if _obj:
+        _attr = _obj.Attributes.Duplicate()
+        _attr.ColorSource = Rhino.DocObjects.ObjectColorSource.ColorFromObject
+        _attr.ObjectColor = _sys_color
+        _attr.MaterialSource = Rhino.DocObjects.ObjectMaterialSource.MaterialFromObject
+        _attr.MaterialIndex = _mat_idx
+        doc.Objects.ModifyAttributes(_obj, _attr, True)
+
 def _apply_common(object_id, spec):
     if not object_id:
         return None
@@ -48,7 +75,8 @@ def _apply_common(object_id, spec):
         rs.ObjectLayer(object_id, layer)
     color = _color(spec.get("color"))
     if color:
-        rs.ObjectColor(object_id, color)
+        _doc = Rhino.RhinoDoc.ActiveDoc
+        _assign_color_material(_doc, object_id, color[0], color[1], color[2])
     return str(object_id)
 
 def _box_corners(center, size):

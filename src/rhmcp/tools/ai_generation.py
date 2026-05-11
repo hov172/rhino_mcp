@@ -26,7 +26,7 @@ import httpx
 from mcp.server.fastmcp import FastMCP
 from mcp.types import ToolAnnotations
 
-from rhmcp.tools_helpers import plugin_client
+from rhmcp.tools_helpers import backend as rhino, plugin_client
 
 # ---------------------------------------------------------------------------
 # Constants
@@ -1031,10 +1031,17 @@ output.AppendLine($"OBJECT_COUNT={{importedCount}}");
     if not output_text and result.get("status") == "ok":
         import_ok = True
 
+    materials_normalized = 0
+    if import_ok:
+        from rhmcp.tools.asset_libraries import _NORMALIZE_ALL_BAKED_SCRIPT
+        norm = rhino.execute_python(_NORMALIZE_ALL_BAKED_SCRIPT)
+        materials_normalized = norm.get("script_result", {}).get("normalized", 0)
+
     return {
         "ok": import_ok,
         "filepath": filepath,
         "object_count": object_count,
+        "materials_normalized": materials_normalized,
         "message": (
             f"Successfully imported {object_count} object(s) from {filepath}."
             if import_ok

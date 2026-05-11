@@ -337,7 +337,13 @@ def _get_or_create_material(oid):
     if obj is None:
         raise ValueError("Object not found: {}".format(oid))
     if obj.Attributes.MaterialSource == Rhino.DocObjects.ObjectMaterialSource.MaterialFromObject:
-        return obj, obj.Attributes.MaterialIndex
+        _midx = obj.Attributes.MaterialIndex
+        if _midx >= 0:
+            _cur = doc.Materials[_midx]
+            # Don't return shared MCP_ materials — callers mutate the returned
+            # material in place, which would corrupt all objects sharing it.
+            if not _cur.IsDeleted and not _cur.Name.startswith("MCP_"):
+                return obj, _midx
     # Duplicate default material to object-level
     mat  = Rhino.DocObjects.Material()
     idx  = doc.Materials.Add(mat)
