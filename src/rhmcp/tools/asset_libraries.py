@@ -1021,10 +1021,14 @@ for obj_id, layer_idx, obj_name in candidates:
 
     _bt = orig_mat.GetBitmapTexture()
     _nt = orig_mat.GetBumpTexture()
+    _et = orig_mat.GetEnvironmentTexture()
+    _tt = orig_mat.GetTransparencyTexture()
     bitmap_path = _resolve_tex(_bt.FileReference.FullPath if _bt is not None else "")
     bump_path   = _resolve_tex(_nt.FileReference.FullPath if _nt is not None else "")
+    env_path    = _resolve_tex(_et.FileReference.FullPath if _et is not None else "")
+    trans_path  = _resolve_tex(_tt.FileReference.FullPath if _tt is not None else "")
 
-    mat_key = (dc.R, dc.G, dc.B, bitmap_path, bump_path)
+    mat_key = (dc.R, dc.G, dc.B, bitmap_path, bump_path, env_path, trans_path)
 
     if mat_key not in mat_cache:
         _hex = "{:02X}{:02X}{:02X}".format(dc.R, dc.G, dc.B)
@@ -1049,16 +1053,17 @@ for obj_id, layer_idx, obj_name in candidates:
             nm.Transparency = transparency
             nm.SpecularColor = specular
             nm.EmissionColor = emission
-            if bitmap_path:
-                try:
-                    nm.SetBitmapTexture(bitmap_path)
-                except Exception:
-                    pass
-            if bump_path:
-                try:
-                    nm.SetBumpTexture(bump_path)
-                except Exception:
-                    pass
+            for _tex_fn, _tex_path in (
+                ("SetBitmapTexture", bitmap_path),
+                ("SetBumpTexture",   bump_path),
+                ("SetEnvironmentTexture", env_path),
+                ("SetTransparencyTexture", trans_path),
+            ):
+                if _tex_path:
+                    try:
+                        getattr(nm, _tex_fn)(_tex_path)
+                    except Exception:
+                        pass
             nm.CommitChanges()
         mat_cache[mat_key] = mat_idx
     clean_mat_idx = mat_cache[mat_key]
@@ -1092,10 +1097,13 @@ for obj_id, layer_idx, obj_name in candidates:
         textures_applied += 1
 
 doc.Views.Redraw()
-result = {
+_res = {
     "normalized": normalized,
     "textures_applied": textures_applied,
     "skipped": skipped,
     "unique_materials": len(mat_cache),
 }
+if textures_applied > 0:
+    _res["tip"] = "Switch viewport to Rendered mode to see texture maps."
+result = _res
 '''
