@@ -10,13 +10,30 @@ from mcp.types import ToolAnnotations
 from rhmcp.tools_helpers import backend as rhino
 
 
-def _wrap_with_revert(code: str) -> str:
+def _wrap_with_revert(code: str, clear_objects: list[str] | None = None) -> str:
     code = code.expandtabs(4)
     indented = "\n".join("    " + line for line in code.splitlines())
+
+    # Build a pre-execution block that deletes all objects on the requested layers.
+    if clear_objects:
+        layer_list = repr(clear_objects)
+        clear_block = (
+            'for _mcp_ln in ' + layer_list + ':\n'
+            '    _mcp_layer = _mcp_doc.Layers.FindName(_mcp_ln)\n'
+            '    if _mcp_layer is not None:\n'
+            '        _mcp_objs = _mcp_doc.Objects.FindByLayer(_mcp_layer)\n'
+            '        if _mcp_objs:\n'
+            '            for _mcp_o in _mcp_objs:\n'
+            '                _mcp_doc.Objects.Delete(_mcp_o.Id, True)\n'
+        )
+    else:
+        clear_block = ''
+
     return (
         'import rhinoscriptsyntax as rs\n'
         'import Rhino as _mcp_Rhino\n'
         '_mcp_doc = _mcp_Rhino.RhinoDoc.ActiveDoc\n'
+        + clear_block +
         '_mcp_ids_before = set(str(o.Id) for o in _mcp_doc.Objects)\n'
         'try:\n'
         f'{indented}\n'
@@ -38,6 +55,7 @@ def register(mcp: FastMCP) -> None:
         code: str,
         rhino_id: str | None = None,
         verified_functions: list[str] | None = None,
+        clear_objects: list[str] | None = None,
     ) -> dict[str, object]:
         """
         Execute Python code inside Rhino.
@@ -50,8 +68,12 @@ def register(mcp: FastMCP) -> None:
             that the caller has looked up (e.g. via ``search_rhinoscript_functions``)
             before writing this code. Providing this list documents that API calls
             have been verified and suppresses the api_warning in the response.
+        :param clear_objects: Layer names whose objects should be deleted before the
+            script runs. Use this for animation or repeated-execution scripts so stale
+            geometry from previous runs does not accumulate in the document.
+            Example: ``["BB_Ball", "BB_Ground"]``
         """
-        result = rhino.execute_python(_wrap_with_revert(code), rhino_id=rhino_id)
+        result = rhino.execute_python(_wrap_with_revert(code, clear_objects), rhino_id=rhino_id)
         if not verified_functions:
             result["api_warning"] = (
                 "verified_functions not provided — consider using "

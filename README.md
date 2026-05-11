@@ -40,7 +40,7 @@ Control Rhino 3D from Claude, Cursor, Codex, and any other MCP-capable AI tool. 
   - [Manual Installation](#manual-installation)
   - [File-based Installation](#file-based-installation)
   - [Checking Plugin Status](#checking-plugin-status)
-- [All 320 Tools](#all-320-tools)
+- [All 334 Tools](#all-334-tools)
   - [Plugin Management](#plugin-management)
   - [Grasshopper — Canvas](#grasshopper--canvas)
   - [Grasshopper — Parameters](#grasshopper--parameters)
@@ -179,7 +179,7 @@ The `command` + `args` lines are literally the shell command Claude Desktop runs
 
 #### Step 5 — Restart Claude Desktop and start using it
 
-Fully quit Claude Desktop (don't just close the window) and reopen it. Claude Desktop reads the config on launch, spawns the MCP server in the background, and the 320 Rhino tools become available automatically.
+Fully quit Claude Desktop (don't just close the window) and reopen it. Claude Desktop reads the config on launch, spawns the MCP server in the background, and the 334 Rhino tools become available automatically.
 
 Test it by typing in Claude:
 
@@ -268,7 +268,7 @@ Same as Path A Step 4. Open Rhino — the plugin auto-starts and prints `Rhino M
 
 #### Step 5 — Restart Claude Desktop and start using it
 
-Fully quit and reopen Claude Desktop. It connects to the running container and the 320 tools appear.
+Fully quit and reopen Claude Desktop. It connects to the running container and the 334 tools appear.
 
 **Connection flow:**
 ```
@@ -459,7 +459,7 @@ The plugin is a `.rhp` file that runs a TCP socket server inside Rhino. There ar
 
 #### Option A — Copy the pre-built `.rhp` directly (fastest)
 
-Download [`rhino-mcp.rhp`](https://github.com/hov172/rhino_mcp/releases/download/v0.7.0/rhino-mcp.rhp) from the latest release, then copy it to the Rhino plug-ins folder:
+Download [`rhino-mcp.rhp`](https://github.com/hov172/rhino_mcp/releases/download/v0.8.0/rhino-mcp.rhp) from the latest release, then copy it to the Rhino plug-ins folder:
 
 ```bash
 # macOS — user plug-ins folder (no admin rights needed)
@@ -478,16 +478,16 @@ Then restart Rhino. The plugin loads automatically on startup.
 
 #### Option B — Install via Yak CLI
 
-Download [`rhino-mcp-0.7.0-rh8_17-any.yak`](https://github.com/hov172/rhino_mcp/releases/download/v0.7.0/rhino-mcp-0.7.0-rh8_17-any.yak) from the latest release, then run:
+Download [`rhino-mcp-0.8.0-rh8_17-any.yak`](https://github.com/hov172/rhino_mcp/releases/download/v0.8.0/rhino-mcp-0.8.0-rh8_17-any.yak) from the latest release, then run:
 
 ```bash
 # macOS
-"/Applications/Rhino 8.app/Contents/Resources/bin/yak" install --source ~/Downloads/rhino-mcp-0.7.0-rh8_17-any.yak
+"/Applications/Rhino 8.app/Contents/Resources/bin/yak" install --source ~/Downloads/rhino-mcp-0.8.0-rh8_17-any.yak
 ```
 
 ```powershell
 # Windows
-& "C:\Program Files\Rhino 8\System\yak.exe" install --source "$env:USERPROFILE\Downloads\rhino-mcp-0.7.0-rh8_17-any.yak"
+& "C:\Program Files\Rhino 8\System\yak.exe" install --source "$env:USERPROFILE\Downloads\rhino-mcp-0.8.0-rh8_17-any.yak"
 ```
 
 Restart Rhino after the install completes.
@@ -1316,7 +1316,7 @@ You can also call `check_plugin_loaded(plugin_name="V-Ray")` directly to test wh
 
 ---
 
-## All 320 Tools
+## All 334 Tools
 
 ---
 
@@ -1662,6 +1662,27 @@ Requires [Enscape](https://enscape3d.com) to be installed and licensed. Each too
 | `get_rhino_document_summary` | Return document metadata: object count by type and layer, materials, units, tolerance, and named views. |
 | `save_rhino_document` | Save the active document to its current path. Pass `path` to save-as a new file. |
 | `export_rhino_document` | Export to a specified file format. Supported: `.3dm`, `.obj`, `.stl`, `.fbx`, `.step`, `.iges`, `.stp`, `.dxf`, `.dwg`, `.pdf`. `select_all=true` (default) exports the whole document; set `false` to export only selected objects. |
+| `import_file` | Import any file Rhino supports (3DS, FBX, OBJ, STL, STEP, IGES, DXF, DWG, 3DM) and automatically normalize import-baked materials so colors and textures display correctly in Shaded and Rendered modes immediately. |
+| `normalize_imported_objects` | Fix display colors on objects imported from 3DS, FBX, OBJ and similar formats. Preserves original material colors, shine, transparency, specular, emission, and texture maps (bitmap, bump, environment, transparency channels). |
+| `set_object_display_color` | Set object color so it shows correctly in both Shaded and Rendered viewport modes. Creates a matching render material (MCP_Color_RRGGBB) — ObjectColor alone only affects wireframe edges. Handles import-baked objects automatically. |
+
+---
+
+### Export Tools
+
+| Tool | Description |
+|---|---|
+| `export_step` | Export selected objects or entire model to STEP format with configurable application protocol (AP214/AP242) and tolerance settings. |
+| `export_iges` | Export to IGES format with surface tolerance and entity type controls for CAD interchange. |
+| `export_dwg` | Export to DWG/DXF format with Rhino version targeting and 2D/3D geometry control. |
+| `export_obj` | Export to OBJ/MTL with material and texture coordinate export controls. |
+| `export_fbx` | Export to FBX with animation, materials, and texture embedding options. |
+| `export_glb` | Export to GLB/glTF with embedded textures, Draco compression, and material export controls. |
+| `export_3dm` | Export to native Rhino 3DM with version targeting, selective object export by layer/type, and embedded metadata notes. |
+| `export_stl` | Export to STL with binary/ASCII format control and mesh tolerance settings. |
+| `export_3mf` | Export to 3MF with unit and tolerance settings for additive manufacturing. |
+| `convert_image` | Convert viewport or file images between PNG, JPG, BMP, TIFF formats with quality control. |
+| `export_viewport_image` | Capture the active viewport to an image file with display mode, resolution, and scale options. |
 
 ---
 
@@ -1710,7 +1731,7 @@ Read external design files — floor plans, specifications, spreadsheets, and re
 | `execute_rhino_csharp` | Run arbitrary C# code inside Rhino via Roslyn scripting. Returns stdout output or document changes. Requires RhinoCode C# support (Rhino 8). |
 | `get_rhino_commands` | List all available Rhino command names, optionally filtered by substring (`filter="circle"`). `loaded_only=true` (default) limits to loaded plugins. Call this before `run_rhino_command` to discover exact spellings. |
 | `run_rhino_command` | Execute a Rhino command macro string (e.g. `_Box 0,0,0 1,1,1`). `echo=true` echoes the command to Rhino's history. Returns `output` with captured command-window text so the AI can read results. Requires `MCPStart` in Rhino. |
-| `list_tool_categories` | **Start here for complex tasks.** Returns all 320 tool categories with counts. Use `include_tool_names=true` to list every tool name per category without loading all 320 descriptions into context. |
+| `list_tool_categories` | **Start here for complex tasks.** Returns all 334 tool categories with counts. Use `include_tool_names=true` to list every tool name per category without loading all 334 descriptions into context. |
 | `search_rhino_docs` | Full-text search of bundled Rhino scripting notes. |
 | `get_rhinoscript_docs` | Look up RhinoScriptSyntax module-level documentation. Pass a module name (`"curve"`, `"surface"`, `"object"`, etc.) to list its functions. |
 | `search_rhinoscript_functions` | Search RhinoScriptSyntax function reference by name or keyword. **Always call this before writing Python scripts** to avoid hallucinated function names. |
