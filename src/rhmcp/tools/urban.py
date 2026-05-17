@@ -17,6 +17,7 @@ import re
 from mcp.server.fastmcp import FastMCP, Image
 
 from rhmcp.tools_helpers import backend as rhino
+from rhmcp.tools_helpers.security import sanitise_rhino_path
 from rhmcp.tools.view import _CAPTURE_SCRIPT
 
 # ---------------------------------------------------------------------------
@@ -1087,7 +1088,7 @@ def register(mcp: FastMCP) -> None:
         elif fmt == "3dm":
             code = f"import Rhino\nok = Rhino.RhinoDoc.ActiveDoc.WriteFile({export_path!r}, Rhino.FileIO.FileWriteOptions())\nprint({export_path!r} if ok else 'FAILED')\n"
         else:
-            macro = f'_-Export "{export_path}" _Enter'
+            macro = f'_-Export "{sanitise_rhino_path(export_path)}" _Enter'
             code = f"import Rhino\nok = Rhino.RhinoApp.RunScript({macro!r}, False)\nprint({export_path!r} if ok else 'FAILED')\n"
         raw = rhino.execute_python(code, rhino_id=rhino_id)
         ok = isinstance(raw, dict) and "FAILED" not in str(raw)

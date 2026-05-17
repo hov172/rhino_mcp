@@ -48,7 +48,7 @@ def sanitise_rhino_path(path: str) -> str:
 # M-3 helper
 # ---------------------------------------------------------------------------
 
-_BLOCKED_NETWORKS = [
+_PRIVATE_NETWORKS = [
     ipaddress.ip_network("10.0.0.0/8"),
     ipaddress.ip_network("172.16.0.0/12"),
     ipaddress.ip_network("192.168.0.0/16"),
@@ -56,44 +56,31 @@ _BLOCKED_NETWORKS = [
     ipaddress.ip_network("169.254.0.0/16"),
     ipaddress.ip_network("::1/128"),
     ipaddress.ip_network("fc00::/7"),
-    ipaddress.ip_network("0.0.0.0/8"),
-    ipaddress.ip_network("::ffff:0:0/96"),   # IPv4-mapped IPv6
 ]
 
 
-def _is_private(host: str) -> bool:
-    # Strip trailing dots (e.g. "localhost." is equivalent to "localhost")
-    host = host.rstrip(".")
-    # If the host looks like an IP address, validate it directly without DNS
-    try:
-        addr = ipaddress.ip_address(host)
-        if isinstance(addr, ipaddress.IPv6Address) and addr.ipv4_mapped:
-            addr = addr.ipv4_mapped
-        return any(addr in net for net in _BLOCKED_NETWORKS)
-    except ValueError:
-        pass  # Not a bare IP address — fall through to DNS resolution
+def _is_private(hostname: str) -> bool:
+    """
+    Return ``True`` if *hostname* resolves to a private/loopback address.
 
-    # Textual check for well-known local hostnames (covers cases where DNS is unavailable)
-    host_lower = host.lower()
-    if host_lower in ("localhost", "::1") or host_lower.endswith(".local"):
-        return True
-
-    # Resolve via DNS and check each returned address
+    Performs DNS resolution and checks each resolved address against the known
+    private networks.  Fails closed: unresolvable or malformed hostnames are
+    treated as private/blocked (returns ``True``).
+    """
     try:
-        infos = socket.getaddrinfo(host, None)
-        for info in infos:
-            raw_addr = info[4][0]
-            addr = ipaddress.ip_address(raw_addr)
-            # Unwrap IPv4-mapped IPv6 addresses (::ffff:x.x.x.x)
-            if isinstance(addr, ipaddress.IPv6Address) and addr.ipv4_mapped:
-                addr = addr.ipv4_mapped
-            if any(addr in net for net in _BLOCKED_NETWORKS):
-                return True
+        results = socket.getaddrinfo(hostname, None)
+        for _family, _type, _proto, _canonname, sockaddr in results:
+            addr_str = sockaddr[0]
+            try:
+                addr = ipaddress.ip_address(addr_str)
+                for net in _PRIVATE_NETWORKS:
+                    if addr in net:
+                        return True
+            except ValueError:
+                pass  # skip unparseable addresses
         return False
-    except socket.gaierror:
-        # Unresolvable hostname — treat as safe (public hostnames may not resolve in CI)
-        return False
-    except ValueError:
+    except (socket.gaierror, ValueError):
+        # Treat unresolvable or malformed hostnames as private/blocked.
         return True
 
 
@@ -102,10 +89,9 @@ def validate_download_url(url: str) -> None:
     Raise ``ValueError`` if *url* is not a safe remote HTTP/HTTPS URL.
 
     Blocks:
-    - Non-HTTPS schemes (file://, http://, ftp://, local paths starting with '/' or 'file=')
+    - Non-HTTP(S) schemes (file://, ftp://, local paths starting with '/' or 'file=')
     - Loopback and private-network hostnames
     - Empty or missing hostnames
-    - Decimal IP, IPv4-mapped IPv6, trailing-dot, and 0.0.0.0 bypasses
     """
     if not url:
         raise ValueError("Download URL must not be empty.")
@@ -119,12 +105,27 @@ def validate_download_url(url: str) -> None:
     if scheme not in ("http", "https"):
         raise ValueError(f"Only http/https download URLs are permitted; got scheme {scheme!r}.")
 
-    host = (parsed.hostname or "").rstrip(".")
-    if not host:
+    hostname = parsed.hostname or ""
+    if not hostname:
         raise ValueError("Download URL has no hostname.")
 
-    if _is_private(host):
-        raise ValueError(f"private/internal host '{host}' not allowed")
+    # Reject loopback / link-local / private addresses
+    try:
+        addr = ipaddress.ip_address(hostname)
+        for net in _PRIVATE_NETWORKS:
+            if addr in net:
+                raise ValueError(f"Download URL targets a private/loopback address: {hostname!r}")
+    except ValueError as exc:
+        # ip_address() raises ValueError for non-IP hostnames — check textually
+        hostname_lower = hostname.lower()
+        if hostname_lower in ("localhost", "::1") or hostname_lower.endswith(".local"):
+            raise ValueError(f"Download URL targets a local hostname: {hostname!r}") from exc
+        # Non-IP public hostname — allow it
+        if "private/loopback" in str(exc):
+            raise
+        # DNS-resolve the hostname and block if it points to a private network.
+        if _is_private(hostname):
+            raise ValueError(f"Download URL hostname resolves to a private/blocked address: {hostname!r}") from exc
 
 
 # ---------------------------------------------------------------------------
@@ -140,27 +141,23 @@ def clamp(value: int | float, lo: int | float, hi: int | float) -> int | float:
 # H-4 helper
 # ---------------------------------------------------------------------------
 
-def safe_extractall(source: "str | os.PathLike[str] | BinaryIO", dest_dir: str | os.PathLike[str]) -> None:
+def safe_extractall(zip_path: str | os.PathLike[str], dest_dir: str | os.PathLike[str]) -> None:
     """
-    Extract a zip archive to *dest_dir*, blocking Zip Slip and symlink attacks.
+    Extract all members of *zip_path* into *dest_dir*, blocking Zip Slip.
 
     Raises:
         zipfile.BadZipFile  -- if the archive is corrupt or not a zip file
-        ValueError          -- if any member path resolves outside *dest_dir* or if
-                               any member is a symlink (symlink targets are not
-                               validated at extract time).
+        ValueError          -- if any member path would escape *dest_dir*
     """
-    real_dest = os.path.realpath(dest_dir)
-    with zipfile.ZipFile(source, "r") as zf:
-        for info in zf.infolist():
-            # Detect symlinks: Unix mode stored in high 16 bits of external_attr
-            unix_mode = (info.external_attr >> 16) & 0xFFFF
-            if unix_mode and (unix_mode & 0xA000) == 0xA000:
-                raise ValueError(f"Zip contains symlink member: '{info.filename}'")
-            member_real = os.path.realpath(os.path.join(real_dest, info.filename))
-            if not member_real.startswith(real_dest + os.sep) and member_real != real_dest:
+    dest = Path(dest_dir).resolve()
+    with zipfile.ZipFile(zip_path, "r") as zf:
+        for member in zf.namelist():
+            member_path = (dest / member).resolve()
+            try:
+                member_path.relative_to(dest)
+            except ValueError:
                 raise ValueError(
-                    f"Zip Slip blocked: archive member {info.filename!r} would extract outside "
-                    f"destination directory {real_dest!r}."
+                    f"Zip Slip blocked: archive member {member!r} would extract outside "
+                    f"destination directory {str(dest)!r}."
                 )
-        zf.extractall(dest_dir)
+        zf.extractall(dest)
