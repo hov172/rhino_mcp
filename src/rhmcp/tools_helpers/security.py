@@ -1,163 +1,85 @@
-"""
-Security helpers shared across rhmcp tools.
-
-Functions
----------
-sanitise_rhino_path  -- strip characters that could break a Rhino macro string
-validate_download_url -- reject non-HTTP(S) and private/loopback URLs
-clamp                -- bound a numeric value to [lo, hi]
-safe_extractall      -- extract a zip archive, blocking Zip Slip path traversal
-"""
-
+"""Shared security guards used across rhino_mcp tools."""
 from __future__ import annotations
 
 import ipaddress
 import os
 import socket
 import zipfile
-from pathlib import Path
+from typing import BinaryIO
 from urllib.parse import urlparse
 
-
-# ---------------------------------------------------------------------------
-# H-1 helper
-# ---------------------------------------------------------------------------
-
-_RHINO_MACRO_DANGEROUS = ('"', '\n', '\r', '\0')
+# Characters that break Rhino macro strings when embedded between double-quotes.
+_RHINO_MACRO_STRIP = str.maketrans("", "", '"\r\n')
 
 
 def sanitise_rhino_path(path: str) -> str:
     """
-    Return *path* with characters that could break a Rhino macro string removed.
+    Remove characters that would break a Rhino macro string literal.
 
-    Rhino macro strings embed paths inside double-quoted tokens, so an embedded
-    double-quote would terminate the token early.  Newlines and null bytes could
-    allow injection of additional macro commands.
-
-    Raises ``ValueError`` if *path* becomes empty after sanitisation.
+    Rhino macros embed paths as: _-Export "«path»" _Enter
+    A double-quote inside «path» terminates the string and allows injection.
+    Newlines also break the macro parser.
     """
-    cleaned = path
-    for ch in _RHINO_MACRO_DANGEROUS:
-        cleaned = cleaned.replace(ch, "")
-    if not cleaned.strip():
-        raise ValueError(f"Path is empty or invalid after sanitisation: {path!r}")
-    return cleaned
+    return path.translate(_RHINO_MACRO_STRIP)
 
 
-# ---------------------------------------------------------------------------
-# M-3 helper
-# ---------------------------------------------------------------------------
-
-_PRIVATE_NETWORKS = [
+# Private/link-local IPv4 and IPv6 ranges that must never be fetched.
+_BLOCKED_NETWORKS = [
     ipaddress.ip_network("10.0.0.0/8"),
     ipaddress.ip_network("172.16.0.0/12"),
     ipaddress.ip_network("192.168.0.0/16"),
     ipaddress.ip_network("127.0.0.0/8"),
-    ipaddress.ip_network("169.254.0.0/16"),
+    ipaddress.ip_network("169.254.0.0/16"),  # link-local / AWS metadata
     ipaddress.ip_network("::1/128"),
     ipaddress.ip_network("fc00::/7"),
 ]
 
 
-def _is_private(hostname: str) -> bool:
-    """
-    Return ``True`` if *hostname* resolves to a private/loopback address.
-
-    Performs DNS resolution and checks each resolved address against the known
-    private networks.  Fails closed: unresolvable or malformed hostnames are
-    treated as private/blocked (returns ``True``).
-    """
+def _is_private(host: str) -> bool:
     try:
-        results = socket.getaddrinfo(hostname, None)
-        for _family, _type, _proto, _canonname, sockaddr in results:
-            addr_str = sockaddr[0]
-            try:
-                addr = ipaddress.ip_address(addr_str)
-                for net in _PRIVATE_NETWORKS:
-                    if addr in net:
-                        return True
-            except ValueError:
-                pass  # skip unparseable addresses
-        return False
+        addr = ipaddress.ip_address(socket.gethostbyname(host))
+        return any(addr in net for net in _BLOCKED_NETWORKS)
     except (socket.gaierror, ValueError):
-        # Treat unresolvable or malformed hostnames as private/blocked.
+        # Unresolvable or malformed — treat as private to be safe.
         return True
 
 
 def validate_download_url(url: str) -> None:
     """
-    Raise ``ValueError`` if *url* is not a safe remote HTTP/HTTPS URL.
+    Raise ValueError if *url* is not a safe remote HTTPS URL.
 
-    Blocks:
-    - Non-HTTP(S) schemes (file://, ftp://, local paths starting with '/' or 'file=')
-    - Loopback and private-network hostnames
-    - Empty or missing hostnames
+    Blocks: non-https schemes, local file paths, private/link-local IP ranges.
     """
-    if not url:
-        raise ValueError("Download URL must not be empty.")
-
-    # Block local-path shortcuts used by Gradio (handled by caller separately if needed)
     if url.startswith("/") or url.startswith("file="):
-        raise ValueError(f"Local file paths are not permitted as download URLs: {url!r}")
+        raise ValueError("local path not allowed as download URL")
 
     parsed = urlparse(url)
-    scheme = parsed.scheme.lower()
-    if scheme not in ("http", "https"):
-        raise ValueError(f"Only http/https download URLs are permitted; got scheme {scheme!r}.")
+    if parsed.scheme != "https":
+        raise ValueError(f"scheme '{parsed.scheme}' not allowed — only https is permitted")
 
-    hostname = parsed.hostname or ""
-    if not hostname:
-        raise ValueError("Download URL has no hostname.")
+    host = parsed.hostname or ""
+    if not host:
+        raise ValueError("URL has no host")
 
-    # Reject loopback / link-local / private addresses
-    try:
-        addr = ipaddress.ip_address(hostname)
-        for net in _PRIVATE_NETWORKS:
-            if addr in net:
-                raise ValueError(f"Download URL targets a private/loopback address: {hostname!r}")
-    except ValueError as exc:
-        # ip_address() raises ValueError for non-IP hostnames — check textually
-        hostname_lower = hostname.lower()
-        if hostname_lower in ("localhost", "::1") or hostname_lower.endswith(".local"):
-            raise ValueError(f"Download URL targets a local hostname: {hostname!r}") from exc
-        # Non-IP public hostname — allow it
-        if "private/loopback" in str(exc):
-            raise
-        # DNS-resolve the hostname and block if it points to a private network.
-        if _is_private(hostname):
-            raise ValueError(f"Download URL hostname resolves to a private/blocked address: {hostname!r}") from exc
+    if _is_private(host):
+        raise ValueError(f"private/internal host '{host}' not allowed")
 
 
-# ---------------------------------------------------------------------------
-# M-4 helper
-# ---------------------------------------------------------------------------
-
-def clamp(value: int | float, lo: int | float, hi: int | float) -> int | float:
-    """Return *value* clamped to the inclusive range [lo, hi]."""
+def clamp(value: int, lo: int, hi: int) -> int:
+    """Return *value* clamped to [lo, hi]."""
     return max(lo, min(hi, value))
 
 
-# ---------------------------------------------------------------------------
-# H-4 helper
-# ---------------------------------------------------------------------------
-
-def safe_extractall(zip_path: str | os.PathLike[str], dest_dir: str | os.PathLike[str]) -> None:
+def safe_extractall(source: "str | BinaryIO", dest_dir: str) -> None:
     """
-    Extract all members of *zip_path* into *dest_dir*, blocking Zip Slip.
+    Extract a zip archive to *dest_dir* while blocking Zip Slip attacks.
 
-    Raises:
-        zipfile.BadZipFile  -- if the archive is corrupt or not a zip file
-        ValueError          -- if any member path would escape *dest_dir*
+    Raises ValueError if any member path resolves outside *dest_dir*.
     """
-    dest = Path(dest_dir).resolve()
-    with zipfile.ZipFile(zip_path, "r") as zf:
+    real_dest = os.path.realpath(dest_dir)
+    with zipfile.ZipFile(source, "r") as zf:
         for member in zf.namelist():
-            member_path = (dest / member).resolve()
-            try:
-                member_path.relative_to(dest)
-            except ValueError:
-                raise ValueError(
-                    f"Zip Slip blocked: archive member {member!r} would extract outside "
-                    f"destination directory {str(dest)!r}."
-                )
-        zf.extractall(dest)
+            member_real = os.path.realpath(os.path.join(real_dest, member))
+            if not member_real.startswith(real_dest + os.sep) and member_real != real_dest:
+                raise ValueError(f"Zip slip detected: '{member}' resolves outside extract dir")
+        zf.extractall(dest_dir)
