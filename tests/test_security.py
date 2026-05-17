@@ -150,5 +150,90 @@ class TestSafeExtractall(unittest.TestCase):
                 safe_extractall(zip_path, dest)
 
 
+class TestRound6To8Helpers(unittest.TestCase):
+    # ------------------------------------------------------------------
+    # _svg_no_fetch (documents.py R7-1)
+    # ------------------------------------------------------------------
+
+    def test_svg_no_fetch_http_raises(self) -> None:
+        from rhmcp.tools.documents import _svg_no_fetch
+        with self.assertRaises(ValueError):
+            _svg_no_fetch("http://evil.com/x.png")
+
+    def test_svg_no_fetch_file_scheme_raises(self) -> None:
+        from rhmcp.tools.documents import _svg_no_fetch
+        with self.assertRaises(ValueError):
+            _svg_no_fetch("file:///etc/passwd")
+
+    def test_svg_no_fetch_data_uri_raises(self) -> None:
+        from rhmcp.tools.documents import _svg_no_fetch
+        with self.assertRaises(ValueError):
+            _svg_no_fetch("data:image/png;base64,abc")
+
+    # ------------------------------------------------------------------
+    # _validate_read_path (documents.py R7-2)
+    # ------------------------------------------------------------------
+
+    def test_validate_read_path_home_accepted(self) -> None:
+        from rhmcp.tools.documents import _validate_read_path
+        home = os.path.expanduser("~")
+        result = _validate_read_path(os.path.join(home, "some_file.pdf"))
+        self.assertIsInstance(result, str)
+
+    def test_validate_read_path_etc_passwd_rejected(self) -> None:
+        from rhmcp.tools.documents import _validate_read_path
+        with self.assertRaises(ValueError):
+            _validate_read_path("/etc/passwd")
+
+    def test_validate_read_path_tmp_rejected_by_default(self) -> None:
+        from rhmcp.tools.documents import _validate_read_path
+        with patch.dict(os.environ, {}, clear=False):
+            os.environ.pop("RHINO_MCP_READ_ROOTS", None)
+            with self.assertRaises(ValueError):
+                _validate_read_path("/tmp/x.txt")
+
+    def test_validate_read_path_custom_root_accepted(self) -> None:
+        from rhmcp.tools.documents import _validate_read_path
+        with patch.dict(os.environ, {"RHINO_MCP_READ_ROOTS": "/tmp"}):
+            result = _validate_read_path("/tmp/x.txt")
+            self.assertIsInstance(result, str)
+
+    # ------------------------------------------------------------------
+    # _safe_export_path (urban.py R4-4)
+    # ------------------------------------------------------------------
+
+    def test_safe_export_path_home_accepted(self) -> None:
+        from rhmcp.tools.urban import _safe_export_path
+        home = os.path.expanduser("~")
+        result = _safe_export_path(os.path.join(home, "out.json"))
+        self.assertIsInstance(result, str)
+
+    def test_safe_export_path_tempdir_accepted(self) -> None:
+        from rhmcp.tools.urban import _safe_export_path
+        result = _safe_export_path(os.path.join(tempfile.gettempdir(), "out.json"))
+        self.assertIsInstance(result, str)
+
+    def test_safe_export_path_etc_rejected(self) -> None:
+        from rhmcp.tools.urban import _safe_export_path
+        with self.assertRaises(ValueError):
+            _safe_export_path("/etc/x")
+
+    # ------------------------------------------------------------------
+    # _JOB_STORE bounded dict (ai_generation.py R6-7)
+    # ------------------------------------------------------------------
+
+    def test_job_store_bounded_evicts_oldest(self) -> None:
+        from rhmcp.tools.ai_generation import _BoundedDict, _JOB_STORE_MAX
+        store = _BoundedDict()
+        # Fill beyond limit
+        for i in range(_JOB_STORE_MAX + 1):
+            store[str(i)] = {"idx": i}
+        self.assertLessEqual(len(store), _JOB_STORE_MAX)
+        # Oldest key ("0") must have been evicted
+        self.assertNotIn("0", store)
+        # Newest key must still be present
+        self.assertIn(str(_JOB_STORE_MAX), store)
+
+
 if __name__ == "__main__":
     unittest.main()
