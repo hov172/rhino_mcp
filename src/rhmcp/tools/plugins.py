@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import os
+import pathlib
 import platform
 import shutil
 import subprocess
@@ -165,11 +166,20 @@ def register(mcp: FastMCP) -> None:
                 }
 
             if ext == ".rhi":
+                # Resolve and validate the path before launching (R4-3).
+                resolved = pathlib.Path(file_path).resolve()
+                if resolved.suffix.lower() not in (".rhi", ".rhp", ".yak"):
+                    return {
+                        "success": False,
+                        "message": f"Only .rhi, .rhp, or .yak files can be installed; got: {resolved.suffix!r}",
+                    }
+                if not resolved.is_file():
+                    return {"success": False, "message": f"Plugin file not found: {resolved}"}
                 # Open with the OS-registered Rhino Installer handler
                 if platform.system() == "Darwin":
-                    subprocess.Popen(["open", file_path])
+                    subprocess.Popen(["open", str(resolved)])
                 else:
-                    os.startfile(file_path)  # type: ignore[attr-defined]
+                    os.startfile(str(resolved))  # type: ignore[attr-defined]
                 return {
                     "success": True,
                     "method": "rhi_installer",
