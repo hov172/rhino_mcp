@@ -193,6 +193,16 @@ def main() -> int:
                             )
                         hits.append(now)
                         self._windows[token] = hits
+                        # Evict oldest tokens if cache is too large (R7-3)
+                        _MAX_WINDOW_KEYS = 4096
+                        if len(self._windows) > _MAX_WINDOW_KEYS:
+                            stale = [k for k, v in self._windows.items() if not v]
+                            for k in stale:
+                                del self._windows[k]
+                            if len(self._windows) > _MAX_WINDOW_KEYS:
+                                evict_count = len(self._windows) - _MAX_WINDOW_KEYS // 2
+                                for k in list(self._windows.keys())[:evict_count]:
+                                    del self._windows[k]
                     return await call_next(request)
 
             app = Starlette(routes=[

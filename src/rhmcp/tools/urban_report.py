@@ -89,11 +89,14 @@ def _html_to_pdf_docraptor(html: str) -> bytes:
 
 
 def _upload_to_s3(pdf_bytes: bytes, html: str, project: str, scheme: str) -> tuple[str, str]:
+    import re as _re
     import boto3
     bucket = os.environ["URBAN_AGENT_S3_BUCKET"]
     ts = int(time.time())
-    pdf_key = f"reports/{project}/{scheme}/{ts}.pdf"
-    html_key = f"reports/{project}/{scheme}/{ts}.html"
+    safe_project = _re.sub(r'[^\w\-.]', '_', project)[:64] or "project"
+    safe_scheme = _re.sub(r'[^\w\-.]', '_', scheme)[:64] or "scheme"
+    pdf_key = f"reports/{safe_project}/{safe_scheme}/{ts}.pdf"
+    html_key = f"reports/{safe_project}/{safe_scheme}/{ts}.html"
     client = boto3.client(
         "s3",
         aws_access_key_id=os.environ.get("AWS_ACCESS_KEY_ID"),
