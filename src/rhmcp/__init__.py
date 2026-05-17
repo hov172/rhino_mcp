@@ -8,11 +8,13 @@ be running and its script server must be started with ``StartScriptServer``.
 from __future__ import annotations
 
 import argparse
+import collections
 import importlib
 import os
 import pkgutil
 import secrets
 import sys
+import time
 
 import yaml
 from mcp.server.fastmcp import FastMCP
@@ -127,6 +129,8 @@ def main() -> int:
         from starlette.responses import JSONResponse
         from starlette.routing import Mount, Route
 
+        _RATE_LIMIT_RPM = int(os.environ.get("RHINO_MCP_RATE_LIMIT_RPM", "120"))
+
         async def health(request: Request) -> JSONResponse:
             return JSONResponse({"status": "ok"})
 
@@ -164,11 +168,39 @@ def main() -> int:
                         )
                     return await call_next(request)
 
+            # R6-9: Per-token sliding-window rate limiter (120 req/min default)
+            class _RateLimiter(BaseHTTPMiddleware):
+                def __init__(self, app):
+                    super().__init__(app)
+                    self._windows: dict = {}
+                    self._lock = __import__("threading").Lock()
+
+                async def dispatch(self, request, call_next):
+                    if request.url.path == "/health" or request.method == "OPTIONS":
+                        return await call_next(request)
+                    token = request.headers.get("Authorization", "anonymous")
+                    now = time.time()
+                    window_start = now - 60.0
+                    with self._lock:
+                        hits = self._windows.get(token, collections.deque())
+                        while hits and hits[0] < window_start:
+                            hits.popleft()
+                        if len(hits) >= _RATE_LIMIT_RPM:
+                            return StarletteResponse(
+                                '{"error":"Rate limit exceeded"}',
+                                status_code=429,
+                                media_type="application/json",
+                            )
+                        hits.append(now)
+                        self._windows[token] = hits
+                    return await call_next(request)
+
             app = Starlette(routes=[
                 Route("/health", health),
                 Mount("/", app=mcp_app),
             ])
             app.add_middleware(_TokenAuth)
+            app.add_middleware(_RateLimiter)
             return app
 
         mcp.streamable_http_app = app_with_cors  # type: ignore[method-assign]
