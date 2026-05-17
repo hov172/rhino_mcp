@@ -254,8 +254,8 @@ public static class GH2Handlers
                 if (doc == null)
                     throw new InvalidOperationException("No active GH2 document");
 
-                var placedGuids = new List<string>();
-                var errors      = new List<string>();
+                var placedMap = new Dictionary<string, string>();
+                var errors    = new List<string>();
 
                 // Place components
                 if (p.TryGetValue("components", out var compsEl) && compsEl.ValueKind == JsonValueKind.Array)
@@ -266,9 +266,10 @@ public static class GH2Handlers
                         {
                             var compDict = compEl.EnumerateObject()
                                 .ToDictionary(kv => kv.Name, kv => kv.Value);
+                            string compKey = compDict.TryGetValue("key", out var keyEl) ? keyEl.GetString() ?? "" : "";
                             var placed = PlaceComponentInternal(doc, compDict);
                             if (placed is string guid)
-                                placedGuids.Add(guid);
+                                placedMap[compKey] = guid;
                             else
                                 errors.Add(placed?.ToString() ?? "unknown error placing component");
                         }
@@ -285,9 +286,10 @@ public static class GH2Handlers
                         {
                             var sliderDict = sliderEl.EnumerateObject()
                                 .ToDictionary(kv => kv.Name, kv => kv.Value);
+                            string sliderKey = sliderDict.TryGetValue("key", out var keyEl) ? keyEl.GetString() ?? "" : "";
                             var placed = PlaceSliderInternal(doc, sliderDict);
                             if (placed is string guid)
-                                placedGuids.Add(guid);
+                                placedMap[sliderKey] = guid;
                             else
                                 errors.Add(placed?.ToString() ?? "unknown error placing slider");
                         }
@@ -296,6 +298,7 @@ public static class GH2Handlers
                 }
 
                 // Connect wires
+                int wiredCount = 0;
                 var wireErrors = new List<string>();
                 if (p.TryGetValue("wires", out var wiresEl) && wiresEl.ValueKind == JsonValueKind.Array)
                 {
@@ -305,14 +308,17 @@ public static class GH2Handlers
                         {
                             var wireDict = wireEl.EnumerateObject()
                                 .ToDictionary(kv => kv.Name, kv => kv.Value);
+                            int prevErrorCount = wireErrors.Count;
                             ConnectInternal(doc, wireDict, wireErrors);
+                            if (wireErrors.Count == prevErrorCount)
+                                wiredCount++;
                         }
                         catch (Exception ex) { wireErrors.Add(ex.Message); }
                     }
                 }
 
                 errors.AddRange(wireErrors);
-                result = new { ok = errors.Count == 0, placed_guids = placedGuids, errors };
+                result = new { ok = errors.Count == 0, placed = placedMap, wired = wiredCount, errors };
             }
             catch (Exception ex)
             {
