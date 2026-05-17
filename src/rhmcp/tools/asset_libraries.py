@@ -308,7 +308,7 @@ def register(mcp: FastMCP) -> None:  # noqa: PLR0915 – many tools, acceptable 
             return {"ok": False, "error": f"HDRI file not found: {filepath}"}
 
         # Build C# code that applies the HDRI inside Rhino.
-        safe_path = filepath.replace("\\", "\\\\").replace('"', '\\"')
+        safe_path = filepath.replace("\\", "\\\\").replace('"', '""')
         csharp_code = f"""
 var doc = RhinoDoc.ActiveDoc;
 var hdriPath = @"{safe_path}";
@@ -926,7 +926,7 @@ def _import_file_to_rhino(filepath: str, scale: float = 1.0) -> dict[str, Any]:
         The raw dict returned by the plugin socket, augmented with an ``ok``
         key derived from the response status.
     """
-    safe_path = filepath.replace("\\", "\\\\").replace('"', '\\"')
+    safe_path = filepath.replace("\\", "\\\\").replace('"', '""')
     scale_str = repr(float(scale))
     csharp_code = f"""
 var filePath = @"{safe_path}";
