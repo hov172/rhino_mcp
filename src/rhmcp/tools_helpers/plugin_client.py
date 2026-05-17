@@ -123,13 +123,14 @@ def health_check(timeout: float = 3.0) -> dict[str, Any]:
         resp = send_command("ping", {}, timeout=timeout, retries=0)
         latency = round((time.monotonic() - t0) * 1000, 1)
         if resp.get("ok") or resp.get("status") == "ok":
+            inner = resp.get("result", resp)
             return {
                 "ok": True,
                 "host": host,
                 "port": port,
                 "latency_ms": latency,
-                "version": resp.get("version"),
-                "rhino": resp.get("rhino"),
+                "version": inner.get("version"),
+                "rhino": inner.get("rhino"),
             }
         return {"ok": False, "host": host, "port": port, "error": "Unexpected ping response", "error_code": "HEALTH_CHECK_FAILED", "raw": resp}
     except OSError as ex:
