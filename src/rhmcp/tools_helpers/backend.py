@@ -52,8 +52,26 @@ def list_instances() -> dict[str, Any]:
     return rhinocode.list_instances()
 
 
-def plugin_result(command_type: str, params: dict[str, Any] | None = None) -> dict[str, Any]:
-    response = plugin_client.send_command(command_type, params)
+def _slot_registry_enabled() -> bool:
+    return os.environ.get("RHINO_MCP_USE_SLOT_REGISTRY", "").strip() == "1"
+
+
+def plugin_result(
+    command_type: str,
+    params: dict[str, Any] | None = None,
+    rhino_id: str | None = None,
+) -> dict[str, Any]:
+    # Resolve connection target via slot registry when requested
+    host: str | None = None
+    port: int | None = None
+    if rhino_id is not None or _slot_registry_enabled():
+        try:
+            from rhmcp.tools_helpers import slot_registry
+            slot = slot_registry.get(rhino_id)
+            host, port = slot.host, slot.port
+        except RuntimeError:
+            pass  # fall through to env-var defaults (backward compat)
+    response = plugin_client.send_command(command_type, params, host=host, port=port)
     if response.get("status") == "error":
         return normalize({"ok": False, "backend": BACKEND_PLUGIN, **response})
     if "result" in response:
