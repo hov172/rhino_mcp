@@ -140,6 +140,10 @@ def register(mcp: FastMCP) -> None:
         Returns a list of RenderResult dicts — one per view.
         Falls back to raw Rhino captures if fal.ai is unavailable.
         """
+        # R6-4: Cap style_override length
+        if style_override and len(style_override) > 2000:
+            return [{"ok": False, "error": "style_override exceeds maximum length of 2000 characters."}]
+
         from rhmcp.tools.urban_design_language import _current_design_language
 
         if views is None:
@@ -224,6 +228,9 @@ def register(mcp: FastMCP) -> None:
         Quick text-to-image style preview via fal.ai FLUX.1 (no Rhino model needed).
         Use to explore design directions before generating the full massing.
         """
+        # R6-4: Cap style_prompt length
+        if style_prompt and len(style_prompt) > 2000:
+            return {"ok": False, "error": "style_prompt exceeds maximum length of 2000 characters."}
         if not os.environ.get("FAL_KEY"):
             return {"ok": False, "error": "FAL_KEY not set"}
         try:
