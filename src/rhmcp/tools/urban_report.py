@@ -109,6 +109,9 @@ def _upload_to_s3(pdf_bytes: bytes, html: str, project: str, scheme: str) -> tup
 
 
 def _save_local(pdf_bytes: bytes, html: str, project: str, scheme: str) -> tuple[str, str]:
+    import re as _re
+    project = _re.sub(r'[^\w\-.]', '_', project)[:64] or "project"
+    scheme = _re.sub(r'[^\w\-.]', '_', scheme)[:64] or "scheme"
     ts = int(time.time())
     out_dir = Path.home() / ".urbanagent" / "reports" / project / f"{scheme}_{ts}"
     out_dir.mkdir(parents=True, exist_ok=True)
