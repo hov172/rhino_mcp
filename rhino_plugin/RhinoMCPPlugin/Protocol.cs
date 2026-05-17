@@ -10,6 +10,10 @@ public sealed class McpRequest
 
     [JsonPropertyName("params")]
     public JsonElement Params { get; set; }
+
+    [JsonPropertyName("secret")]
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public string? Secret { get; set; }
 }
 
 public sealed class McpResponse

@@ -1,5 +1,6 @@
 using System.Net;
 using System.Net.Sockets;
+using System.Security.Cryptography;
 using System.Text;
 using System.Text.Json;
 using Rhino;
@@ -120,9 +121,27 @@ public sealed class RhinoMcpServer
             var text = accumulated.ToString().Trim();
             var request = JsonSerializer.Deserialize<McpRequest>(text, JsonHelpers.Options);
             if (request is null || string.IsNullOrWhiteSpace(request.Type))
+            {
                 response = McpResponse.Error("Invalid MCP request.");
+            }
             else
+            {
+                // PSK check — only enforced when RHINO_MCP_PLUGIN_SECRET is configured.
+                var configuredSecret = Environment.GetEnvironmentVariable("RHINO_MCP_PLUGIN_SECRET");
+                if (configuredSecret is not null)
+                {
+                    var provided = request.Secret ?? "";
+                    if (!SecretEquals(configuredSecret, provided))
+                    {
+                        response = McpResponse.Error("Unauthorized: invalid or missing plugin secret.");
+                        var errJson = JsonSerializer.Serialize(response, JsonHelpers.Options);
+                        var errBytes = Encoding.UTF8.GetBytes(errJson);
+                        await stream.WriteAsync(errBytes.AsMemory(0, errBytes.Length), token).ConfigureAwait(false);
+                        return;  // close connection immediately
+                    }
+                }
                 response = InvokeOnRhinoThread(() => CommandDispatcher.Dispatch(request));
+            }
         }
         catch (Exception ex)
         {
@@ -132,6 +151,17 @@ public sealed class RhinoMcpServer
         var json = JsonSerializer.Serialize(response, JsonHelpers.Options);
         var bytes = Encoding.UTF8.GetBytes(json);
         await stream.WriteAsync(bytes.AsMemory(0, bytes.Length), token).ConfigureAwait(false);
+    }
+
+    /// <summary>
+    /// Constant-time secret comparison — hashes both values first to normalise
+    /// length, then uses FixedTimeEquals to prevent timing attacks.
+    /// </summary>
+    private static bool SecretEquals(string configured, string provided)
+    {
+        var a = SHA256.HashData(System.Text.Encoding.UTF8.GetBytes(configured));
+        var b = SHA256.HashData(System.Text.Encoding.UTF8.GetBytes(provided));
+        return CryptographicOperations.FixedTimeEquals(a, b);
     }
 
     private static T InvokeOnRhinoThread<T>(Func<T> func)
