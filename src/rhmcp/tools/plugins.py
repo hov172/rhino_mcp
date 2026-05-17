@@ -11,6 +11,7 @@ from mcp.server.fastmcp import FastMCP
 from mcp.types import ToolAnnotations
 
 from rhmcp.tools_helpers import plugin_client
+from rhmcp.tools_helpers.security import sanitise_rhino_path
 
 # Plugins installable via Yak (Rhino's package manager CLI) — confirmed package names
 _YAK_PLUGINS: dict[str, str] = {
@@ -155,7 +156,7 @@ def register(mcp: FastMCP) -> None:
                 }
 
             if ext == ".rhp":
-                result = plugin_client.send_command("run_command", {"command": f'_LoadPlugin "{file_path}"'})
+                result = plugin_client.send_command("run_command", {"command": f'_LoadPlugin "{sanitise_rhino_path(file_path)}"'})
                 return {
                     "success": True,
                     "method": "load_plugin",
