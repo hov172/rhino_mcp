@@ -8,6 +8,7 @@ Provides access to Poly Haven (HDRIs, textures, models) and Sketchfab
 from __future__ import annotations
 
 import os
+import re as _re
 import tempfile
 import zipfile
 from pathlib import Path
@@ -19,6 +20,28 @@ from mcp.types import ToolAnnotations
 
 from rhmcp.tools_helpers import backend as rhino
 from rhmcp.tools_helpers import plugin_client
+
+# ---------------------------------------------------------------------------
+# Input-validation helpers (R4-1)
+# ---------------------------------------------------------------------------
+
+_GUID_RE = _re.compile(
+    r'^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$'
+)
+
+
+def _validate_guid(guid: str) -> str:
+    """Raise ValueError if *guid* is not a standard UUID string."""
+    if not _GUID_RE.match(guid):
+        raise ValueError(f"Invalid GUID format: {guid!r}")
+    return guid
+
+
+def _validate_mat_name(name: str) -> str:
+    """Raise ValueError if *name* is not a safe material name (max 128 chars)."""
+    if not _re.match(r'^[\w\s.\-]{1,128}$', name):
+        raise ValueError(f"Invalid material name: {name!r}")
+    return name
 
 # ---------------------------------------------------------------------------
 # Constants
@@ -243,6 +266,11 @@ def register(mcp: FastMCP) -> None:  # noqa: PLR0915 – many tools, acceptable 
         if not download_url:
             return {"ok": False, "error": "Could not determine download URL from file list."}
 
+        # Sanitise the upstream-supplied filename before joining with a local path (R4-5).
+        filename = os.path.basename(filename)
+        if not filename or ".." in filename:
+            return {"ok": False, "error": f"Invalid filename from upstream: {filename!r}"}
+
         filepath = os.path.join(dest_dir, filename)
         try:
             with httpx.Client(timeout=_DOWNLOAD_TIMEOUT, follow_redirects=True) as client:
@@ -308,7 +336,9 @@ def register(mcp: FastMCP) -> None:  # noqa: PLR0915 – many tools, acceptable 
             return {"ok": False, "error": f"HDRI file not found: {filepath}"}
 
         # Build C# code that applies the HDRI inside Rhino.
-        safe_path = filepath.replace("\\", "\\\\").replace('"', '""')
+        # This path is used in a verbatim C# string (@"...") where backslashes
+        # are literal — only double-quotes need doubling (R4-6).
+        safe_path = filepath.replace('"', '""')
         csharp_code = f"""
 var doc = RhinoDoc.ActiveDoc;
 var hdriPath = @"{safe_path}";
@@ -457,7 +487,11 @@ catch (Exception ex)
                     continue
 
                 download_url: str = entry["url"]
-                fname: str = entry.get("filename") or f"{asset_id}_{ch_label}_{resolution}.{chosen_fmt}"
+                raw_fname: str = entry.get("filename") or f"{asset_id}_{ch_label}_{resolution}.{chosen_fmt}"
+                # Sanitise the upstream-supplied filename (R4-5).
+                fname = os.path.basename(raw_fname)
+                if not fname or ".." in fname:
+                    continue  # skip channels with invalid filenames
                 fpath = os.path.join(dest_dir, fname)
 
                 if not os.path.isfile(fpath):
@@ -477,8 +511,12 @@ catch (Exception ex)
             return {"ok": False, "error": "No texture maps could be downloaded for this asset."}
 
         # Build C# to create a PBR material and assign it to the object.
-        safe_name = mat_name.replace('"', '\\"')
-        safe_obj_id = object_id.replace('"', '\\"')
+        # Validate inputs strictly before interpolating into C# strings (R4-1).
+        try:
+            safe_name = _validate_mat_name(mat_name)
+            safe_obj_id = _validate_guid(object_id)
+        except ValueError as exc:
+            return {"ok": False, "error": str(exc)}
 
         def _cs_path(p: str) -> str:
             return p.replace("\\", "\\\\").replace('"', '\\"')
@@ -926,7 +964,9 @@ def _import_file_to_rhino(filepath: str, scale: float = 1.0) -> dict[str, Any]:
         The raw dict returned by the plugin socket, augmented with an ``ok``
         key derived from the response status.
     """
-    safe_path = filepath.replace("\\", "\\\\").replace('"', '""')
+    # Path used in verbatim C# string (@"...") — backslashes are literal,
+    # only double-quotes need doubling (R4-6).
+    safe_path = filepath.replace('"', '""')
     scale_str = repr(float(scale))
     csharp_code = f"""
 var filePath = @"{safe_path}";

@@ -911,13 +911,27 @@ def _download_file(
         if key:
             headers["Authorization"] = f"Bearer {key}"
 
+    _MAX_REDIRECTS = 5
+    current_url = url
     try:
-        with httpx.Client(timeout=120.0, follow_redirects=True) as client:
-            with client.stream("GET", url, headers=headers) as resp:
-                resp.raise_for_status()
-                with open(filepath, "wb") as fout:
-                    for chunk in resp.iter_bytes(chunk_size=65536):
-                        fout.write(chunk)
+        with httpx.Client(timeout=120.0, follow_redirects=False) as client:
+            for _ in range(_MAX_REDIRECTS):
+                with client.stream("GET", current_url, headers=headers) as resp:
+                    if resp.status_code in (301, 302, 303, 307, 308):
+                        location = resp.headers.get("location", "")
+                        try:
+                            validate_download_url(location)
+                        except ValueError as exc:
+                            return {"ok": False, "error": f"Redirect blocked: {exc}"}
+                        current_url = location
+                        continue
+                    resp.raise_for_status()
+                    with open(filepath, "wb") as fout:
+                        for chunk in resp.iter_bytes(chunk_size=65536):
+                            fout.write(chunk)
+                    break
+            else:
+                return {"ok": False, "error": "Too many redirects during download."}
     except httpx.HTTPStatusError as exc:
         return {"ok": False, "error": f"Download failed {exc.response.status_code}: {exc.response.text}"}
     except httpx.RequestError as exc:

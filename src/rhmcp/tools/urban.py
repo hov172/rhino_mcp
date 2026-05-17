@@ -12,13 +12,31 @@ import base64
 import datetime as _dt
 import json
 import os
+import pathlib
 import re
+import tempfile
 
 from mcp.server.fastmcp import FastMCP, Image
 
 from rhmcp.tools_helpers import backend as rhino
 from rhmcp.tools_helpers.security import sanitise_rhino_path
 from rhmcp.tools.view import _CAPTURE_SCRIPT
+
+
+def _safe_export_path(path: str) -> str:
+    """Ensure export_path is within a safe output directory (R4-4)."""
+    resolved = pathlib.Path(path).resolve()
+    allowed_roots = [
+        pathlib.Path.home(),
+        pathlib.Path(tempfile.gettempdir()),
+    ]
+    for root in allowed_roots:
+        try:
+            resolved.relative_to(root)
+            return str(resolved)
+        except ValueError:
+            continue
+    raise ValueError(f"export_path must be within home or temp directory: {path!r}")
 
 # ---------------------------------------------------------------------------
 # Paths
@@ -1071,7 +1089,11 @@ def register(mcp: FastMCP) -> None:
         fmt = output_format.lower().lstrip(".")
         if fmt not in {"3dm", "glb", "gltf", "geojson", "pdf"}:
             return {"ok": False, "error": "output_format must be one of 3dm, glb, gltf, geojson, pdf"}
-        export_path = path or os.path.join("/tmp", f"urban_export_{_dt.datetime.now(_dt.UTC).strftime('%Y%m%d_%H%M%S')}.{fmt}")
+        raw_path = path or os.path.join(tempfile.gettempdir(), f"urban_export_{_dt.datetime.now(_dt.UTC).strftime('%Y%m%d_%H%M%S')}.{fmt}")
+        try:
+            export_path = _safe_export_path(raw_path)
+        except ValueError as exc:
+            return {"ok": False, "error": str(exc)}
         if fmt == "geojson":
             code = (
                 "import json, Rhino\n"
