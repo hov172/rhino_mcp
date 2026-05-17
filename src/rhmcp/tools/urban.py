@@ -725,6 +725,10 @@ def register(mcp: FastMCP) -> None:
         if not run_result.get("ok"):
             return {"ok": False, "error": f"GH solution failed: {run_result.get('error')}"}
 
+        # R6-1: Validate layer_prefix to prevent Python code injection
+        if not re.fullmatch(r'[A-Za-z0-9_:.\- ]{1,64}', layer_prefix):
+            return {"ok": False, "error": f"Invalid layer_prefix: {layer_prefix!r}. Use only letters, digits, spaces, and _:.-"}
+
         layer = f"{layer_prefix}::Massing::{typology}"
         if bake_guid:
             _gh("gh_bake_component", {"instance_guid": bake_guid, "layer": layer})
@@ -733,9 +737,11 @@ def register(mcp: FastMCP) -> None:
         ox, oy = float(site_origin[0]), float(site_origin[1])
         oz = float(site_origin[2]) if len(site_origin) > 2 else 0.0
         if ox != 0.0 or oy != 0.0 or oz != 0.0:
+            # R6-1: Use repr() to safely embed layer name in generated Python code
             move_code = (
                 "import rhinoscriptsyntax as rs\n"
-                f"objs = rs.ObjectsByLayer('{layer}')\n"
+                f"layer = {layer!r}\n"
+                "objs = rs.ObjectsByLayer(layer)\n"
                 f"if objs: rs.MoveObjects(objs, ({ox}, {oy}, {oz}))\n"
                 "result = {'moved': len(objs) if objs else 0}"
             )
@@ -912,6 +918,9 @@ def register(mcp: FastMCP) -> None:
         generated slider params, missing fields, and confidence. This is a
         deterministic schema guard for LLM clients.
         """
+        # R6-4: Cap prompt length
+        if prompt and len(prompt) > 8000:
+            return {"ok": False, "error": "prompt exceeds maximum length of 8000 characters."}
         return _parse_urban_prompt_text(prompt)
 
     @mcp.tool(annotations=ToolAnnotations(title="Generate Site Layout", destructiveHint=True))
@@ -1159,6 +1168,9 @@ def register(mcp: FastMCP) -> None:
         PRD orchestrator: parse prompt, generate layout/massing, calculate
         metrics, optionally export the result.
         """
+        # R6-4: Cap prompt length
+        if prompt and len(prompt) > 8000:
+            return {"ok": False, "error": "prompt exceeds maximum length of 8000 characters."}
         parsed = parse_urban_prompt(prompt, rhino_id=rhino_id)
         boundary = _site_dimensions_from_boundary(site_boundary)
         if boundary.get("ok"):
