@@ -274,6 +274,10 @@ def register(mcp: FastMCP) -> None:  # noqa: PLR0915 – many tools, acceptable 
 
         filepath = os.path.join(dest_dir, filename)
         try:
+            validate_download_url(download_url)
+        except ValueError as exc:
+            return {"ok": False, "error": f"Unsafe download URL: {exc}"}
+        try:
             with httpx.Client(timeout=_DOWNLOAD_TIMEOUT, follow_redirects=True) as client:
                 with client.stream("GET", download_url) as stream:
                     stream.raise_for_status()
@@ -498,6 +502,7 @@ catch (Exception ex)
 
                 if not os.path.isfile(fpath):
                     try:
+                        validate_download_url(download_url)
                         with client.stream("GET", download_url) as stream:
                             stream.raise_for_status()
                             with open(fpath, "wb") as fh:
@@ -866,6 +871,11 @@ catch (Exception ex)
         archive_url: str = fmt_data.get("url", "")
         if not archive_url:
             return {"ok": False, "error": "Download URL is empty."}
+
+        try:
+            validate_download_url(archive_url)
+        except ValueError as exc:
+            return {"ok": False, "error": f"Unsafe archive URL: {exc}"}
 
         # Step 2: Download the zip archive.
         dest_dir = output_dir or os.path.join(tempfile.gettempdir(), f"sketchfab_{model_uid}")
