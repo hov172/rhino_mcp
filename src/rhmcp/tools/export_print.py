@@ -143,7 +143,7 @@ else:
 
     if not _wrote_ok:
         # Fall back: use the interactive Export command on the current selection
-        _mcp_path_safe = _mcp_path.replace('"', '').replace('\r', '').replace('\n', '')
+        _mcp_path_safe = _mcp_path.replace('"', '').replace('\r', '').replace('\n', '').replace('\0', '')
         _cmd = '_-Export "{}" _Enter'.format(_mcp_path_safe)
         rs.Command(_cmd, False)
         _wrote_ok = os.path.isfile(_mcp_path)
@@ -183,7 +183,7 @@ if not selected:
               "error": "No objects selected for export."}
 else:
     # Export via built-in _-Export command (Rhino 8 supports 3MF natively)
-    _mcp_path_safe = _mcp_path.replace('"', '').replace('\r', '').replace('\n', '')
+    _mcp_path_safe = _mcp_path.replace('"', '').replace('\r', '').replace('\n', '').replace('\0', '')
     _cmd = '_-Export "{}" _Enter'.format(_mcp_path_safe)
     rs.Command(_cmd, False)
     _wrote_ok = os.path.isfile(_mcp_path)

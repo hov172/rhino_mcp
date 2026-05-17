@@ -10,6 +10,7 @@ from mcp.server.fastmcp import FastMCP
 from mcp.types import ToolAnnotations
 
 from rhmcp.tools_helpers import backend as rhino
+from rhmcp.tools_helpers.security import validate_download_url
 
 # ---------------------------------------------------------------------------
 # Module-level state
@@ -84,6 +85,7 @@ def _fal_img2img(
         img_url = data["images"][0]["url"]
         request_id = data.get("request_id", "")
         seed_used = int(data.get("seed") or seed or 0)
+        validate_download_url(img_url)
         img_resp = client.get(img_url)
         img_resp.raise_for_status()
         rendered_b64 = base64.b64encode(img_resp.content).decode()
@@ -108,6 +110,7 @@ def _fal_text2img(prompt: str, seed: int | None) -> tuple[str, str, int]:
         img_url = data["images"][0]["url"]
         request_id = data.get("request_id", "")
         seed_used = int(data.get("seed") or seed or 0)
+        validate_download_url(img_url)
         img_resp = client.get(img_url)
         img_resp.raise_for_status()
         return base64.b64encode(img_resp.content).decode(), request_id, seed_used

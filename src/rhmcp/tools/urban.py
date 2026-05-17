@@ -27,8 +27,8 @@ def _safe_export_path(path: str) -> str:
     """Ensure export_path is within a safe output directory (R4-4)."""
     resolved = pathlib.Path(path).resolve()
     allowed_roots = [
-        pathlib.Path.home(),
-        pathlib.Path(tempfile.gettempdir()),
+        pathlib.Path.home().resolve(),
+        pathlib.Path(tempfile.gettempdir()).resolve(),
     ]
     for root in allowed_roots:
         try:
@@ -1131,6 +1131,7 @@ def register(mcp: FastMCP) -> None:
         stamp = _dt.datetime.now(_dt.UTC).strftime("%Y%m%d_%H%M%S")
         safe_version = re.sub(r"[^A-Za-z0-9_.-]+", "_", version_name or stamp).strip("_")
         folder = os.path.join(directory, safe_project, safe_version)
+        folder = _safe_export_path(folder)  # restrict to home or temp directory
         os.makedirs(folder, exist_ok=True)
         model_path = os.path.join(folder, f"{safe_project}_{safe_version}.3dm")
         manifest_path = os.path.join(folder, "version.json")

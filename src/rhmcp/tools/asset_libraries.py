@@ -20,6 +20,7 @@ from mcp.types import ToolAnnotations
 
 from rhmcp.tools_helpers import backend as rhino
 from rhmcp.tools_helpers import plugin_client
+from rhmcp.tools_helpers.security import sanitise_rhino_path, validate_download_url, safe_extractall, clamp
 
 # ---------------------------------------------------------------------------
 # Input-validation helpers (R4-1)
@@ -273,6 +274,10 @@ def register(mcp: FastMCP) -> None:  # noqa: PLR0915 – many tools, acceptable 
 
         filepath = os.path.join(dest_dir, filename)
         try:
+            validate_download_url(download_url)
+        except ValueError as exc:
+            return {"ok": False, "error": f"Unsafe download URL: {exc}"}
+        try:
             with httpx.Client(timeout=_DOWNLOAD_TIMEOUT, follow_redirects=True) as client:
                 with client.stream("GET", download_url) as stream:
                     stream.raise_for_status()
@@ -338,7 +343,8 @@ def register(mcp: FastMCP) -> None:  # noqa: PLR0915 – many tools, acceptable 
         # Build C# code that applies the HDRI inside Rhino.
         # This path is used in a verbatim C# string (@"...") where backslashes
         # are literal — only double-quotes need doubling (R4-6).
-        safe_path = filepath.replace('"', '""')
+        filepath = sanitise_rhino_path(filepath)  # strip macro-breaking chars before C#/macro use
+        safe_path = filepath.replace('"', '""')   # then escape for C# verbatim string
         csharp_code = f"""
 var doc = RhinoDoc.ActiveDoc;
 var hdriPath = @"{safe_path}";
@@ -496,6 +502,7 @@ catch (Exception ex)
 
                 if not os.path.isfile(fpath):
                     try:
+                        validate_download_url(download_url)
                         with client.stream("GET", download_url) as stream:
                             stream.raise_for_status()
                             with open(fpath, "wb") as fh:
@@ -823,6 +830,9 @@ catch (Exception ex)
                 "imported": True
             }
         """
+        if not _re.fullmatch(r"[0-9a-fA-F]{32}", model_uid):
+            return {"ok": False, "error": f"Invalid model_uid: expected 32 hex characters, got {model_uid!r}"}
+
         resolved_key = api_key or os.environ.get("SKETCHFAB_API_KEY")
         if not resolved_key:
             return {"ok": False, "error": "Sketchfab API key required. Pass api_key or set SKETCHFAB_API_KEY env var."}
@@ -862,6 +872,11 @@ catch (Exception ex)
         if not archive_url:
             return {"ok": False, "error": "Download URL is empty."}
 
+        try:
+            validate_download_url(archive_url)
+        except ValueError as exc:
+            return {"ok": False, "error": f"Unsafe archive URL: {exc}"}
+
         # Step 2: Download the zip archive.
         dest_dir = output_dir or os.path.join(tempfile.gettempdir(), f"sketchfab_{model_uid}")
         os.makedirs(dest_dir, exist_ok=True)
@@ -881,7 +896,6 @@ catch (Exception ex)
         extract_dir = os.path.join(dest_dir, "extracted")
         os.makedirs(extract_dir, exist_ok=True)
         try:
-            from rhmcp.tools_helpers.security import safe_extractall
             safe_extractall(zip_path, extract_dir)
         except zipfile.BadZipFile as exc:
             return {"ok": False, "error": f"Archive is not a valid zip: {exc}"}

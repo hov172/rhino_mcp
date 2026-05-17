@@ -898,6 +898,10 @@ def _download_file(
     if "." not in filename:
         filename += ".glb"
 
+    filename = os.path.basename(filename)
+    if not filename or ".." in filename:
+        filename = f"generated_{uuid.uuid4().hex[:8]}"
+
     filepath = os.path.join(save_dir, filename)
 
     # Build headers.
