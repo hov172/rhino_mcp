@@ -1042,23 +1042,25 @@ Use `get_rhino_backend_status` from any AI client to check which backends are cu
 | `RHINO_MCP_HOST` | `127.0.0.1` | IP/hostname of the machine running Rhino (used by the Python side to connect) |
 | `RHINO_MCP_PORT` | `1999` | Plugin socket port |
 | `RHINO_MCP_SOCKET_TIMEOUT` | `15.0` | Socket timeout in seconds |
+| `RHINO_MCP_SOCKET_RETRIES` | `2` | Extra retry attempts on socket connection failure (total = retries + 1) |
 | `RHINOCODE` | *(auto-detected)* | Path to rhinocode binary if not on `PATH` |
 | `RHINO_MCP_TELEMETRY` | *(unset)* | Set to `1`, `true`, or `yes` to enable usage telemetry |
 | `RHINO_MCP_TELEMETRY_LOG` | `~/.rhino_mcp_telemetry.jsonl` | Path for the telemetry log file (JSONL format) |
+| `RHINO_MCP_READ_ROOTS` | `~` (home dir) | Colon-separated paths `read_*` tools may access. Default restricts reads to home directory. |
+| `RHINO_MCP_RATE_LIMIT_RPM` | `120` | HTTP transport: maximum requests per minute per token. |
 
 ### Rhino Plugin (C# side)
 
 | Variable | Default | Description |
 |---|---|---|
 | `RHINO_MCP_BIND_HOST` | `127.0.0.1` | IP address the Rhino plugin binds its TCP listener to. Set to `0.0.0.0` to accept connections from any network interface (required for remote AI clients). Must be set in Rhino's environment before `MCPStart` is run. |
+| `RHINO_MCP_PLUGIN_SECRET` | *(unset)* | Pre-shared key required from the Python server on every connection. Set the same value on both machines when using network (non-loopback) binding. Unset = no authentication (safe for localhost-only). |
 
 ---
 
 ## Remote Host Support
 
 The Python MCP server and the Rhino plugin communicate over TCP. By default both sides use `127.0.0.1` (loopback), so Rhino and the AI client must be on the same machine. Setting `RHINO_MCP_BIND_HOST` lets the plugin accept connections from any address, enabling Claude (or any MCP client) to drive Rhino on a dedicated render workstation, a cloud VM, or across a local network.
-
-> **Prerequisite:** Remote host support requires the C# plugin to be rebuilt from source. Run `./scripts/build-plugin.sh` and restart Rhino before following the steps below. The pre-built `.rhp` in the repo binds to loopback only.
 
 ---
 
@@ -1136,6 +1138,32 @@ netsh advfirewall firewall add rule `
     name="RhinoMCP" protocol=TCP dir=in `
     localport=1999 action=allow
 ```
+
+---
+
+### Step 2b — Set a shared plugin secret (recommended for network use)
+
+When the plugin listens on a network interface, anyone on the same network can send commands to Rhino. Setting `RHINO_MCP_PLUGIN_SECRET` requires the Python server to authenticate on every connection.
+
+**On the Rhino machine** — add to the same environment where `RHINO_MCP_BIND_HOST` is set:
+```bash
+# macOS
+launchctl setenv RHINO_MCP_PLUGIN_SECRET "$(openssl rand -hex 32)"
+```
+```powershell
+# Windows
+[System.Environment]::SetEnvironmentVariable(
+    "RHINO_MCP_PLUGIN_SECRET", [System.Guid]::NewGuid().ToString("N"), "User")
+```
+
+**On the MCP server machine** — add the same value to the `env` block in your AI client config:
+```json
+"RHINO_MCP_PLUGIN_SECRET": "same-value-as-on-rhino-machine"
+```
+
+The plugin prints a warning in the Rhino console if you bind to a non-loopback address without a secret configured.
+
+> **Localhost-only users:** Leave `RHINO_MCP_PLUGIN_SECRET` unset. It has no effect when `RHINO_MCP_BIND_HOST` is `127.0.0.1`.
 
 ---
 

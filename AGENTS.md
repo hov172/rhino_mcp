@@ -8,10 +8,10 @@ This file gives AI coding agents (Claude, Codex, Gemini, etc.) the context neede
 
 **rhino-mcp** is an MCP (Model Context Protocol) server that lets AI assistants control Rhino 3D. It has two components:
 
-1. **Python MCP server** (`src/rhmcp/`) — FastMCP-based server exposing 320 tools to AI clients
+1. **Python MCP server** (`src/rhmcp/`) — FastMCP-based server exposing 334 tools to AI clients
 2. **C# Rhino plugin** (`rhino_plugin/`) — TCP socket server inside Rhino (port 1999) that receives and executes commands
 
-Current version: **0.7.0**
+Current version: **0.9.0**
 
 ---
 
@@ -35,13 +35,14 @@ Rhino 3D document
 
 | Path | Purpose |
 |---|---|
-| `src/rhmcp/server.py` | MCP server entry point, registers all tool modules |
+| `src/rhmcp/__init__.py` | MCP server entry point, HTTP/stdio transport setup, registers all tool modules |
 | `src/rhmcp/tools/` | 50+ tool modules, each with a `register(mcp)` function |
 | `src/rhmcp/tools_helpers/backend.py` | Backend router: `execute_python`, `run_plugin_or_python`, `run_command` |
 | `src/rhmcp/tools_helpers/plugin_client.py` | TCP socket client with exponential backoff retry |
 | `src/rhmcp/tools_helpers/rhinocode.py` | rhinocode CLI fallback, temp-file polling for results |
 | `src/rhmcp/tools_helpers/validate.py` | Shared input validators returning error-dicts or None |
 | `src/rhmcp/tools_helpers/errors.py` | `normalize()` — ensures consistent `ok`/`error` shape |
+| `src/rhmcp/tools_helpers/security.py` | Security helpers: `sanitise_rhino_path`, `validate_download_url`, `safe_extractall`, `clamp`, `_validate_read_path`, `_validate_image_path`, `_safe_export_path` |
 | `rhino_plugin/RhinoMCPPlugin/` | C# Rhino plugin source |
 | `rhino_plugin/package/manifest.yml` | Yak package manifest |
 | `rhino_plugin/release/` | Built artifacts (.rhp, .yak) — gitignored |
@@ -102,8 +103,8 @@ All return `{"ok": False, "error": "...", "error_code": "..."}` on failure, `Non
 ## Running Tests
 
 ```bash
-# Unit + smoke + script-syntax (no Rhino needed)
-uv run pytest tests/test_tools_unit.py tests/test_smoke.py tests/test_script_syntax.py -v -m "not integration"
+# Unit + smoke + script-syntax + security (no Rhino needed)
+uv run pytest tests/ --ignore=tests/test_integration.py --ignore=tests/test_gh_integration.py --ignore=tests/test_studio_pipeline_integration.py -q
 
 # Integration tests (requires Rhino running with plugin loaded)
 uv run pytest tests/test_integration.py -v -m integration
@@ -112,7 +113,7 @@ uv run pytest tests/test_integration.py -v -m integration
 uvx ruff check src/rhmcp --select=E,W,F --ignore=E501,E701,E402,E741
 ```
 
-**137 unit/smoke/syntax tests** must pass before any commit. The CI workflow (`.github/workflows/ci.yml`) runs these on Python 3.10/3.11/3.12.
+**262 tests** (unit, smoke, script-syntax, and security) must pass before any commit. The CI workflow (`.github/workflows/ci.yml`) runs these on Python 3.10/3.11/3.12.
 
 ---
 
@@ -132,7 +133,7 @@ Artifacts land in `rhino_plugin/release/` (gitignored — upload to GitHub relea
 
 ## Version Bumping Checklist
 
-When bumping the version (e.g. `0.7.0` → `0.8.0`):
+When bumping the version (e.g. `0.9.0` → `0.10.0`):
 
 1. `pyproject.toml` — `version = "..."`
 2. `rhino_plugin/RhinoMCPPlugin/RhinoMCPPlugin.csproj` — `<Version>...</Version>`
@@ -140,6 +141,7 @@ When bumping the version (e.g. `0.7.0` → `0.8.0`):
 4. `rhino_plugin/release/manifest.yml` — `version: ...`
 5. `README.md` — download links and yak filename
 6. `CHANGELOG.md` — add new entry at top
+7. `.env.example` — verify all new env vars are documented
 
 Tool count: verify with `uv run python -c "..."` (see below) before updating docs.
 
