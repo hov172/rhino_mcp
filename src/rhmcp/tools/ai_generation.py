@@ -886,12 +886,11 @@ def _download_file(
 
     Returns ``{"ok": True, "filepath": str}`` on success.
     """
-    # Handle local file paths returned by Hunyuan3D Gradio.
-    if url and (url.startswith("/") or url.startswith("file=")):
-        local_path = url.replace("file=", "", 1)
-        if Path(local_path).is_file():
-            return {"ok": True, "filepath": local_path}
-        return {"ok": False, "error": f"Local file not found: {local_path}"}
+    from rhmcp.tools_helpers.security import validate_download_url
+    try:
+        validate_download_url(url)
+    except ValueError as exc:
+        return {"ok": False, "error": str(exc)}
 
     # Determine output path.
     save_dir = output_dir if output_dir else tempfile.mkdtemp(prefix="rhmcp_ai_")
