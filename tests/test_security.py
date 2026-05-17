@@ -235,5 +235,65 @@ class TestRound6To8Helpers(unittest.TestCase):
         self.assertIn(str(_JOB_STORE_MAX), store)
 
 
+class TestPluginClientPsk(unittest.TestCase):
+    """
+    Verify that _attempt includes / excludes the 'secret' key in the JSON
+    payload based on whether RHINO_MCP_PLUGIN_SECRET is set.
+
+    We patch socket.create_connection so no real TCP connection is made,
+    and capture the bytes passed to sendall to inspect the serialised payload.
+    """
+
+    def _run_attempt_capturing_payload(self, env: dict) -> dict:
+        """
+        Call _attempt with a mocked socket and return the parsed JSON payload
+        that would have been sent on the wire.
+        """
+        import json as _json
+        from unittest.mock import MagicMock
+
+        sent: list[bytes] = []
+
+        mock_sock = MagicMock()
+        mock_sock.__enter__ = lambda s: s
+        mock_sock.__exit__ = MagicMock(return_value=False)
+        mock_sock.sendall.side_effect = lambda data: sent.append(data)
+        # recv returns valid JSON response then empty bytes (EOF)
+        response_bytes = _json.dumps({"status": "ok", "result": {}}).encode("utf-8")
+        mock_sock.recv.side_effect = [response_bytes, b""]
+
+        from rhmcp.tools_helpers import plugin_client
+
+        with patch.dict(os.environ, env, clear=False), \
+             patch("socket.create_connection", return_value=mock_sock):
+            # Remove the key if it was not supposed to be present
+            if "RHINO_MCP_PLUGIN_SECRET" not in env:
+                os.environ.pop("RHINO_MCP_PLUGIN_SECRET", None)
+            plugin_client._attempt("ping", {}, "127.0.0.1", 1999, 1.0)
+
+        self.assertTrue(sent, "sendall was never called — socket mock broken")
+        return _json.loads(sent[0].decode("utf-8"))
+
+    def test_secret_included_when_env_var_set(self) -> None:
+        payload = self._run_attempt_capturing_payload(
+            {"RHINO_MCP_PLUGIN_SECRET": "supersecret"}
+        )
+        self.assertIn("secret", payload)
+        self.assertEqual(payload["secret"], "supersecret")
+
+    def test_secret_excluded_when_env_var_absent(self) -> None:
+        # Ensure the var is absent for this test
+        env_without = {k: v for k, v in os.environ.items() if k != "RHINO_MCP_PLUGIN_SECRET"}
+        with patch.dict(os.environ, env_without, clear=True):
+            payload = self._run_attempt_capturing_payload({})
+        self.assertNotIn("secret", payload)
+
+    def test_secret_excluded_when_env_var_empty(self) -> None:
+        payload = self._run_attempt_capturing_payload(
+            {"RHINO_MCP_PLUGIN_SECRET": ""}
+        )
+        self.assertNotIn("secret", payload)
+
+
 if __name__ == "__main__":
     unittest.main()
