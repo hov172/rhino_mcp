@@ -13,6 +13,7 @@ from __future__ import annotations
 
 import ipaddress
 import os
+import socket
 import zipfile
 from pathlib import Path
 from urllib.parse import urlparse
@@ -58,6 +59,31 @@ _PRIVATE_NETWORKS = [
 ]
 
 
+def _is_private(hostname: str) -> bool:
+    """
+    Return ``True`` if *hostname* resolves to a private/loopback address.
+
+    Performs DNS resolution and checks each resolved address against the known
+    private networks.  Fails closed: unresolvable or malformed hostnames are
+    treated as private/blocked (returns ``True``).
+    """
+    try:
+        results = socket.getaddrinfo(hostname, None)
+        for _family, _type, _proto, _canonname, sockaddr in results:
+            addr_str = sockaddr[0]
+            try:
+                addr = ipaddress.ip_address(addr_str)
+                for net in _PRIVATE_NETWORKS:
+                    if addr in net:
+                        return True
+            except ValueError:
+                pass  # skip unparseable addresses
+        return False
+    except (socket.gaierror, ValueError):
+        # Treat unresolvable or malformed hostnames as private/blocked.
+        return True
+
+
 def validate_download_url(url: str) -> None:
     """
     Raise ``ValueError`` if *url* is not a safe remote HTTP/HTTPS URL.
@@ -97,6 +123,9 @@ def validate_download_url(url: str) -> None:
         # Non-IP public hostname — allow it
         if "private/loopback" in str(exc):
             raise
+        # DNS-resolve the hostname and block if it points to a private network.
+        if _is_private(hostname):
+            raise ValueError(f"Download URL hostname resolves to a private/blocked address: {hostname!r}") from exc
 
 
 # ---------------------------------------------------------------------------
