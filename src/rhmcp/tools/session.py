@@ -11,13 +11,15 @@ from rhmcp.tools_helpers import backend as rhino
 
 
 def register(mcp: FastMCP) -> None:
-    @mcp.tool(annotations=ToolAnnotations(title="List Rhino Instances", readOnlyHint=True))
-    def get_rhino_instances() -> dict[str, object]:
+    @mcp.tool(annotations=ToolAnnotations(title="List Rhinocode Instances", readOnlyHint=True))
+    def get_rhinocode_instances() -> dict[str, object]:
         """
-        List running Rhino instances known to ``rhinocode``.
+        List running Rhino instances known to the rhinocode CLI backend.
 
         Rhino must be running and ``StartScriptServer`` must have been executed
-        inside Rhino for instances to appear.
+        inside Rhino for instances to appear. Use ``get_rhino_instances`` instead
+        when the RhinoMCP plugin (MCPStart) is running — it uses the slot registry
+        and supports multi-instance routing via rhino_id.
         """
         return rhino.list_instances()
 

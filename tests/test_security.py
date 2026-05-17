@@ -123,3 +123,69 @@ class TestZipSlip:
         os.makedirs(extract_dir)
         with pytest.raises(ValueError, match="Zip slip"):
             safe_extractall(zf_bytes, extract_dir)
+
+
+class TestJinja2Autoescape:
+    def test_xss_payload_escaped_in_report(self):
+        """project_name with <script> must be HTML-escaped in output."""
+        from types import SimpleNamespace
+        from rhmcp.tools.urban_report import _render_html
+        metrics = SimpleNamespace(gfa_m2=1000, far=2.5, unit_count_est=10, open_space_pct=20)
+        html = _render_html(
+            project_name="<script>alert(1)</script>",
+            scheme_name="Test",
+            author="Tester",
+            metrics=metrics,
+            renders={},
+            design_language={},
+            solar=None,
+            params=[],
+            include_solar=False,
+            include_design_language=False,
+        )
+        assert "<script>alert(1)</script>" not in html
+        assert "&lt;script&gt;" in html
+
+
+class TestDownloadFileSecurity:
+    def _get_download_file(self):
+        import importlib
+        return importlib.import_module("rhmcp.tools.ai_generation")._download_file
+
+    def test_local_path_rejected(self):
+        dl = self._get_download_file()
+        result = dl("/etc/passwd", api_key=None, output_dir=None, service="rodin")
+        assert result["ok"] is False
+        assert "not allowed" in result["error"].lower()
+
+    def test_file_equals_path_rejected(self):
+        dl = self._get_download_file()
+        result = dl("file=/etc/passwd", api_key=None, output_dir=None, service="rodin")
+        assert result["ok"] is False
+
+    def test_http_scheme_rejected(self):
+        dl = self._get_download_file()
+        result = dl("http://example.com/model.glb", api_key=None, output_dir=None, service="rodin")
+        assert result["ok"] is False
+        assert "scheme" in result["error"].lower()
+
+    def test_aws_metadata_rejected(self):
+        dl = self._get_download_file()
+        result = dl("https://169.254.169.254/latest/meta-data/", api_key=None, output_dir=None, service="rodin")
+        assert result["ok"] is False
+        assert "private" in result["error"].lower()
+
+
+class TestJobStoreNoApiKey:
+    def test_api_key_not_stored_in_job_store(self):
+        """api_key must never appear in _JOB_STORE values."""
+        import importlib
+        mod = importlib.import_module("rhmcp.tools.ai_generation")
+        store = mod._JOB_STORE
+        store["test-job-123"] = {
+            "service": "rodin",
+            "task_uuid": "abc",
+            "output_format": "glb",
+        }
+        assert "api_key" not in store["test-job-123"]
+        del store["test-job-123"]
