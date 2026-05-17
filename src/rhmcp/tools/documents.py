@@ -230,6 +230,10 @@ def register(mcp: FastMCP) -> None:
         :param quality: JPEG-equivalent quality hint used when the source is
             JPEG; ignored for lossless formats.
         """
+        from rhmcp.tools_helpers.security import clamp
+        if max_dimension is not None:
+            max_dimension = clamp(max_dimension, 1, 8192)
+
         try:
             from PIL import Image
         except ImportError:
