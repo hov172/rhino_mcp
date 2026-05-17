@@ -11,6 +11,9 @@ from mcp.types import ToolAnnotations
 
 from rhmcp.tools_helpers import backend as rhino
 
+# R6-3: Maximum code length for execution tools (200 KB)
+_MAX_CODE_LEN = 200_000
+
 
 def register(mcp: FastMCP) -> None:
     @mcp.tool(annotations=ToolAnnotations(title="Create Object", destructiveHint=True))
@@ -240,6 +243,9 @@ def register(mcp: FastMCP) -> None:
         """
         Reference-compatible alias for executing Rhino Python.
         """
+        # R6-3: Enforce maximum code length
+        if len(code) > _MAX_CODE_LEN:
+            return {"ok": False, "error": f"Code exceeds maximum length of {_MAX_CODE_LEN} characters."}
         plugin = _try_plugin("execute_rhinoscript_python_code", {"code": code})
         return plugin or rhino.execute_python(code, rhino_id=rhino_id)
 
@@ -248,6 +254,9 @@ def register(mcp: FastMCP) -> None:
         """
         Reference-compatible alias for executing RhinoCommon C#.
         """
+        # R6-3: Enforce maximum code length
+        if len(code) > _MAX_CODE_LEN:
+            return {"ok": False, "error": f"Code exceeds maximum length of {_MAX_CODE_LEN} characters."}
         plugin = _try_plugin("execute_rhinocommon_csharp_code", {"code": code})
         return plugin or rhino.execute_script(code, ".cs", rhino_id=rhino_id)
 

@@ -9,6 +9,9 @@ from mcp.types import ToolAnnotations
 
 from rhmcp.tools_helpers import backend as rhino
 
+# R6-3: Maximum code length for execution tools (200 KB)
+_MAX_CODE_LEN = 200_000
+
 
 def _wrap_with_revert(code: str, clear_objects: list[str] | None = None) -> str:
     code = code.expandtabs(4)
@@ -73,6 +76,9 @@ def register(mcp: FastMCP) -> None:
             geometry from previous runs does not accumulate in the document.
             Example: ``["BB_Ball", "BB_Ground"]``
         """
+        # R6-3: Enforce maximum code length
+        if len(code) > _MAX_CODE_LEN:
+            return {"ok": False, "error": f"Code exceeds maximum length of {_MAX_CODE_LEN} characters."}
         result = rhino.execute_python(_wrap_with_revert(code, clear_objects), rhino_id=rhino_id)
         if not verified_functions:
             result["api_warning"] = (
@@ -90,4 +96,7 @@ def register(mcp: FastMCP) -> None:
         This requires RhinoCode C# script support in the target Rhino version.
         Return information through stdout or by changing the active document.
         """
+        # R6-3: Enforce maximum code length
+        if len(code) > _MAX_CODE_LEN:
+            return {"ok": False, "error": f"Code exceeds maximum length of {_MAX_CODE_LEN} characters."}
         return rhino.execute_script(code, ".cs", rhino_id=rhino_id)
