@@ -31,6 +31,7 @@ public static class CommandDispatcher
             "gh_get_solution_state" or
             "get_plugin_commands" or
             // Grasshopper 2 read-only
+            "gh2_start" or
             "gh2_get_canvas_graph" or
             "gh2_search_components" or
             "gh2_describe_component";

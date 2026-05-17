@@ -19,6 +19,12 @@ namespace RhinoMCPPlugin;
 /// </summary>
 public static class GH2Handlers
 {
+    // NOTE: All public handlers in this class are invoked from the UI thread
+    // (via RhinoMcpServer.InvokeOnRhinoThread → CommandDispatcher.Dispatch).
+    // The inner RhinoApp.InvokeOnUiThread calls below are therefore synchronous
+    // re-entrant dispatches, not async fire-and-forget. This matches the
+    // pattern used by GHDocumentHandlers and GHCanvasHandlers.
+
     // -----------------------------------------------------------------------
     // Assembly discovery
     // -----------------------------------------------------------------------
@@ -210,13 +216,14 @@ public static class GH2Handlers
                                                     var toDoc    = topLevel?.GetType().GetProperty("DocObject")?.GetValue(topLevel);
                                                     var toGuid   = toDoc?.GetType().GetProperty("InstanceGuid")?.GetValue(toDoc)?.ToString() ?? "";
                                                     var toName   = recType.GetProperty("NickName")?.GetValue(rec)?.ToString() ?? "";
-                                                    wires.Add(new
-                                                    {
-                                                        from_guid   = instanceId,
-                                                        from_output = opName,
-                                                        to_guid     = toGuid,
-                                                        to_input    = toName
-                                                    });
+                                                    if (!string.IsNullOrEmpty(toGuid))
+                                                        wires.Add(new
+                                                        {
+                                                            from_guid   = instanceId,
+                                                            from_output = opName,
+                                                            to_guid     = toGuid,
+                                                            to_input    = toName
+                                                        });
                                                 }
                                                 catch { /* skip unresolvable wire */ }
                                             }
@@ -694,7 +701,31 @@ public static class GH2Handlers
                             {
                                 var nameProp = objType.GetProperty("Name");
                                 var name     = nameProp?.GetValue(obj)?.ToString() ?? "unknown";
-                                errors.Add($"Component '{name}' has runtime errors");
+
+                                // Try to get actual error message text via reflection
+                                bool addedMessages = false;
+                                try
+                                {
+                                    var messages = objType.GetProperty("RuntimeMessages")?.GetValue(obj)
+                                                ?? objType.GetProperty("Messages")?.GetValue(obj);
+                                    if (messages is System.Collections.IEnumerable msgList)
+                                    {
+                                        foreach (var msg in msgList)
+                                        {
+                                            var msgText = msg?.GetType().GetProperty("Message")?.GetValue(msg)?.ToString()
+                                                       ?? msg?.ToString();
+                                            if (!string.IsNullOrEmpty(msgText))
+                                            {
+                                                errors.Add($"{name}: {msgText}");
+                                                addedMessages = true;
+                                            }
+                                        }
+                                    }
+                                }
+                                catch { /* reflection failed — fall through to generic message */ }
+
+                                if (!addedMessages)
+                                    errors.Add($"Component '{name}' has runtime errors");
                             }
                         }
                     }
@@ -794,6 +825,60 @@ public static class GH2Handlers
 
             object? compObj = null;
 
+            // If no GUID but a name was supplied, resolve the GUID via proxy search
+            if (string.IsNullOrEmpty(guidStr) && !string.IsNullOrEmpty(name))
+            {
+                object? resolvedServer = null;
+                foreach (var serverTypeName in new[] { "Grasshopper2.GH_Instances", "Grasshopper2.GH_ComponentServer" })
+                {
+                    var serverType = asm.GetType(serverTypeName);
+                    if (serverType == null) continue;
+                    foreach (var propName in new[] { "ComponentServer", "ObjectServer", "Server" })
+                    {
+                        var prop = serverType.GetProperty(propName, BindingFlags.Static | BindingFlags.Public);
+                        if (prop == null) continue;
+                        resolvedServer = prop.GetValue(null);
+                        if (resolvedServer != null) break;
+                    }
+                    if (resolvedServer != null) break;
+                }
+
+                if (resolvedServer != null)
+                {
+                    var proxiesProp = resolvedServer.GetType().GetProperty("ObjectProxies")
+                                  ?? resolvedServer.GetType().GetProperty("Proxies");
+                    var proxies = proxiesProp?.GetValue(resolvedServer) as System.Collections.IEnumerable;
+                    if (proxies != null)
+                    {
+                        var exactMatches  = new List<(string guid, string pName)>();
+                        var prefixMatches = new List<(string guid, string pName)>();
+                        foreach (var proxy in proxies)
+                        {
+                            var pType    = proxy.GetType();
+                            var descProp = pType.GetProperty("Desc") ?? pType.GetProperty("Description");
+                            var desc     = descProp?.GetValue(proxy);
+                            if (desc == null) continue;
+                            var pName  = desc.GetType().GetProperty("Name")?.GetValue(desc)?.ToString() ?? "";
+                            var guidObj = pType.GetProperty("Guid")?.GetValue(proxy);
+                            var pGuid  = guidObj?.ToString() ?? "";
+                            if (string.IsNullOrEmpty(pGuid)) continue;
+
+                            if (string.Equals(pName, name, StringComparison.OrdinalIgnoreCase))
+                                exactMatches.Add((pGuid, pName));
+                            else if (pName.StartsWith(name, StringComparison.OrdinalIgnoreCase))
+                                prefixMatches.Add((pGuid, pName));
+                        }
+
+                        var matches = exactMatches.Count > 0 ? exactMatches : prefixMatches;
+                        if (matches.Count == 0)
+                            return $"ERROR: Component '{name}' not found.";
+                        if (matches.Count > 1)
+                            return $"ERROR: Ambiguous component name '{name}': {matches.Count} matches found. Provide component_guid instead.";
+                        guidStr = matches[0].guid;
+                    }
+                }
+            }
+
             // Try to find a GH2 component server and emit the object
             foreach (var serverTypeName in new[] { "Grasshopper2.GH_Instances", "Grasshopper2.GH_ComponentServer" })
             {
@@ -821,7 +906,13 @@ public static class GH2Handlers
             }
 
             if (compObj == null)
+            {
+                if (string.IsNullOrEmpty(guidStr))
+                    return name != null
+                        ? $"ERROR: Component '{name}' not found."
+                        : "ERROR: component_guid or name is required";
                 return "ERROR: GH2 component placement API not available in this build";
+            }
 
             // CreateAttributes and set position
             var compType = compObj.GetType();
