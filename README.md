@@ -462,23 +462,6 @@ A `rhinocode` fallback path (Rhino 8.11+ only) is also available for most non-Gr
 
 ---
 
-## Install
-
-### Option 1 — Rhino PackageManager (recommended, once published)
-In Rhino: `_PackageManager` → search **rhino-mcp** → Install → Restart Rhino.
-
-### Option 2 — Local script (from this repo)
-```bash
-./scripts/install-plugin-local.sh    # macOS
-.\scripts\install-plugin-local.ps1  # Windows
-```
-Requires a built `.yak` file in `rhino_plugin/package/`. Run `./scripts/package-plugin.sh` first if needed.
-
-### Option 3 — Manual (GitHub Releases)
-Download the `.rhp` or `.yak` from the [GitHub Releases](../../releases) page and drag it onto Rhino's viewport, or install via `_PackageManager` → Install from File.
-
----
-
 ## Requirements
 
 | Component | Minimum version |
@@ -491,6 +474,12 @@ Download the `.rhp` or `.yak` from the [GitHub Releases](../../releases) page an
 ---
 
 ## Installation
+
+### Quick install options
+
+- **Rhino PackageManager (recommended, once published):** In Rhino: `_PackageManager` → search **rhino-mcp** → Install → Restart Rhino.
+- **Local script (from this repo):** `./scripts/install-plugin-local.sh` (macOS) or `.\scripts\install-plugin-local.ps1` (Windows). Requires a built `.yak` file in `rhino_plugin/package/` — run `./scripts/package-plugin.sh` first if needed.
+- **GitHub Releases:** Download the `.rhp` or `.yak` from the [GitHub Releases](https://github.com/hov172/rhino_mcp/releases) page and drag it onto Rhino's viewport, or install via `_PackageManager` → Install from File.
 
 ### 1. Install the Rhino Plugin (`rhino-mcp.rhp`)
 

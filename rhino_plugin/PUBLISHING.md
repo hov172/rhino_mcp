@@ -14,8 +14,8 @@
 4. Push: `yak push rhino_plugin/package/rhino-mcp-<version>-rh8_17-any.yak`
 
 ## Versioning policy
-- Yak version must match `manifest.yml` → must match `AssemblyInformationalVersion` → must match `pyproject.toml`
-- All four locations updated by `scripts/bump-version.sh <new-version>`
+- Yak version must match `rhino_plugin/package/manifest.yml` → must match `AssemblyInformationalVersion` → must match `pyproject.toml`
+- Manually update the four locations: `pyproject.toml`, `rhino_plugin/package/manifest.yml`, `rhino_plugin/RhinoMCPPlugin/AssemblyInfo.cs` (AssemblyInformationalVersion), and `rhino_plugin/RhinoMCPPlugin/RhinoMCPPlugin.csproj` (Version).
 
 ## Verification
 After pushing, wait ~5 min then search in Rhino: `_PackageManager` → search "rhino-mcp"
