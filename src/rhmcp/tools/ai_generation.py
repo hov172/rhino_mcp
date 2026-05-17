@@ -16,9 +16,12 @@ from __future__ import annotations
 
 import mimetypes
 import os
+import pathlib
 import tempfile
+import threading
 import time
 import uuid
+from collections import OrderedDict
 from pathlib import Path
 from typing import Any
 
@@ -41,7 +44,20 @@ _VALID_FORMATS = {"glb", "obj", "fbx", "stl", "usdz"}
 # Internal in-memory job store: maps job_id -> metadata dict.
 # This allows poll_generation_job to work without the caller persisting the
 # remote task UUID separately.
-_JOB_STORE: dict[str, dict[str, Any]] = {}
+
+# R6-7: Bounded ordered dict — evicts oldest entries when limit is reached
+_JOB_STORE_MAX = 1000
+
+class _BoundedDict(OrderedDict):
+    def __setitem__(self, key, value):
+        super().__setitem__(key, value)
+        while len(self) > _JOB_STORE_MAX:
+            self.popitem(last=False)  # evict oldest
+
+_JOB_STORE: dict[str, dict[str, Any]] = _BoundedDict()
+
+# R6-8: Lock for thread-safe _JOB_STORE access
+_JOB_STORE_LOCK = threading.Lock()
 
 
 # ---------------------------------------------------------------------------
@@ -90,6 +106,10 @@ def register(mcp: FastMCP) -> None:  # noqa: C901 – register is intentionally 
         ``message``.  Pass ``job_id`` to ``poll_generation_job`` to check
         progress, and to ``import_generated_model`` when done.
         """
+        # R6-4: Cap prompt length
+        if prompt and len(prompt) > 8000:
+            return {"ok": False, "error": "prompt exceeds maximum length of 8000 characters."}
+
         service = service.lower()
         if service not in _VALID_SERVICES:
             return {"ok": False, "error": f"Unknown service '{service}'. Choose 'rodin' or 'hunyuan3d'."}
@@ -154,10 +174,15 @@ def register(mcp: FastMCP) -> None:  # noqa: C901 – register is intentionally 
         if len(image_paths) > 5:
             return {"ok": False, "error": "Maximum 5 images are supported."}
 
-        # Validate all paths exist before starting the upload.
+        # Validate all paths exist and are within home dir before starting the upload.
         for p in image_paths:
             if not Path(p).is_file():
                 return {"ok": False, "error": f"Image file not found: {p}"}
+            # R6-10: Validate image path is within home directory with safe extension
+            try:
+                _validate_image_path(p)
+            except ValueError as exc:
+                return {"ok": False, "error": str(exc)}
 
         if service == "rodin":
             return _rodin_image_job(image_paths, output_format, api_key, prompt)
@@ -365,6 +390,22 @@ def register(mcp: FastMCP) -> None:  # noqa: C901 – register is intentionally 
 
 
 # ---------------------------------------------------------------------------
+# Image path validation helper (R6-10)
+# ---------------------------------------------------------------------------
+
+
+def _validate_image_path(path: str) -> None:
+    """Validate that an image path is within the user's home directory and has a safe extension."""
+    resolved = pathlib.Path(path).resolve()
+    try:
+        resolved.relative_to(pathlib.Path.home().resolve())
+    except ValueError:
+        raise ValueError(f"image_path must be within home directory: {path!r}")
+    if resolved.suffix.lower() not in (".jpg", ".jpeg", ".png", ".webp", ".gif"):
+        raise ValueError(f"Unsupported image format: {resolved.suffix!r}")
+
+
+# ---------------------------------------------------------------------------
 # Rodin helpers
 # ---------------------------------------------------------------------------
 
@@ -407,7 +448,7 @@ def _rodin_text_job(
             resp.raise_for_status()
             data: dict[str, Any] = resp.json()
     except httpx.HTTPStatusError as exc:
-        return {"ok": False, "error": f"Rodin API error {exc.response.status_code}: {exc.response.text}"}
+        return {"ok": False, "error": f"Rodin API error {exc.response.status_code}: {exc.response.text[:200]}"}
     except httpx.RequestError as exc:
         return {"ok": False, "error": f"Network error contacting Rodin: {exc}"}
     except Exception as exc:
@@ -418,12 +459,13 @@ def _rodin_text_job(
         return {"ok": False, "error": "Rodin did not return a task UUID.", "raw": data}
 
     job_id = str(uuid.uuid4())
-    _JOB_STORE[job_id] = {
-        "service": "rodin",
-        "task_uuid": task_uuid,
-        "output_format": output_format,
-        "jobs": data.get("jobs", {}),
-    }
+    with _JOB_STORE_LOCK:  # R6-8
+        _JOB_STORE[job_id] = {
+            "service": "rodin",
+            "task_uuid": task_uuid,
+            "output_format": output_format,
+            "jobs": data.get("jobs", {}),
+        }
 
     return {
         "job_id": job_id,
@@ -451,6 +493,7 @@ def _rodin_image_job(
         files: list[tuple[str, Any]] = []
         opened: list[Any] = []
         for p in image_paths:
+            _validate_image_path(p)  # R6-10: defense-in-depth path validation
             mime, _ = mimetypes.guess_type(p)
             mime = mime or "image/jpeg"
             fh = open(p, "rb")  # noqa: WPS515
@@ -476,7 +519,7 @@ def _rodin_image_job(
                 fh.close()
 
     except httpx.HTTPStatusError as exc:
-        return {"ok": False, "error": f"Rodin API error {exc.response.status_code}: {exc.response.text}"}
+        return {"ok": False, "error": f"Rodin API error {exc.response.status_code}: {exc.response.text[:200]}"}
     except httpx.RequestError as exc:
         return {"ok": False, "error": f"Network error contacting Rodin: {exc}"}
     except OSError as exc:
@@ -489,12 +532,13 @@ def _rodin_image_job(
         return {"ok": False, "error": "Rodin did not return a task UUID.", "raw": data}
 
     job_id = str(uuid.uuid4())
-    _JOB_STORE[job_id] = {
-        "service": "rodin",
-        "task_uuid": task_uuid,
-        "output_format": output_format,
-        "jobs": data.get("jobs", {}),
-    }
+    with _JOB_STORE_LOCK:  # R6-8
+        _JOB_STORE[job_id] = {
+            "service": "rodin",
+            "task_uuid": task_uuid,
+            "output_format": output_format,
+            "jobs": data.get("jobs", {}),
+        }
 
     return {
         "job_id": job_id,
@@ -508,7 +552,8 @@ def _rodin_image_job(
 
 def _rodin_poll(job_id: str, api_key: str | None) -> dict[str, object]:
     """Poll the status of a Rodin job."""
-    meta = _JOB_STORE.get(job_id)
+    with _JOB_STORE_LOCK:  # R6-8: read a shallow copy, do I/O outside the lock
+        meta = dict(_JOB_STORE.get(job_id) or {})
     if not meta:
         return {
             "ok": False,
@@ -559,7 +604,9 @@ def _rodin_poll(job_id: str, api_key: str | None) -> dict[str, object]:
     )
 
     if status == "done" and download_url:
-        meta["download_url"] = download_url
+        with _JOB_STORE_LOCK:  # R6-8
+            if job_id in _JOB_STORE:
+                _JOB_STORE[job_id]["download_url"] = download_url
 
     return {
         "job_id": job_id,
@@ -584,7 +631,7 @@ def _rodin_poll_simple_get(
             resp.raise_for_status()
             data: dict[str, Any] = resp.json()
     except httpx.HTTPStatusError as exc:
-        return {"ok": False, "error": f"Rodin poll error {exc.response.status_code}: {exc.response.text}"}
+        return {"ok": False, "error": f"Rodin poll error {exc.response.status_code}: {exc.response.text[:200]}"}
     except httpx.RequestError as exc:
         return {"ok": False, "error": f"Network error polling Rodin: {exc}"}
     except Exception as exc:
@@ -597,8 +644,9 @@ def _rodin_poll_simple_get(
     download_url: str | None = None
     if status == "done":
         download_url = f"{_RODIN_BASE}/{task_uuid}/mesh.{output_format}"
-        if job_id in _JOB_STORE:
-            _JOB_STORE[job_id]["download_url"] = download_url
+        with _JOB_STORE_LOCK:  # R6-8
+            if job_id in _JOB_STORE:
+                _JOB_STORE[job_id]["download_url"] = download_url
 
     return {
         "job_id": job_id,
@@ -676,14 +724,15 @@ def _hunyuan3d_text_job(
             "error": f"Failed to submit Hunyuan3D job: {exc}",
         }
 
-    _JOB_STORE[job_id] = {
-        "service": "hunyuan3d",
-        "status": "processing",
-        "prompt": prompt,
-        "output_format": output_format,
-        "gradio_job": gradio_job,
-        "result_path": None,
-    }
+    with _JOB_STORE_LOCK:  # R6-8
+        _JOB_STORE[job_id] = {
+            "service": "hunyuan3d",
+            "status": "processing",
+            "prompt": prompt,
+            "output_format": output_format,
+            "gradio_job": gradio_job,
+            "result_path": None,
+        }
 
     return {
         "job_id": job_id,
@@ -730,15 +779,16 @@ def _hunyuan3d_image_job(
             "error": f"Failed to submit Hunyuan3D image job: {exc}",
         }
 
-    _JOB_STORE[job_id] = {
-        "service": "hunyuan3d",
-        "status": "processing",
-        "prompt": prompt or "",
-        "image_paths": image_paths,
-        "output_format": output_format,
-        "gradio_job": gradio_job,
-        "result_path": None,
-    }
+    with _JOB_STORE_LOCK:  # R6-8
+        _JOB_STORE[job_id] = {
+            "service": "hunyuan3d",
+            "status": "processing",
+            "prompt": prompt or "",
+            "image_paths": image_paths,
+            "output_format": output_format,
+            "gradio_job": gradio_job,
+            "result_path": None,
+        }
 
     return {
         "job_id": job_id,
@@ -751,7 +801,8 @@ def _hunyuan3d_image_job(
 
 def _hunyuan3d_poll(job_id: str, api_key: str | None) -> dict[str, object]:
     """Execute / check a Hunyuan3D Gradio job."""
-    meta = _JOB_STORE.get(job_id)
+    with _JOB_STORE_LOCK:  # R6-8: read a shallow copy, do I/O outside the lock
+        meta = dict(_JOB_STORE.get(job_id) or {})
     if not meta:
         return {
             "ok": False,
@@ -781,15 +832,20 @@ def _hunyuan3d_poll(job_id: str, api_key: str | None) -> dict[str, object]:
     try:
         from gradio_client.utils import Status  # type: ignore[import]
     except ImportError:
-        meta["status"] = "failed"
-        meta["error"] = "gradio_client not available."
+        with _JOB_STORE_LOCK:  # R6-8: write-back status
+            if job_id in _JOB_STORE:
+                _JOB_STORE[job_id].update({"status": "failed", "error": "gradio_client not available."})
         return {"ok": False, "error": "gradio_client not installed. Run: pip install gradio_client"}
 
     gradio_job = meta.get("gradio_job")
     if gradio_job is None:
         # Should not happen with the new submit-on-create flow, but guard anyway.
-        meta["status"] = "failed"
-        meta["error"] = "No Gradio job object found — job may have been created by an older session."
+        with _JOB_STORE_LOCK:  # R6-8: write-back status
+            if job_id in _JOB_STORE:
+                _JOB_STORE[job_id].update({
+                    "status": "failed",
+                    "error": "No Gradio job object found — job may have been created by an older session.",
+                })
         return {
             "job_id": job_id,
             "status": "failed",
@@ -818,8 +874,25 @@ def _hunyuan3d_poll(job_id: str, api_key: str | None) -> dict[str, object]:
                 elif isinstance(first, dict):
                     result_path = first.get("name") or first.get("path") or first.get("url")
 
-            meta["status"] = "done"
-            meta["result_path"] = result_path
+            # R6-5: Validate result_path before storing
+            if result_path:
+                if result_path.startswith(("http://", "https://")):
+                    from rhmcp.tools_helpers.security import validate_download_url
+                    try:
+                        validate_download_url(result_path)
+                    except Exception:
+                        result_path = None  # don't store invalid URL
+                else:
+                    # Local path — must be within temp dir
+                    try:
+                        resolved = pathlib.Path(result_path).resolve()
+                        resolved.relative_to(pathlib.Path(tempfile.gettempdir()).resolve())
+                    except ValueError:
+                        result_path = None  # outside temp, don't store
+
+            with _JOB_STORE_LOCK:  # R6-8: write-back status
+                if job_id in _JOB_STORE:
+                    _JOB_STORE[job_id].update({"status": "done", "result_path": result_path})
 
             return {
                 "job_id": job_id,
@@ -831,8 +904,12 @@ def _hunyuan3d_poll(job_id: str, api_key: str | None) -> dict[str, object]:
             }
 
         if code in (Status.CANCELLED, Status.CLOSED):
-            meta["status"] = "failed"
-            meta["error"] = f"Gradio job ended with status: {code}"
+            with _JOB_STORE_LOCK:  # R6-8: write-back status
+                if job_id in _JOB_STORE:
+                    _JOB_STORE[job_id].update({
+                        "status": "failed",
+                        "error": f"Gradio job ended with status: {code}",
+                    })
             return {
                 "job_id": job_id,
                 "status": "failed",
@@ -842,7 +919,9 @@ def _hunyuan3d_poll(job_id: str, api_key: str | None) -> dict[str, object]:
             }
 
         # Still running (PENDING, IN_QUEUE, PROCESSING, GENERATING, etc.)
-        meta["status"] = "processing"
+        with _JOB_STORE_LOCK:  # R6-8: write-back status
+            if job_id in _JOB_STORE:
+                _JOB_STORE[job_id]["status"] = "processing"
         progress_pct: float | None = getattr(status_update, "progress_data", None)
         progress = float(progress_pct) / 100.0 if isinstance(progress_pct, (int, float)) else 0.5
 
@@ -855,8 +934,9 @@ def _hunyuan3d_poll(job_id: str, api_key: str | None) -> dict[str, object]:
         }
 
     except Exception as exc:
-        meta["status"] = "failed"
-        meta["error"] = str(exc)
+        with _JOB_STORE_LOCK:  # R6-8: write-back status
+            if job_id in _JOB_STORE:
+                _JOB_STORE[job_id].update({"status": "failed", "error": str(exc)})
         return {
             "job_id": job_id,
             "status": "failed",
@@ -898,9 +978,12 @@ def _download_file(
     if "." not in filename:
         filename += ".glb"
 
+    import re as _re
     filename = os.path.basename(filename)
-    if not filename or ".." in filename:
-        filename = f"generated_{uuid.uuid4().hex[:8]}"
+    # R6-2: Strip to safe chars only — allowlist prevents path traversal regardless of OS
+    filename = _re.sub(r'[^A-Za-z0-9_.\-]', '_', filename)[:128]
+    if not filename or filename.startswith('.'):
+        filename = f"generated_{uuid.uuid4().hex[:8]}.glb"
 
     filepath = os.path.join(save_dir, filename)
 
@@ -937,7 +1020,7 @@ def _download_file(
             else:
                 return {"ok": False, "error": "Too many redirects during download."}
     except httpx.HTTPStatusError as exc:
-        return {"ok": False, "error": f"Download failed {exc.response.status_code}: {exc.response.text}"}
+        return {"ok": False, "error": f"Download failed {exc.response.status_code}: {exc.response.text[:200]}"}
     except httpx.RequestError as exc:
         return {"ok": False, "error": f"Network error during download: {exc}"}
     except OSError as exc:
