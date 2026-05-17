@@ -43,8 +43,7 @@ class TestGH2Registration(unittest.TestCase):
             "gh2_solve_graph", "gh2_clear_canvas",
         }
         registered = set(self.tools.keys())
-        missing = expected - registered
-        self.assertFalse(missing, f"Missing tools: {missing}")
+        self.assertEqual(registered, expected, f"Tool mismatch — extra: {registered - expected}, missing: {expected - registered}")
 
     def test_register_function_exists(self) -> None:
         """gh2 module must expose a callable register() function."""

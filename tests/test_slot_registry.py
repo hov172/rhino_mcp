@@ -1,8 +1,10 @@
 """Unit tests for slot_registry — no live Rhino required."""
 from __future__ import annotations
+import dataclasses
 import json
 import os
-import time
+import subprocess
+import sys
 import pytest
 from pathlib import Path
 
@@ -73,9 +75,10 @@ def test_discover_prunes_stale(slots_dir):
     """Slot file with a non-existent PID is pruned and the file deleted."""
     from rhmcp.tools_helpers.slot_registry import discover
 
-    # Use a PID that almost certainly doesn't exist.
-    # os.kill(pid, 0) with a bogus PID raises OSError(ESRCH) → _is_alive returns False.
-    stale_pid = 99999999
+    # Spawn and reap a real child process to get a guaranteed-dead PID.
+    p = subprocess.Popen([sys.executable, "-c", "pass"])
+    p.wait()
+    stale_pid = p.pid
     slot_file = _write_slot(slots_dir, stale_pid)
 
     # Verify the file exists before discovery.
@@ -190,8 +193,9 @@ def test_wait_for_slot_dead_process_raises(slots_dir):
     """wait_for_slot raises RuntimeError immediately if PID is not alive."""
     from rhmcp.tools_helpers.slot_registry import wait_for_slot
 
-    # A huge PID that almost certainly doesn't exist.
-    dead_pid = 99999999
+    p = subprocess.Popen([sys.executable, "-c", "pass"])
+    p.wait()
+    dead_pid = p.pid
     with pytest.raises(RuntimeError, match="exited"):
         wait_for_slot(dead_pid, timeout=5.0, poll=0.05)
 
@@ -207,9 +211,11 @@ def test_is_alive_current_process():
 
 
 def test_is_alive_nonexistent_pid():
-    """A PID that almost certainly doesn't exist returns False."""
+    """A guaranteed-dead child PID returns False."""
     from rhmcp.tools_helpers.slot_registry import _is_alive
-    assert _is_alive(99999999) is False
+    p = subprocess.Popen([sys.executable, "-c", "pass"])
+    p.wait()
+    assert _is_alive(p.pid) is False
 
 
 # ---------------------------------------------------------------------------
@@ -237,7 +243,7 @@ def test_slots_dir_name():
 # SlotInfo dataclass tests
 # ---------------------------------------------------------------------------
 
-def test_slot_info_frozen(slots_dir):
+def test_slot_info_frozen():
     """SlotInfo is frozen — attribute assignment raises FrozenInstanceError."""
     from rhmcp.tools_helpers.slot_registry import SlotInfo
     info = SlotInfo(
@@ -248,7 +254,8 @@ def test_slot_info_frozen(slots_dir):
         rhino_version="8.0",
         started_at="2026-05-17T00:00:00Z",
     )
-    with pytest.raises(Exception):  # dataclasses.FrozenInstanceError
+    _FrozenError = getattr(dataclasses, "FrozenInstanceError", AttributeError)
+    with pytest.raises(_FrozenError):
         info.pid = 2  # type: ignore[misc]
 
 

@@ -23,7 +23,7 @@ def test_sh_script_uses_find_not_ls():
     """Must use 'find' not 'ls' glob to avoid pipefail false-exit."""
     content = SH_SCRIPT.read_text()
     assert "find " in content, "Script should use 'find' for .yak file discovery"
-    assert "ls " not in content or "# " in content, "Script should not use bare 'ls' for .yak glob"
+    assert "ls " not in content, "Script should not use bare 'ls' for .yak glob"
 
 
 def test_sh_script_has_yak_existence_check():
@@ -49,9 +49,10 @@ def test_ps_script_exists():
 
 
 def test_ps_script_uses_lastwritetime_sort():
-    """Must use LastWriteTime sort to get newest .yak regardless of version string."""
+    """Must use LastWriteTime sort + Select -Last 1 to pick newest .yak."""
     content = PS_SCRIPT.read_text()
     assert "LastWriteTime" in content, "PowerShell script must use Sort-Object LastWriteTime"
+    assert "-Last 1" in content, "PowerShell script must select last (newest) item after sort"
 
 
 def test_ps_script_has_yak_existence_check():

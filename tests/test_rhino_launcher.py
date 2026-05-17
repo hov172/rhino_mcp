@@ -3,7 +3,6 @@ from __future__ import annotations
 import os
 import sys
 from pathlib import Path
-from unittest.mock import patch
 
 import pytest
 
@@ -129,26 +128,6 @@ def test_launch_not_found_raises(monkeypatch):
         rhino_launcher.launch()
 
 
-def test_launch_explicit_path_not_found_raises(monkeypatch):
-    """RuntimeError is raised when an explicitly supplied rhino_path doesn't exist."""
-    from rhmcp.tools_helpers import rhino_launcher
-
-    # find_rhino should not be called when rhino_path is explicit, but the
-    # explicit path should be treated as the resolved exe. Because Path(...)
-    # exists() returns False for a nonexistent path, the logic should still
-    # raise. We simulate by making find_rhino return None and passing a
-    # nonexistent path so exe == None.
-    # Actually, launch() uses rhino_path directly without calling find_rhino when
-    # rhino_path is supplied. We test the fallback path explicitly.
-    nonexistent = Path("/tmp/no_such_rhino_exe_xyz_999")
-    # launch() code: exe = rhino_path or find_rhino()
-    # If rhino_path is a truthy Path (even nonexistent), it won't call find_rhino.
-    # The RuntimeError is only raised when exe is None.
-    # So we monkeypatch find_rhino to cover the launch(None) case.
-    monkeypatch.setattr(rhino_launcher, "find_rhino", lambda: None)
-    with pytest.raises(RuntimeError, match="not found"):
-        rhino_launcher.launch(rhino_path=None)
-
 
 def test_launch_error_message_mentions_env_var(monkeypatch):
     """RuntimeError message mentions RHINO_MCP_RHINO_PATH for user guidance."""
@@ -180,7 +159,7 @@ def test_rhino_paths_darwin_contains_rhino8():
     """darwin path list contains a Rhino 8 path."""
     from rhmcp.tools_helpers import rhino_launcher
     darwin_paths = rhino_launcher._RHINO_PATHS.get("darwin", [])
-    assert any("8" in p for p in darwin_paths)
+    assert any("Rhino 8" in p for p in darwin_paths)
 
 
 def test_rhino_paths_win32_contains_exe():
