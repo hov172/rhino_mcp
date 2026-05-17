@@ -52,6 +52,7 @@ public sealed class RhinoMcpServer
         _cts = new CancellationTokenSource();
         _listener = new TcpListener(BindAddress, Port);
         _listener.Start();
+        SlotAnnouncer.Announce(BindAddress.ToString(), Port, "0.11.0");
         _acceptTask = Task.Run(() => AcceptLoop(_cts.Token));
     }
 
@@ -61,6 +62,7 @@ public sealed class RhinoMcpServer
         _listener?.Stop();
         _listener = null;
         _cts = null;
+        SlotAnnouncer.Withdraw();
     }
 
     private async Task AcceptLoop(CancellationToken token)
