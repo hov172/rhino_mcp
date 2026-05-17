@@ -95,7 +95,8 @@ if _mcp_object_ids is None:
         ok = False
     if not ok:
         try:
-            ok = bool(rs.Command('_SaveAs "{}" _Enter'.format(_mcp_path), False))
+            _mcp_path_safe = _mcp_path.replace('"', '').replace('\r', '').replace('\n', '')
+            ok = bool(rs.Command('_SaveAs "{}" _Enter'.format(_mcp_path_safe), False))
         except Exception:
             ok = False
 else:
@@ -120,7 +121,8 @@ else:
     except Exception as _e:
         ok = False
         try:
-            ok = bool(rs.Command('_SaveAs "{}" _Enter'.format(_mcp_path), False))
+            _mcp_path_safe = _mcp_path.replace('"', '').replace('\r', '').replace('\n', '')
+            ok = bool(rs.Command('_SaveAs "{}" _Enter'.format(_mcp_path_safe), False))
         except Exception:
             ok = False
 

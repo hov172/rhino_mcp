@@ -160,7 +160,8 @@ except Exception:
 
 # Fallback to command export ---------------------------------------------
 if not _ok:
-    rs.Command('_-Export "{}" _Enter'.format(_mcp_path), False)
+    _mcp_path_safe = _mcp_path.replace('"', '').replace('\r', '').replace('\n', '')
+    rs.Command('_-Export "{}" _Enter'.format(_mcp_path_safe), False)
     import os
     _ok = os.path.isfile(_mcp_path)
 
@@ -214,7 +215,8 @@ except Exception:
 
 # Fallback to command export ---------------------------------------------
 if not _ok:
-    rs.Command('_-Export "{}" _Enter'.format(_mcp_path), False)
+    _mcp_path_safe = _mcp_path.replace('"', '').replace('\r', '').replace('\n', '')
+    rs.Command('_-Export "{}" _Enter'.format(_mcp_path_safe), False)
     import os
     _ok = os.path.isfile(_mcp_path)
 
@@ -267,7 +269,8 @@ except Exception:
 
 # Fallback to command export ---------------------------------------------
 if not _ok:
-    rs.Command('_-Export "{}" _Enter'.format(_mcp_path), False)
+    _mcp_path_safe = _mcp_path.replace('"', '').replace('\r', '').replace('\n', '')
+    rs.Command('_-Export "{}" _Enter'.format(_mcp_path_safe), False)
     _ok = os.path.isfile(_mcp_path)
 
 rs.UnselectAllObjects()
