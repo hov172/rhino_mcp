@@ -11,6 +11,7 @@ import argparse
 import importlib
 import os
 import pkgutil
+import secrets
 import sys
 
 import yaml
@@ -122,6 +123,10 @@ def main() -> int:
             enable_dns_rebinding_protection=False,
         )
 
+        _AUTH_TOKEN = secrets.token_hex(32)
+        print(f"Rhino MCP auth token: {_AUTH_TOKEN}", file=sys.stderr)
+        print("Pass this as: Authorization: Bearer <token>", file=sys.stderr)
+
         from starlette.requests import Request
         from starlette.responses import JSONResponse
         from starlette.routing import Mount, Route
@@ -133,6 +138,8 @@ def main() -> int:
 
         def app_with_cors():
             from starlette.applications import Starlette
+            from starlette.middleware.base import BaseHTTPMiddleware
+            from starlette.responses import Response as StarletteResponse
 
             mcp_app = original_app()
             mcp_app.add_middleware(
@@ -141,10 +148,25 @@ def main() -> int:
                 allow_methods=["*"],
                 allow_headers=["*"],
             )
+
+            class _TokenAuth(BaseHTTPMiddleware):
+                async def dispatch(self, request, call_next):
+                    if request.url.path == "/health":
+                        return await call_next(request)
+                    auth = request.headers.get("Authorization", "")
+                    if not secrets.compare_digest(auth, f"Bearer {_AUTH_TOKEN}"):
+                        return StarletteResponse(
+                            '{"error":"Unauthorized"}',
+                            status_code=401,
+                            media_type="application/json",
+                        )
+                    return await call_next(request)
+
             app = Starlette(routes=[
                 Route("/health", health),
                 Mount("/", app=mcp_app),
             ])
+            app.add_middleware(_TokenAuth)
             return app
 
         mcp.streamable_http_app = app_with_cors  # type: ignore[method-assign]

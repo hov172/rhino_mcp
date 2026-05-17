@@ -100,5 +100,60 @@ class TestHealthEndpoint(unittest.TestCase):
         self.assertEqual(response.json(), {"status": "ok"})
 
 
+class TestAuthMiddleware(unittest.TestCase):
+    def _make_authed_app(self, token: str):
+        import secrets as _secrets
+        from starlette.applications import Starlette
+        from starlette.middleware.base import BaseHTTPMiddleware
+        from starlette.requests import Request
+        from starlette.responses import JSONResponse
+        from starlette.responses import Response as StarletteResponse
+        from starlette.routing import Mount, Route
+
+        async def health(request: Request) -> JSONResponse:
+            return JSONResponse({"status": "ok"})
+
+        async def protected(request: Request) -> JSONResponse:
+            return JSONResponse({"data": "secret"})
+
+        class _TokenAuth(BaseHTTPMiddleware):
+            async def dispatch(self, request, call_next):
+                if request.url.path == "/health":
+                    return await call_next(request)
+                auth = request.headers.get("Authorization", "")
+                if not _secrets.compare_digest(auth, f"Bearer {token}"):
+                    return StarletteResponse(
+                        '{"error":"Unauthorized"}', status_code=401,
+                        media_type="application/json"
+                    )
+                return await call_next(request)
+
+        stub = Starlette(routes=[Route("/protected", protected)])
+        app = Starlette(routes=[
+            Route("/health", health),
+            Mount("/", app=stub),
+        ])
+        app.add_middleware(_TokenAuth)
+        return app
+
+    def test_health_no_auth_required(self):
+        client = TestClient(self._make_authed_app("mytoken"), raise_server_exceptions=True)
+        self.assertEqual(client.get("/health").status_code, 200)
+
+    def test_protected_route_rejected_without_token(self):
+        client = TestClient(self._make_authed_app("mytoken"), raise_server_exceptions=True)
+        self.assertEqual(client.get("/protected").status_code, 401)
+
+    def test_protected_route_accepted_with_correct_token(self):
+        client = TestClient(self._make_authed_app("mytoken"), raise_server_exceptions=True)
+        r = client.get("/protected", headers={"Authorization": "Bearer mytoken"})
+        self.assertEqual(r.status_code, 200)
+
+    def test_wrong_token_rejected(self):
+        client = TestClient(self._make_authed_app("mytoken"), raise_server_exceptions=True)
+        r = client.get("/protected", headers={"Authorization": "Bearer wrongtoken"})
+        self.assertEqual(r.status_code, 401)
+
+
 if __name__ == "__main__":
     unittest.main()
