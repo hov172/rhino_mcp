@@ -825,6 +825,9 @@ catch (Exception ex)
                 "imported": True
             }
         """
+        if not _re.fullmatch(r"[0-9a-fA-F]{32}", model_uid):
+            return {"ok": False, "error": f"Invalid model_uid: expected 32 hex characters, got {model_uid!r}"}
+
         resolved_key = api_key or os.environ.get("SKETCHFAB_API_KEY")
         if not resolved_key:
             return {"ok": False, "error": "Sketchfab API key required. Pass api_key or set SKETCHFAB_API_KEY env var."}
