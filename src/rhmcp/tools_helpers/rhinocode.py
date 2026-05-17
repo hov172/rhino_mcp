@@ -32,7 +32,9 @@ def find_rhinocode() -> str:
     """
     configured = os.environ.get("RHINOCODE")
     if configured:
-        return configured
+        if os.path.isfile(configured) and os.access(configured, os.X_OK):
+            return configured
+        # Env var set but not executable — fall through to auto-detect
 
     found = shutil.which("rhinocode")
     if found:
