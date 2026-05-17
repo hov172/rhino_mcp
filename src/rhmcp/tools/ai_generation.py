@@ -947,7 +947,8 @@ def _import_file_into_rhino(
     ``RhinoDoc.ActiveDoc.Import()`` and optionally scale / translate the result.
     """
     # Normalise path separators for the C# verbatim string literal.
-    safe_path = filepath.replace("\\", "/")
+    # C# verbatim strings use "" to represent a literal quote
+    safe_path = filepath.replace("\\", "/").replace('"', '""')
 
     scale_code = ""
     if abs(scale - 1.0) > 1e-9:

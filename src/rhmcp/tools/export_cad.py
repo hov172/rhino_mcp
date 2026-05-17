@@ -157,7 +157,8 @@ try:
 except Exception as _ex:
     _error = str(_ex)
     try:
-        _ok = bool(rs.Command('_-Export "{}" _Enter'.format(_mcp_path), False))
+        _mcp_path_safe = _mcp_path.replace('"', '').replace('\r', '').replace('\n', '')
+        _ok = bool(rs.Command('_-Export "{}" _Enter'.format(_mcp_path_safe), False))
     except Exception as _ex2:
         _error = "{} | fallback: {}".format(_error, _ex2)
         _ok = False
@@ -209,7 +210,8 @@ try:
 except Exception as _ex:
     _error = str(_ex)
     try:
-        _ok = bool(rs.Command('_-Export "{}" _Enter'.format(_mcp_path), False))
+        _mcp_path_safe = _mcp_path.replace('"', '').replace('\r', '').replace('\n', '')
+        _ok = bool(rs.Command('_-Export "{}" _Enter'.format(_mcp_path_safe), False))
     except Exception as _ex2:
         _error = "{} | fallback: {}".format(_error, _ex2)
         _ok = False
@@ -270,7 +272,8 @@ try:
 except Exception as _ex:
     _error = str(_ex)
     try:
-        _ok = bool(rs.Command('_-Export "{}" _Enter'.format(_mcp_path), False))
+        _mcp_path_safe = _mcp_path.replace('"', '').replace('\r', '').replace('\n', '')
+        _ok = bool(rs.Command('_-Export "{}" _Enter'.format(_mcp_path_safe), False))
     except Exception as _ex2:
         _error = "{} | fallback: {}".format(_error, _ex2)
         _ok = False

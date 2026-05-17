@@ -153,7 +153,7 @@ def main() -> int:
 
             class _TokenAuth(BaseHTTPMiddleware):
                 async def dispatch(self, request, call_next):
-                    if request.url.path == "/health":
+                    if request.url.path == "/health" or request.method == "OPTIONS":
                         return await call_next(request)
                     auth = request.headers.get("Authorization", "")
                     if not secrets.compare_digest(auth, f"Bearer {_AUTH_TOKEN}"):

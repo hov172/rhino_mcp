@@ -337,7 +337,8 @@ import System.Drawing
 doc = Rhino.RhinoDoc.ActiveDoc
 
 ids_before = set(str(o.Id) for o in doc.Objects if not o.IsDeleted)
-cmd = '_-Import "{}" _Enter'.format(_mcp_import_path)
+_mcp_import_path_safe = _mcp_import_path.replace('"', '').replace('\r', '').replace('\n', '')
+cmd = '_-Import "{}" _Enter'.format(_mcp_import_path_safe)
 ok = rs.Command(cmd, False)
 
 if not ok:

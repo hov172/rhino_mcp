@@ -7,10 +7,12 @@ from __future__ import annotations
 
 import io
 import os
+import socket
 import struct
 import tempfile
 import zipfile
 import unittest
+from unittest.mock import patch
 
 from rhmcp.tools_helpers.security import (
     clamp,
@@ -77,6 +79,30 @@ class TestValidateDownloadUrl(unittest.TestCase):
         with self.assertRaises(ValueError):
             validate_download_url("")
 
+    def test_decimal_ip_localhost_blocked(self) -> None:
+        with patch("socket.getaddrinfo",
+                   return_value=[(None, None, None, None, ("127.0.0.1", 0))]):
+            with self.assertRaises(ValueError, msg="decimal IP for loopback should be blocked"):
+                validate_download_url("https://2130706433/secret")
+
+    def test_ipv4_mapped_ipv6_loopback_blocked(self) -> None:
+        with patch("socket.getaddrinfo",
+                   return_value=[(None, None, None, None, ("::ffff:127.0.0.1", 0))]):
+            with self.assertRaises(ValueError, msg="IPv4-mapped IPv6 loopback should be blocked"):
+                validate_download_url("https://some-host/secret")
+
+    def test_trailing_dot_localhost_blocked(self) -> None:
+        with patch("socket.getaddrinfo",
+                   return_value=[(None, None, None, None, ("127.0.0.1", 0))]):
+            with self.assertRaises(ValueError, msg="trailing-dot hostname should be blocked"):
+                validate_download_url("https://localhost./secret")
+
+    def test_zero_ip_blocked(self) -> None:
+        with patch("socket.getaddrinfo",
+                   return_value=[(None, None, None, None, ("0.0.0.0", 0))]):
+            with self.assertRaises(ValueError, msg="0.0.0.0 should be blocked"):
+                validate_download_url("https://0.0.0.0/secret")
+
 
 class TestClamp(unittest.TestCase):
     def test_within_range(self) -> None:
@@ -124,6 +150,21 @@ class TestSafeExtractall(unittest.TestCase):
             os.makedirs(dest)
             with self.assertRaises(ValueError, msg="Zip Slip should be blocked"):
                 safe_extractall(zip_path, dest)
+
+    def test_symlink_member_raises(self) -> None:
+        zf_bytes = io.BytesIO()
+        with zipfile.ZipFile(zf_bytes, "w") as zf:
+            info = zipfile.ZipInfo("link")
+            # Set Unix symlink mode (0xA1FF) in external_attr high 16 bits
+            info.external_attr = 0xA1FF0000
+            info.compress_type = zipfile.ZIP_STORED
+            zf.writestr(info, "/etc/passwd")
+        zf_bytes.seek(0)
+        with tempfile.TemporaryDirectory() as tmp:
+            extract_dir = os.path.join(tmp, "out")
+            os.makedirs(extract_dir)
+            with self.assertRaises(ValueError, msg="symlink member should be blocked"):
+                safe_extractall(zf_bytes, extract_dir)
 
 
 if __name__ == "__main__":

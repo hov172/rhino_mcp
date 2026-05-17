@@ -124,7 +124,7 @@ class TestAuthMiddleware(unittest.TestCase):
 
         class _TokenAuth(BaseHTTPMiddleware):
             async def dispatch(self, request, call_next):
-                if request.url.path == "/health":
+                if request.url.path == "/health" or request.method == "OPTIONS":
                     return await call_next(request)
                 auth = request.headers.get("Authorization", "")
                 if not _secrets.compare_digest(auth, f"Bearer {token}"):
@@ -159,6 +159,13 @@ class TestAuthMiddleware(unittest.TestCase):
         client = TestClient(self._make_authed_app("mytoken"), raise_server_exceptions=True)
         r = client.get("/protected", headers={"Authorization": "Bearer wrongtoken"})
         self.assertEqual(r.status_code, 401)
+
+    def test_options_preflight_exempt_from_auth(self):
+        app = self._make_authed_app("mytoken")
+        client = TestClient(app, raise_server_exceptions=True)
+        r = client.options("/protected")
+        # OPTIONS must not be blocked by auth middleware
+        self.assertNotEqual(r.status_code, 401)
 
 
 if __name__ == "__main__":
