@@ -214,7 +214,8 @@ def register(mcp: FastMCP) -> None:
         command = "_-Export"
         if select_all:
             command = "_SelAll " + command
-        command = '{} "{}" _Enter'.format(command, path)
+        from rhmcp.tools_helpers.security import sanitise_rhino_path
+        command = '{} "{}" _Enter'.format(command, sanitise_rhino_path(path))
         return rhino.run_command(command, rhino_id=rhino_id)
 
 

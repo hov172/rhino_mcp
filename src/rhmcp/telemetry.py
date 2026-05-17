@@ -89,7 +89,7 @@ def install(mcp) -> None:  # type: ignore[type-arg]
                 name, arguments, context=context, convert_result=convert_result
             )
         except Exception as exc:  # noqa: BLE001
-            exc_str = f"{type(exc).__name__}: {exc}"
+            exc_str = f"{type(exc).__name__}: {str(exc)[:120]}"
             raise
         finally:
             _write(

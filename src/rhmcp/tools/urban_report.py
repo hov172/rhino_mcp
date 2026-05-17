@@ -48,7 +48,7 @@ def _render_html(
     include_solar: bool,
     include_design_language: bool,
 ) -> str:
-    env = Environment(loader=FileSystemLoader(str(_TEMPLATES_DIR)), autoescape=False)
+    env = Environment(loader=FileSystemLoader(str(_TEMPLATES_DIR)), autoescape=True)
     css_path = _TEMPLATES_DIR / "report.css"
     css = css_path.read_text() if css_path.exists() else ""
     template = env.get_template("report.html.jinja2")

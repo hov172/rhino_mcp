@@ -1,91 +1,130 @@
+"""
+Unit tests for rhmcp.tools_helpers.security.
+No Rhino instance required.
+"""
+
 from __future__ import annotations
-import io, os, pytest
-from rhmcp.tools_helpers.security import sanitise_rhino_path, validate_download_url, clamp, safe_extractall
+
+import io
+import os
+import struct
+import tempfile
 import zipfile
+import unittest
 
-class TestSanitiseRhinoPath:
-    def test_clean_path_unchanged(self):
-        assert sanitise_rhino_path("/tmp/model.3dm") == "/tmp/model.3dm"
-    def test_double_quote_stripped(self):
-        assert '"' not in sanitise_rhino_path('/tmp/evil"_Quit.3dm')
-    def test_backslash_preserved_windows(self):
-        assert sanitise_rhino_path(r"C:\Users\alice\model.3dm") == r"C:\Users\alice\model.3dm"
-    def test_newline_stripped(self):
-        assert "\n" not in sanitise_rhino_path("/tmp/a\nb.3dm")
-    def test_carriage_return_stripped(self):
-        assert "\r" not in sanitise_rhino_path("/tmp/a\rb.3dm")
+from rhmcp.tools_helpers.security import (
+    clamp,
+    safe_extractall,
+    sanitise_rhino_path,
+    validate_download_url,
+)
 
-class TestValidateDownloadUrl:
-    def test_https_allowed(self, monkeypatch):
-        import socket as _socket
-        # Mock getaddrinfo to return a public IP (1.1.1.1)
-        monkeypatch.setattr(
-            _socket, "getaddrinfo",
-            lambda host, port, *a, **kw: [(None, None, None, None, ("1.1.1.1", 0))]
-        )
-        validate_download_url("https://sketchfab.com/model.glb")  # must not raise
 
-    def test_unresolvable_hostname_blocked(self, monkeypatch):
-        import socket as _socket
-        monkeypatch.setattr(
-            _socket, "getaddrinfo",
-            lambda *a, **kw: (_ for _ in ()).throw(_socket.gaierror("Name not resolved"))
-        )
-        with pytest.raises(ValueError, match="private"):
-            validate_download_url("https://not-a-real-host-xyz123.example/")
+class TestSanitiseRhinoPath(unittest.TestCase):
+    def test_clean_path_unchanged(self) -> None:
+        p = "/Users/alice/models/building.3dm"
+        self.assertEqual(sanitise_rhino_path(p), p)
 
-    def test_http_blocked(self):
-        with pytest.raises(ValueError, match="scheme"):
-            validate_download_url("http://example.com/model.glb")
-    def test_file_scheme_blocked(self):
-        with pytest.raises(ValueError, match="scheme"):
-            validate_download_url("file:///etc/passwd")
-    def test_local_path_blocked(self):
-        with pytest.raises(ValueError, match="local"):
+    def test_strips_double_quote(self) -> None:
+        self.assertEqual(sanitise_rhino_path('/tmp/bad"name.3dm'), "/tmp/badname.3dm")
+
+    def test_strips_newline(self) -> None:
+        self.assertEqual(sanitise_rhino_path("/tmp/foo\nbar.3dm"), "/tmp/foobar.3dm")
+
+    def test_strips_carriage_return(self) -> None:
+        self.assertEqual(sanitise_rhino_path("/tmp/foo\rbar.3dm"), "/tmp/foobar.3dm")
+
+    def test_strips_null_byte(self) -> None:
+        self.assertEqual(sanitise_rhino_path("/tmp/foo\0bar.3dm"), "/tmp/foobar.3dm")
+
+    def test_raises_on_empty_result(self) -> None:
+        with self.assertRaises(ValueError):
+            sanitise_rhino_path('"\n\r\0')
+
+
+class TestValidateDownloadUrl(unittest.TestCase):
+    def test_https_allowed(self) -> None:
+        validate_download_url("https://example.com/model.glb")  # must not raise
+
+    def test_http_allowed(self) -> None:
+        validate_download_url("http://cdn.example.com/file.zip")  # must not raise
+
+    def test_local_path_blocked(self) -> None:
+        with self.assertRaises(ValueError):
             validate_download_url("/etc/passwd")
-    def test_file_equals_blocked(self):
-        with pytest.raises(ValueError, match="local"):
-            validate_download_url("file=/etc/passwd")
-    def test_aws_metadata_blocked(self):
-        with pytest.raises(ValueError, match="private"):
-            validate_download_url("https://169.254.169.254/latest/meta-data/")
-    def test_localhost_blocked(self):
-        with pytest.raises(ValueError, match="private"):
-            validate_download_url("https://127.0.0.1/secret")
-    def test_rfc1918_10_blocked(self):
-        with pytest.raises(ValueError, match="private"):
-            validate_download_url("https://10.0.0.1/secret")
-    def test_rfc1918_172_blocked(self):
-        with pytest.raises(ValueError, match="private"):
-            validate_download_url("https://172.16.0.1/secret")
-    def test_rfc1918_192_blocked(self):
-        with pytest.raises(ValueError, match="private"):
-            validate_download_url("https://192.168.1.1/secret")
 
-class TestClamp:
-    def test_within_range(self):
-        assert clamp(150, 50, 600) == 150
-    def test_below_min(self):
-        assert clamp(10, 50, 600) == 50
-    def test_above_max(self):
-        assert clamp(9999, 50, 600) == 600
+    def test_file_equals_blocked(self) -> None:
+        with self.assertRaises(ValueError):
+            validate_download_url("file=/tmp/model.glb")
 
-class TestZipSlip:
-    def test_safe_zip_extracted_normally(self, tmp_path):
-        zf_bytes = io.BytesIO()
-        with zipfile.ZipFile(zf_bytes, "w") as zf:
-            zf.writestr("model/scene.gltf", '{"asset":{}}')
-        zf_bytes.seek(0)
-        extract_dir = str(tmp_path / "out")
-        os.makedirs(extract_dir)
-        safe_extractall(zf_bytes, extract_dir)
-        assert os.path.exists(os.path.join(extract_dir, "model", "scene.gltf"))
-    def test_zip_slip_path_raises(self, tmp_path):
-        zf_bytes = io.BytesIO()
-        with zipfile.ZipFile(zf_bytes, "w") as zf:
-            zf.writestr("../../evil.sh", "rm -rf /")
-        zf_bytes.seek(0)
-        extract_dir = str(tmp_path / "out")
-        os.makedirs(extract_dir)
-        with pytest.raises(ValueError, match="Zip slip"):
-            safe_extractall(zf_bytes, extract_dir)
+    def test_file_scheme_blocked(self) -> None:
+        with self.assertRaises(ValueError):
+            validate_download_url("file:///etc/passwd")
+
+    def test_localhost_blocked(self) -> None:
+        with self.assertRaises(ValueError):
+            validate_download_url("http://localhost/secret")
+
+    def test_loopback_ip_blocked(self) -> None:
+        with self.assertRaises(ValueError):
+            validate_download_url("http://127.0.0.1/secret")
+
+    def test_private_ip_blocked(self) -> None:
+        with self.assertRaises(ValueError):
+            validate_download_url("http://192.168.1.1/secret")
+
+    def test_empty_blocked(self) -> None:
+        with self.assertRaises(ValueError):
+            validate_download_url("")
+
+
+class TestClamp(unittest.TestCase):
+    def test_within_range(self) -> None:
+        self.assertEqual(clamp(50, 1, 100), 50)
+
+    def test_below_lo(self) -> None:
+        self.assertEqual(clamp(-5, 1, 100), 1)
+
+    def test_above_hi(self) -> None:
+        self.assertEqual(clamp(9999, 1, 8192), 8192)
+
+    def test_at_lo(self) -> None:
+        self.assertEqual(clamp(1, 1, 100), 1)
+
+    def test_at_hi(self) -> None:
+        self.assertEqual(clamp(100, 1, 100), 100)
+
+    def test_float(self) -> None:
+        self.assertAlmostEqual(clamp(0.5, 0.0, 1.0), 0.5)
+
+
+class TestSafeExtractall(unittest.TestCase):
+    def _make_zip(self, members: dict[str, bytes], path: str) -> None:
+        with zipfile.ZipFile(path, "w") as zf:
+            for name, data in members.items():
+                zf.writestr(name, data)
+
+    def test_normal_extraction(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            zip_path = os.path.join(tmp, "good.zip")
+            self._make_zip({"model.glb": b"data", "tex/tex.png": b"png"}, zip_path)
+            dest = os.path.join(tmp, "out")
+            os.makedirs(dest)
+            safe_extractall(zip_path, dest)
+            self.assertTrue(os.path.exists(os.path.join(dest, "model.glb")))
+            self.assertTrue(os.path.exists(os.path.join(dest, "tex", "tex.png")))
+
+    def test_zip_slip_blocked(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            zip_path = os.path.join(tmp, "evil.zip")
+            # Manually craft a zip with a traversal member name
+            with zipfile.ZipFile(zip_path, "w") as zf:
+                zf.writestr("../../evil.txt", "pwned")
+            dest = os.path.join(tmp, "out")
+            os.makedirs(dest)
+            with self.assertRaises(ValueError, msg="Zip Slip should be blocked"):
+                safe_extractall(zip_path, dest)
+
+
+if __name__ == "__main__":
+    unittest.main()

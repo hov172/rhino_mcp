@@ -843,10 +843,12 @@ catch (Exception ex)
         extract_dir = os.path.join(dest_dir, "extracted")
         os.makedirs(extract_dir, exist_ok=True)
         try:
-            with zipfile.ZipFile(zip_path, "r") as zf:
-                zf.extractall(extract_dir)
+            from rhmcp.tools_helpers.security import safe_extractall
+            safe_extractall(zip_path, extract_dir)
         except zipfile.BadZipFile as exc:
             return {"ok": False, "error": f"Archive is not a valid zip: {exc}"}
+        except ValueError as exc:
+            return {"ok": False, "error": str(exc)}
 
         # Step 4: Find the primary model file.
         ext_priority = {

@@ -64,6 +64,8 @@ def _fal_img2img(
     Raises on HTTP/network error (caller handles retry).
     """
     fal_key = os.environ.get("FAL_KEY", "")
+    if not fal_key:
+        raise ValueError("FAL_KEY environment variable is not set")
     headers = {"Authorization": f"Key {fal_key}", "Content-Type": "application/json"}
     payload: dict[str, Any] = {
         "image_url": f"data:image/png;base64,{image_b64}",
@@ -92,6 +94,8 @@ def _fal_img2img(
 def _fal_text2img(prompt: str, seed: int | None) -> tuple[str, str, int]:
     """Text-to-image via fal-ai/flux-dev. Returns (b64, request_id, seed)."""
     fal_key = os.environ.get("FAL_KEY", "")
+    if not fal_key:
+        raise ValueError("FAL_KEY environment variable is not set")
     headers = {"Authorization": f"Key {fal_key}", "Content-Type": "application/json"}
     payload: dict[str, Any] = {"prompt": prompt, "num_images": 1}
     if seed is not None:

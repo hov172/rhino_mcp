@@ -422,7 +422,6 @@ def _rodin_text_job(
         "service": "rodin",
         "task_uuid": task_uuid,
         "output_format": output_format,
-        "api_key": api_key,
         "jobs": data.get("jobs", {}),
     }
 
@@ -494,7 +493,6 @@ def _rodin_image_job(
         "service": "rodin",
         "task_uuid": task_uuid,
         "output_format": output_format,
-        "api_key": api_key,
         "jobs": data.get("jobs", {}),
     }
 
@@ -520,7 +518,7 @@ def _rodin_poll(job_id: str, api_key: str | None) -> dict[str, object]:
 
     task_uuid: str = meta["task_uuid"]
     output_format: str = meta.get("output_format", "glb")
-    resolved_key = api_key or meta.get("api_key")
+    resolved_key = api_key
 
     try:
         headers = _rodin_headers(resolved_key)
@@ -683,7 +681,6 @@ def _hunyuan3d_text_job(
         "status": "processing",
         "prompt": prompt,
         "output_format": output_format,
-        "api_key": api_key,
         "gradio_job": gradio_job,
         "result_path": None,
     }
@@ -739,7 +736,6 @@ def _hunyuan3d_image_job(
         "prompt": prompt or "",
         "image_paths": image_paths,
         "output_format": output_format,
-        "api_key": api_key,
         "gradio_job": gradio_job,
         "result_path": None,
     }
@@ -886,12 +882,11 @@ def _download_file(
 
     Returns ``{"ok": True, "filepath": str}`` on success.
     """
-    # Handle local file paths returned by Hunyuan3D Gradio.
-    if url and (url.startswith("/") or url.startswith("file=")):
-        local_path = url.replace("file=", "", 1)
-        if Path(local_path).is_file():
-            return {"ok": True, "filepath": local_path}
-        return {"ok": False, "error": f"Local file not found: {local_path}"}
+    from rhmcp.tools_helpers.security import validate_download_url
+    try:
+        validate_download_url(url)
+    except ValueError as exc:
+        return {"ok": False, "error": str(exc)}
 
     # Determine output path.
     save_dir = output_dir if output_dir else tempfile.mkdtemp(prefix="rhmcp_ai_")
