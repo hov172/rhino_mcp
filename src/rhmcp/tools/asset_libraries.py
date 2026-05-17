@@ -20,7 +20,7 @@ from mcp.types import ToolAnnotations
 
 from rhmcp.tools_helpers import backend as rhino
 from rhmcp.tools_helpers import plugin_client
-from rhmcp.tools_helpers.security import sanitise_rhino_path, validate_download_url, safe_extractall, clamp
+from rhmcp.tools_helpers.security import sanitise_rhino_path, validate_download_url, safe_extractall
 
 # ---------------------------------------------------------------------------
 # Input-validation helpers (R4-1)
