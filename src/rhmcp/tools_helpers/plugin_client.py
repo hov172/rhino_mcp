@@ -36,7 +36,11 @@ def _attempt(
     target_port: int,
     target_timeout: float,
 ) -> dict[str, Any]:
-    request = json.dumps({"type": command_type, "params": params}).encode("utf-8")
+    payload: dict = {"type": command_type, "params": params}
+    _secret = os.environ.get("RHINO_MCP_PLUGIN_SECRET")
+    if _secret:
+        payload["secret"] = _secret
+    request = json.dumps(payload).encode("utf-8")
     with socket.create_connection((target_host, target_port), timeout=target_timeout) as sock:
         sock.settimeout(target_timeout)
         sock.sendall(request)
