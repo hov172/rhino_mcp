@@ -151,6 +151,21 @@ class TestSafeExtractall(unittest.TestCase):
             with self.assertRaises(ValueError, msg="Zip Slip should be blocked"):
                 safe_extractall(zip_path, dest)
 
+    def test_symlink_member_raises(self) -> None:
+        zf_bytes = io.BytesIO()
+        with zipfile.ZipFile(zf_bytes, "w") as zf:
+            info = zipfile.ZipInfo("link")
+            # Set Unix symlink mode (0xA1FF) in external_attr high 16 bits
+            info.external_attr = 0xA1FF0000
+            info.compress_type = zipfile.ZIP_STORED
+            zf.writestr(info, "/etc/passwd")
+        zf_bytes.seek(0)
+        with tempfile.TemporaryDirectory() as tmp:
+            extract_dir = os.path.join(tmp, "out")
+            os.makedirs(extract_dir)
+            with self.assertRaises(ValueError, msg="symlink member should be blocked"):
+                safe_extractall(zf_bytes, extract_dir)
+
 
 if __name__ == "__main__":
     unittest.main()

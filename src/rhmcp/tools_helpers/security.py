@@ -140,23 +140,27 @@ def clamp(value: int | float, lo: int | float, hi: int | float) -> int | float:
 # H-4 helper
 # ---------------------------------------------------------------------------
 
-def safe_extractall(zip_path: str | os.PathLike[str], dest_dir: str | os.PathLike[str]) -> None:
+def safe_extractall(source: "str | os.PathLike[str] | BinaryIO", dest_dir: str | os.PathLike[str]) -> None:
     """
-    Extract all members of *zip_path* into *dest_dir*, blocking Zip Slip.
+    Extract a zip archive to *dest_dir*, blocking Zip Slip and symlink attacks.
 
     Raises:
         zipfile.BadZipFile  -- if the archive is corrupt or not a zip file
-        ValueError          -- if any member path would escape *dest_dir*
+        ValueError          -- if any member path resolves outside *dest_dir* or if
+                               any member is a symlink (symlink targets are not
+                               validated at extract time).
     """
-    dest = Path(dest_dir).resolve()
-    with zipfile.ZipFile(zip_path, "r") as zf:
-        for member in zf.namelist():
-            member_path = (dest / member).resolve()
-            try:
-                member_path.relative_to(dest)
-            except ValueError:
+    real_dest = os.path.realpath(dest_dir)
+    with zipfile.ZipFile(source, "r") as zf:
+        for info in zf.infolist():
+            # Detect symlinks: Unix mode stored in high 16 bits of external_attr
+            unix_mode = (info.external_attr >> 16) & 0xFFFF
+            if unix_mode and (unix_mode & 0xA000) == 0xA000:
+                raise ValueError(f"Zip contains symlink member: '{info.filename}'")
+            member_real = os.path.realpath(os.path.join(real_dest, info.filename))
+            if not member_real.startswith(real_dest + os.sep) and member_real != real_dest:
                 raise ValueError(
-                    f"Zip Slip blocked: archive member {member!r} would extract outside "
-                    f"destination directory {str(dest)!r}."
+                    f"Zip Slip blocked: archive member {info.filename!r} would extract outside "
+                    f"destination directory {real_dest!r}."
                 )
-        zf.extractall(dest)
+        zf.extractall(dest_dir)
