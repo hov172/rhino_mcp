@@ -27,8 +27,8 @@ def _safe_export_path(path: str) -> str:
     """Ensure export_path is within a safe output directory (R4-4)."""
     resolved = pathlib.Path(path).resolve()
     allowed_roots = [
-        pathlib.Path.home(),
-        pathlib.Path(tempfile.gettempdir()),
+        pathlib.Path.home().resolve(),
+        pathlib.Path(tempfile.gettempdir()).resolve(),
     ]
     for root in allowed_roots:
         try:
