@@ -20,6 +20,7 @@ from mcp.types import ToolAnnotations
 
 from rhmcp.tools_helpers import backend as rhino
 from rhmcp.tools_helpers import plugin_client
+from rhmcp.tools_helpers.security import sanitise_rhino_path, validate_download_url, safe_extractall, clamp
 
 # ---------------------------------------------------------------------------
 # Input-validation helpers (R4-1)
@@ -338,7 +339,8 @@ def register(mcp: FastMCP) -> None:  # noqa: PLR0915 – many tools, acceptable 
         # Build C# code that applies the HDRI inside Rhino.
         # This path is used in a verbatim C# string (@"...") where backslashes
         # are literal — only double-quotes need doubling (R4-6).
-        safe_path = filepath.replace('"', '""')
+        filepath = sanitise_rhino_path(filepath)  # strip macro-breaking chars before C#/macro use
+        safe_path = filepath.replace('"', '""')   # then escape for C# verbatim string
         csharp_code = f"""
 var doc = RhinoDoc.ActiveDoc;
 var hdriPath = @"{safe_path}";
@@ -881,7 +883,6 @@ catch (Exception ex)
         extract_dir = os.path.join(dest_dir, "extracted")
         os.makedirs(extract_dir, exist_ok=True)
         try:
-            from rhmcp.tools_helpers.security import safe_extractall
             safe_extractall(zip_path, extract_dir)
         except zipfile.BadZipFile as exc:
             return {"ok": False, "error": f"Archive is not a valid zip: {exc}"}
