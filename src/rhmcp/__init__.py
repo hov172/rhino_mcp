@@ -110,7 +110,6 @@ def main() -> int:
 
     transport = args.transport
     if transport == "http":
-        from mcp.server.fastmcp.server import TransportSecuritySettings
         from starlette.middleware.cors import CORSMiddleware
 
         transport = "streamable-http"
@@ -118,9 +117,6 @@ def main() -> int:
         mcp.settings.port = args.port
         mcp.settings.streamable_http_path = "/"
         mcp.settings.stateless_http = True
-        mcp.settings.transport_security = TransportSecuritySettings(
-            enable_dns_rebinding_protection=False,
-        )
 
         from starlette.requests import Request
         from starlette.responses import JSONResponse
@@ -135,11 +131,17 @@ def main() -> int:
             from starlette.applications import Starlette
 
             mcp_app = original_app()
+            _allowed_origins = [
+                "http://localhost",
+                "http://127.0.0.1",
+                f"http://localhost:{args.port}",
+                f"http://127.0.0.1:{args.port}",
+            ]
             mcp_app.add_middleware(
                 CORSMiddleware,
-                allow_origins=["*"],
-                allow_methods=["*"],
-                allow_headers=["*"],
+                allow_origins=_allowed_origins,
+                allow_methods=["GET", "POST", "OPTIONS"],
+                allow_headers=["Authorization", "Content-Type"],
             )
             app = Starlette(routes=[
                 Route("/health", health),

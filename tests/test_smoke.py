@@ -99,6 +99,12 @@ class TestHealthEndpoint(unittest.TestCase):
         response = client.get("/health")
         self.assertEqual(response.json(), {"status": "ok"})
 
+    def test_health_no_wildcard_cors(self) -> None:
+        client = TestClient(self._make_app(), raise_server_exceptions=True)
+        response = client.get("/health", headers={"Origin": "http://evil.com"})
+        acao = response.headers.get("access-control-allow-origin", "")
+        self.assertNotEqual(acao, "*")
+
 
 if __name__ == "__main__":
     unittest.main()
