@@ -1,0 +1,15 @@
+version: 1
+runtime: python
+entry: src/rhmcp/__main__.py
+
+build:
+  install: pip install uv
+  command: uv sync --frozen
+
+startCommand:
+  type: http
+  command: uv run python -m rhmcp --transport http --host 0.0.0.0 --port 8000
+  port: 8000
+
+configSchema:
+  source: code

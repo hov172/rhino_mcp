@@ -42,6 +42,9 @@ ENV RHINO_MCP_BACKEND=auto
 
 EXPOSE 8000
 
+HEALTHCHECK --interval=30s --timeout=3s --start-period=5s --retries=3 \
+    CMD python -c "import urllib.request; urllib.request.urlopen('http://localhost:8000/health')" || exit 1
+
 # HTTP transport — multiple AI clients can connect simultaneously.
 # Pass API keys at runtime:
 #   docker run -e ANTHROPIC_API_KEY=... -e FAL_KEY=... -e DOCRAPTOR_API_KEY=... \

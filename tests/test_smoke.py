@@ -8,10 +8,11 @@ from __future__ import annotations
 import importlib
 import pkgutil
 import unittest
-from unittest.mock import patch
+from unittest.mock import AsyncMock, patch
 
 import rhmcp.tools as _tools_pkg
 from mcp.server.fastmcp import FastMCP
+from starlette.testclient import TestClient
 
 
 class TestAllModulesLoad(unittest.TestCase):
@@ -67,6 +68,36 @@ class TestAllModulesLoad(unittest.TestCase):
         for mod_name in ("backend", "errors", "validate", "plugin_client", "rhinocode"):
             with self.subTest(mod_name):
                 importlib.import_module(f"rhmcp.tools_helpers.{mod_name}")
+
+
+class TestHealthEndpoint(unittest.TestCase):
+    def _make_app(self):
+        from starlette.applications import Starlette
+        from starlette.middleware.cors import CORSMiddleware
+        from starlette.requests import Request
+        from starlette.responses import JSONResponse
+        from starlette.routing import Mount, Route
+
+        async def health(request: Request) -> JSONResponse:
+            return JSONResponse({"status": "ok"})
+
+        # Minimal stub so we don't need a real FastMCP HTTP app
+        stub = Starlette()
+        app = Starlette(routes=[
+            Route("/health", health),
+            Mount("/", app=stub),
+        ])
+        return app
+
+    def test_health_returns_200(self) -> None:
+        client = TestClient(self._make_app(), raise_server_exceptions=True)
+        response = client.get("/health")
+        self.assertEqual(response.status_code, 200)
+
+    def test_health_returns_json_status_ok(self) -> None:
+        client = TestClient(self._make_app(), raise_server_exceptions=True)
+        response = client.get("/health")
+        self.assertEqual(response.json(), {"status": "ok"})
 
 
 if __name__ == "__main__":

@@ -122,16 +122,29 @@ def main() -> int:
             enable_dns_rebinding_protection=False,
         )
 
+        from starlette.requests import Request
+        from starlette.responses import JSONResponse
+        from starlette.routing import Mount, Route
+
+        async def health(request: Request) -> JSONResponse:
+            return JSONResponse({"status": "ok"})
+
         original_app = mcp.streamable_http_app
 
         def app_with_cors():
-            app = original_app()
-            app.add_middleware(
+            from starlette.applications import Starlette
+
+            mcp_app = original_app()
+            mcp_app.add_middleware(
                 CORSMiddleware,
                 allow_origins=["*"],
                 allow_methods=["*"],
                 allow_headers=["*"],
             )
+            app = Starlette(routes=[
+                Route("/health", health),
+                Mount("/", app=mcp_app),
+            ])
             return app
 
         mcp.streamable_http_app = app_with_cors  # type: ignore[method-assign]
