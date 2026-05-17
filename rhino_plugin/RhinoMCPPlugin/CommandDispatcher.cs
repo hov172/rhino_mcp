@@ -29,7 +29,11 @@ public static class CommandDispatcher
             "gh_get_output" or
             "gh_get_solution_errors" or
             "gh_get_solution_state" or
-            "get_plugin_commands";
+            "get_plugin_commands" or
+            // Grasshopper 2 read-only
+            "gh2_get_canvas_graph" or
+            "gh2_search_components" or
+            "gh2_describe_component";
 
         var doc = Rhino.RhinoDoc.ActiveDoc;
         uint undoRecord = uint.MaxValue;
@@ -40,7 +44,7 @@ public static class CommandDispatcher
         {
             var result = request.Type switch
             {
-                "ping" => McpResponse.Ok(new { ok = true, version = "0.10.0", rhino = RhinoApp.Version.ToString() }),
+                "ping" => McpResponse.Ok(new { ok = true, version = "0.11.0", rhino = RhinoApp.Version.ToString(), host_app = DetectHostApp() }),
                 "get_document_summary" => McpResponse.Ok(RhinoHandlers.GetDocumentSummary()),
                 "get_objects" => McpResponse.Ok(RhinoHandlers.GetObjects(p)),
                 "get_object_info" => McpResponse.Ok(RhinoHandlers.GetObjectInfo(p)),
@@ -124,6 +128,18 @@ public static class CommandDispatcher
                 "gh_bake_all"           => McpResponse.Ok(GHSolutionHandlers.BakeAll(p)),
                 "gh_enable_component"   => McpResponse.Ok(GHSolutionHandlers.EnableComponent(p)),
                 "get_plugin_commands" => McpResponse.Ok(RhinoHandlers.GetPluginCommands(p)),
+                // Grasshopper 2
+                "gh2_start"              => McpResponse.Ok(GH2Handlers.Start(p)),
+                "gh2_get_canvas_graph"   => McpResponse.Ok(GH2Handlers.GetCanvasGraph(p)),
+                "gh2_apply_graph"        => McpResponse.Ok(GH2Handlers.ApplyGraph(p)),
+                "gh2_place_component"    => McpResponse.Ok(GH2Handlers.PlaceComponent(p)),
+                "gh2_place_slider"       => McpResponse.Ok(GH2Handlers.PlaceSlider(p)),
+                "gh2_connect"            => McpResponse.Ok(GH2Handlers.Connect(p)),
+                "gh2_connect_many"       => McpResponse.Ok(GH2Handlers.ConnectMany(p)),
+                "gh2_describe_component" => McpResponse.Ok(GH2Handlers.DescribeComponent(p)),
+                "gh2_search_components"  => McpResponse.Ok(GH2Handlers.SearchComponents(p)),
+                "gh2_solve_graph"        => McpResponse.Ok(GH2Handlers.SolveGraph(p)),
+                "gh2_clear_canvas"       => McpResponse.Ok(GH2Handlers.ClearCanvas(p)),
                 _ => McpResponse.Error($"Unsupported command type: {request.Type}")
             };
             return result;
@@ -133,6 +149,20 @@ public static class CommandDispatcher
             if (undoRecord != uint.MaxValue)
                 doc.EndUndoRecord(undoRecord);
         }
+    }
+
+    private static string DetectHostApp()
+    {
+        try
+        {
+            if (Rhino.Runtime.HostUtils.IsHosted)
+            {
+                return System.Diagnostics.Process.GetCurrentProcess().MainModule?.FileDescription
+                    ?? System.Diagnostics.Process.GetCurrentProcess().ProcessName;
+            }
+        }
+        catch { }
+        return "Rhino";
     }
 
     private static object RunScript(string command, bool echo = false)

@@ -26,6 +26,13 @@
     <PackageReference Include="Microsoft.CodeAnalysis.CSharp.Scripting" Version="4.8.0" />
   </ItemGroup>
 
+  <ItemGroup Condition="Exists('$(RhinoPluginPath)/Grasshopper2.dll')">
+    <Reference Include="Grasshopper2">
+      <HintPath>$(RhinoPluginPath)/Grasshopper2.dll</HintPath>
+      <Private>false</Private>
+    </Reference>
+  </ItemGroup>
+
   <Target Name="PostBuild" AfterTargets="PostBuildEvent" Condition="$([MSBuild]::IsOsPlatform('OSX'))">
     <Exec Command="cp &quot;$(TargetDir)rhino-mcp.rhp&quot; &quot;/Applications/Rhino 8.app/Contents/PlugIns/&quot;" ContinueOnError="true" />
   </Target>
