@@ -66,17 +66,61 @@ def _parse_page_spec(spec: str | None, page_count: int) -> list[int]:
     if not spec:
         return list(range(page_count))
     indices: set[int] = set()
-    for part in spec.split(","):
-        part = part.strip()
-        if "-" in part:
-            a, b = part.split("-", 1)
-            lo, hi = max(1, int(a)), min(page_count, int(b))
-            indices.update(range(lo - 1, hi))
-        else:
-            n = int(part)
-            if 1 <= n <= page_count:
-                indices.add(n - 1)
+    try:
+        for part in spec.split(","):
+            part = part.strip()
+            if "-" in part:
+                a, b = part.split("-", 1)
+                lo, hi = max(1, int(a)), min(page_count, int(b))
+                indices.update(range(lo - 1, hi))
+            else:
+                n = int(part)
+                if 1 <= n <= page_count:
+                    indices.add(n - 1)
+    except (ValueError, TypeError) as exc:
+        raise ValueError(f"Invalid pages spec {spec!r}: {exc}") from exc
     return sorted(indices)
+
+
+# ---------------------------------------------------------------------------
+# R7-2: Path allow-list helper
+# ---------------------------------------------------------------------------
+
+def _validate_read_path(path: str) -> str:
+    """Restrict read paths to user home dir or env-configured roots (R7-2)."""
+    import pathlib
+    resolved = pathlib.Path(path).expanduser().resolve()
+
+    raw_roots = os.environ.get("RHINO_MCP_READ_ROOTS", "")
+    if raw_roots:
+        allowed_roots = [
+            pathlib.Path(r).resolve()
+            for r in raw_roots.split(os.pathsep)
+            if r
+        ]
+    else:
+        allowed_roots = [pathlib.Path.home().resolve()]
+
+    for root in allowed_roots:
+        try:
+            resolved.relative_to(root)
+            return str(resolved)
+        except ValueError:
+            continue
+
+    raise ValueError(
+        f"Path {path!r} is outside allowed read roots. "
+        f"Set RHINO_MCP_READ_ROOTS env var to allow additional directories."
+    )
+
+
+# ---------------------------------------------------------------------------
+# R7-1: cairosvg URL fetcher that blocks external/local resource loading
+# ---------------------------------------------------------------------------
+
+def _svg_no_fetch(url: str, *args, **kwargs):
+    """Block all external/local resource fetching during SVG rendering (R7-1)."""
+    raise ValueError(f"External SVG resource fetching disabled: {url!r}")
 
 
 # ---------------------------------------------------------------------------
@@ -96,11 +140,16 @@ def register(mcp: FastMCP) -> None:
         Call this before ``read_pdf`` to decide which pages to fetch.
         """
         try:
+            path = _validate_read_path(path)
+        except ValueError as exc:
+            return {"ok": False, "error": str(exc)}
+
+        try:
             import fitz
         except ImportError:
             return {"ok": False, "error": "pymupdf not installed — run: uv pip install pymupdf"}
 
-        p = Path(path).expanduser()
+        p = Path(path)
         if not p.exists():
             return {"ok": False, "error": f"File not found: {path}"}
         if p.suffix.lower() not in _PDF_EXTS:
@@ -162,11 +211,16 @@ def register(mcp: FastMCP) -> None:
         dpi = clamp(dpi, 50, 600)
         max_pages = clamp(max_pages, 1, 50)
         try:
+            path = _validate_read_path(path)
+        except ValueError as exc:
+            return {"ok": False, "error": str(exc)}
+
+        try:
             import fitz
         except ImportError:
             return {"ok": False, "error": "pymupdf not installed — run: uv pip install pymupdf"}
 
-        p = Path(path).expanduser()
+        p = Path(path)
         if not p.exists():
             return {"ok": False, "error": f"File not found: {path}"}
         if p.suffix.lower() not in _PDF_EXTS:
@@ -178,7 +232,11 @@ def register(mcp: FastMCP) -> None:
             return {"ok": False, "error": str(exc)}
 
         page_count = doc.page_count
-        indices = _parse_page_spec(pages, page_count)
+        try:
+            indices = _parse_page_spec(pages, page_count)
+        except ValueError as exc:
+            doc.close()
+            return {"ok": False, "error": str(exc)}
         truncated = len(indices) > max_pages
         indices = indices[:max_pages]
 
@@ -233,13 +291,17 @@ def register(mcp: FastMCP) -> None:
         from rhmcp.tools_helpers.security import clamp
         if max_dimension is not None:
             max_dimension = clamp(max_dimension, 1, 8192)
+        try:
+            path = _validate_read_path(path)
+        except ValueError as exc:
+            return {"ok": False, "error": str(exc)}
 
         try:
             from PIL import Image
         except ImportError:
             return {"ok": False, "error": "Pillow not installed — run: uv pip install Pillow"}
 
-        p = Path(path).expanduser()
+        p = Path(path)
         if not p.exists():
             return {"ok": False, "error": f"File not found: {path}"}
         if p.suffix.lower() not in _IMAGE_EXTS:
@@ -302,7 +364,14 @@ def register(mcp: FastMCP) -> None:
         :param max_rows: Maximum data rows returned (default 500).
         :param header_row: Treat the first row as column headers.
         """
-        p = Path(path).expanduser()
+        from rhmcp.tools_helpers.security import clamp
+        max_rows = clamp(max_rows, 1, 100_000)
+        try:
+            path = _validate_read_path(path)
+        except ValueError as exc:
+            return {"ok": False, "error": str(exc)}
+
+        p = Path(path)
         if not p.exists():
             return {"ok": False, "error": f"File not found: {path}"}
 
@@ -413,7 +482,14 @@ def register(mcp: FastMCP) -> None:
             Falls back gracefully if cairosvg is unavailable.
         :param render_dpi: Resolution for PNG rendering (default 150).
         """
-        p = Path(path).expanduser()
+        from rhmcp.tools_helpers.security import clamp
+        render_dpi = clamp(render_dpi, 24, 600)
+        try:
+            path = _validate_read_path(path)
+        except ValueError as exc:
+            return {"ok": False, "error": str(exc)}
+
+        p = Path(path)
         if not p.exists():
             return {"ok": False, "error": f"File not found: {path}"}
         if p.suffix.lower() not in _SVG_EXTS:
@@ -457,8 +533,17 @@ def register(mcp: FastMCP) -> None:
         if render_png:
             try:
                 import cairosvg  # type: ignore[import-untyped]
+                import inspect as _inspect
                 scale = render_dpi / 96.0
-                png_bytes = cairosvg.svg2png(bytestring=svg_text.encode(), scale=scale)
+                _svg2png_kwargs: dict = {
+                    "bytestring": svg_text.encode(),
+                    "scale": scale,
+                    "url_fetcher": _svg_no_fetch,
+                }
+                # Pass unsafe=False only if cairosvg supports it (older versions don't)
+                if "unsafe" in _inspect.signature(cairosvg.svg2png).parameters:
+                    _svg2png_kwargs["unsafe"] = False
+                png_bytes = cairosvg.svg2png(**_svg2png_kwargs)
                 result["image_data"] = base64.b64encode(png_bytes).decode()
                 result["mime_type"] = "image/png"
                 result["rendered_dpi"] = render_dpi
@@ -492,12 +577,19 @@ def register(mcp: FastMCP) -> None:
         :param max_paragraphs: Limit number of paragraphs returned. Omit to
             return all.
         """
+        from rhmcp.tools_helpers.security import clamp
+        max_paragraphs = clamp(max_paragraphs or 50_000, 1, 50_000)
+        try:
+            path = _validate_read_path(path)
+        except ValueError as exc:
+            return {"ok": False, "error": str(exc)}
+
         try:
             import docx as _docx
         except ImportError:
             return {"ok": False, "error": "python-docx not installed — run: uv pip install python-docx"}
 
-        p = Path(path).expanduser()
+        p = Path(path)
         if not p.exists():
             return {"ok": False, "error": f"File not found: {path}"}
         if p.suffix.lower() not in _DOCX_EXTS:
@@ -514,11 +606,8 @@ def register(mcp: FastMCP) -> None:
             if para.text.strip()
         ]
 
-        if max_paragraphs is not None:
-            truncated_paras = len(paras) > max_paragraphs
-            paras = paras[:max_paragraphs]
-        else:
-            truncated_paras = False
+        truncated_paras = len(paras) > max_paragraphs
+        paras = paras[:max_paragraphs]
 
         full_text = "\n".join(p["text"] for p in paras)
 
