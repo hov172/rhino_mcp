@@ -68,6 +68,10 @@ def register(mcp: FastMCP) -> None:
         Arctic, Raytraced.  ``transparent_background`` is only effective for
         PNG output.  ``quality`` controls JPEG compression (1-100).
         """
+        from rhmcp.tools_helpers.security import clamp
+        width = clamp(width, 1, 8192)
+        height = clamp(height, 1, 8192)
+        quality = clamp(quality, 1, 100)
         code = (
             "_mcp_path = {path}\n"
             "_mcp_width = {width}\n"

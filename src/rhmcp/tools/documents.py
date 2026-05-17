@@ -158,6 +158,9 @@ def register(mcp: FastMCP) -> None:
             empty strings; text-layer PDFs return parseable content.
         :param max_pages: Hard cap on pages returned per call (default 10).
         """
+        from rhmcp.tools_helpers.security import clamp
+        dpi = clamp(dpi, 50, 600)
+        max_pages = clamp(max_pages, 1, 50)
         try:
             import fitz
         except ImportError:
