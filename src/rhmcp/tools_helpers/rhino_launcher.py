@@ -52,5 +52,11 @@ def launch(rhino_path: Path | None = None, timeout: float = 60.0) -> int:
         stderr=subprocess.DEVNULL,
         start_new_session=True,
     )
+    # Give Rhino a moment to start, then verify it didn't crash immediately
+    import time
+    time.sleep(0.5)
+    if proc.poll() is not None:
+        raise RuntimeError(f"Rhino exited immediately with code {proc.returncode}")
     slot_registry.wait_for_slot(proc.pid, timeout=timeout)
+    proc.poll()  # Non-blocking check; on Unix avoids zombie if Rhino exits later
     return proc.pid

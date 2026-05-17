@@ -1,7 +1,6 @@
 from __future__ import annotations
 import json
 import os
-import sys
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Iterator
@@ -22,19 +21,18 @@ class SlotInfo:
 
 
 def _slots_dir() -> Path:
-    if sys.platform == "win32":
-        base = Path(os.environ.get("TEMP", "C:/Temp"))
-    else:
-        base = Path("/tmp")
-    return base / "rhino-mcp-slots"
+    import tempfile
+    return Path(tempfile.gettempdir()) / "rhino-mcp-slots"
 
 
 def _is_alive(pid: int) -> bool:
     try:
         os.kill(pid, 0)   # signal 0 = existence check
         return True
+    except PermissionError:
+        return True   # process exists but caller lacks access
     except OSError:
-        return False
+        return False  # ESRCH or no such process
 
 
 def discover() -> dict[str, SlotInfo]:
@@ -91,6 +89,8 @@ def wait_for_slot(pid: int, timeout: float = 30.0, poll: float = 0.5) -> SlotInf
     import time
     deadline = time.monotonic() + timeout
     while time.monotonic() < deadline:
+        if not _is_alive(pid):
+            raise RuntimeError(f"Rhino process {pid} exited before announcing in the slot registry")
         slots = discover()
         if str(pid) in slots:
             return slots[str(pid)]

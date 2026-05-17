@@ -70,7 +70,9 @@ def plugin_result(
             slot = slot_registry.get(rhino_id)
             host, port = slot.host, slot.port
         except RuntimeError:
-            pass  # fall through to env-var defaults (backward compat)
+            if rhino_id is not None:
+                raise  # explicit routing failure must surface to caller
+            pass  # auto-select failure → env-var default is acceptable
     response = plugin_client.send_command(command_type, params, host=host, port=port)
     if response.get("status") == "error":
         return normalize({"ok": False, "backend": BACKEND_PLUGIN, **response})
@@ -171,7 +173,7 @@ def run_plugin_or_python(
     _plugin_error: str | None = None
     if mode in {BACKEND_AUTO, BACKEND_PLUGIN}:
         try:
-            return plugin_result(command_type, params)
+            return plugin_result(command_type, params, rhino_id=rhino_id)
         except OSError as ex:
             if mode == BACKEND_PLUGIN:
                 return normalize({"ok": False, "backend": BACKEND_PLUGIN, "error": str(ex), "error_code": "SOCKET_UNAVAILABLE"})
@@ -196,7 +198,7 @@ def run_plugin_or_csharp(
     mode = preferred_backend(backend_name)
     if mode in {BACKEND_AUTO, BACKEND_PLUGIN}:
         try:
-            return plugin_result(command_type, params)
+            return plugin_result(command_type, params, rhino_id=rhino_id)
         except OSError as ex:
             if mode == BACKEND_PLUGIN:
                 return normalize({"ok": False, "backend": BACKEND_PLUGIN, "error": str(ex), "error_code": "SOCKET_UNAVAILABLE"})
@@ -214,7 +216,7 @@ def run_command(command: str, echo: bool = False, rhino_id: str | None = None, b
     mode = preferred_backend(backend_name)
     if mode in {BACKEND_AUTO, BACKEND_PLUGIN}:
         try:
-            return plugin_result("run_command", {"command": command, "echo": echo})
+            return plugin_result("run_command", {"command": command, "echo": echo}, rhino_id=rhino_id)
         except OSError:
             if mode == BACKEND_PLUGIN:
                 return normalize({"ok": False, "backend": BACKEND_PLUGIN, "error": "Plugin socket unavailable.", "error_code": "SOCKET_UNAVAILABLE"})
