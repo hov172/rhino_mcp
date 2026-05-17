@@ -156,11 +156,11 @@ public static class CommandDispatcher
     {
         try
         {
-            if (Rhino.Runtime.HostUtils.IsHosted)
-            {
-                return System.Diagnostics.Process.GetCurrentProcess().MainModule?.FileDescription
-                    ?? System.Diagnostics.Process.GetCurrentProcess().ProcessName;
-            }
+            // IsHosted was added in a later RhinoCommon build — check via reflection
+            var prop = typeof(Rhino.Runtime.HostUtils).GetProperty("IsHosted",
+                System.Reflection.BindingFlags.Public | System.Reflection.BindingFlags.Static);
+            if (prop != null && prop.GetValue(null) is true)
+                return System.Diagnostics.Process.GetCurrentProcess().ProcessName;
         }
         catch { }
         return "Rhino";
