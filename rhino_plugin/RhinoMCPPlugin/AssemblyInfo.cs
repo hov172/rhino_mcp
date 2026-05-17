@@ -2,7 +2,7 @@ using System.Reflection;
 using System.Runtime.InteropServices;
 using Rhino.PlugIns;
 
-[assembly: AssemblyInformationalVersion("0.9.0")]
+[assembly: AssemblyInformationalVersion("0.10.0")]
 
 [assembly: PlugInDescription(DescriptionType.Organization, "Rhino MCP Contributors")]
 [assembly: PlugInDescription(DescriptionType.WebSite, "https://github.com/local/rhino_mcp")]
