@@ -422,7 +422,6 @@ def _rodin_text_job(
         "service": "rodin",
         "task_uuid": task_uuid,
         "output_format": output_format,
-        "api_key": api_key,
         "jobs": data.get("jobs", {}),
     }
 
@@ -494,7 +493,6 @@ def _rodin_image_job(
         "service": "rodin",
         "task_uuid": task_uuid,
         "output_format": output_format,
-        "api_key": api_key,
         "jobs": data.get("jobs", {}),
     }
 
@@ -520,7 +518,7 @@ def _rodin_poll(job_id: str, api_key: str | None) -> dict[str, object]:
 
     task_uuid: str = meta["task_uuid"]
     output_format: str = meta.get("output_format", "glb")
-    resolved_key = api_key or meta.get("api_key")
+    resolved_key = api_key
 
     try:
         headers = _rodin_headers(resolved_key)
@@ -683,7 +681,6 @@ def _hunyuan3d_text_job(
         "status": "processing",
         "prompt": prompt,
         "output_format": output_format,
-        "api_key": api_key,
         "gradio_job": gradio_job,
         "result_path": None,
     }
@@ -739,7 +736,6 @@ def _hunyuan3d_image_job(
         "prompt": prompt or "",
         "image_paths": image_paths,
         "output_format": output_format,
-        "api_key": api_key,
         "gradio_job": gradio_job,
         "result_path": None,
     }
