@@ -266,6 +266,11 @@ def register(mcp: FastMCP) -> None:  # noqa: PLR0915 – many tools, acceptable 
         if not download_url:
             return {"ok": False, "error": "Could not determine download URL from file list."}
 
+        # Sanitise the upstream-supplied filename before joining with a local path (R4-5).
+        filename = os.path.basename(filename)
+        if not filename or ".." in filename:
+            return {"ok": False, "error": f"Invalid filename from upstream: {filename!r}"}
+
         filepath = os.path.join(dest_dir, filename)
         try:
             with httpx.Client(timeout=_DOWNLOAD_TIMEOUT, follow_redirects=True) as client:
@@ -482,7 +487,11 @@ catch (Exception ex)
                     continue
 
                 download_url: str = entry["url"]
-                fname: str = entry.get("filename") or f"{asset_id}_{ch_label}_{resolution}.{chosen_fmt}"
+                raw_fname: str = entry.get("filename") or f"{asset_id}_{ch_label}_{resolution}.{chosen_fmt}"
+                # Sanitise the upstream-supplied filename (R4-5).
+                fname = os.path.basename(raw_fname)
+                if not fname or ".." in fname:
+                    continue  # skip channels with invalid filenames
                 fpath = os.path.join(dest_dir, fname)
 
                 if not os.path.isfile(fpath):
