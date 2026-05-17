@@ -20,7 +20,7 @@ def validate_download_url(url: str) -> None:
 
     Blocks: local paths (starts with / or file=), non-https schemes,
     private/link-local IP ranges (10.x, 172.16-31.x, 192.168.x, 127.x, 169.254.x, ::1, fc00::/7).
-    Uses socket.gethostbyname to resolve hostname before checking ranges.
+    Uses socket.getaddrinfo to resolve hostname before checking ranges (supports IPv4 and IPv6).
     If hostname is unresolvable, treat as private (raise ValueError).
     """
     # Block bare local paths and file= style strings before URL parsing
@@ -39,9 +39,10 @@ def validate_download_url(url: str) -> None:
     if not hostname:
         raise ValueError("URL has no hostname")
 
-    # Resolve hostname to IP
+    # Resolve hostname to IP (supports both IPv4 and IPv6)
     try:
-        resolved_ip = socket.gethostbyname(hostname)
+        resolved = socket.getaddrinfo(hostname, None)
+        resolved_ip = resolved[0][4][0]
     except socket.gaierror:
         raise ValueError(f"private or unresolvable hostname: {hostname}")
 
@@ -53,12 +54,6 @@ def validate_download_url(url: str) -> None:
 
     if addr.is_private or addr.is_loopback or addr.is_link_local or addr.is_reserved:
         raise ValueError(f"private/reserved IP address blocked: {resolved_ip}")
-
-    # Also check fc00::/7 for IPv6 (unique local) - covered by is_private in Python 3.11+
-    # But explicitly handle for older Pythons
-    if isinstance(addr, ipaddress.IPv6Address):
-        if int(addr) >> 121 == 0x7E:  # fc00::/7
-            raise ValueError(f"private/reserved IP address blocked: {resolved_ip}")
 
 
 def clamp(value: int, lo: int, hi: int) -> int:

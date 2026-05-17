@@ -16,8 +16,24 @@ class TestSanitiseRhinoPath:
         assert "\r" not in sanitise_rhino_path("/tmp/a\rb.3dm")
 
 class TestValidateDownloadUrl:
-    def test_https_allowed(self):
-        validate_download_url("https://sketchfab.com/model.glb")  # no raise
+    def test_https_allowed(self, monkeypatch):
+        import socket as _socket
+        # Mock getaddrinfo to return a public IP (1.1.1.1)
+        monkeypatch.setattr(
+            _socket, "getaddrinfo",
+            lambda host, port, *a, **kw: [(None, None, None, None, ("1.1.1.1", 0))]
+        )
+        validate_download_url("https://sketchfab.com/model.glb")  # must not raise
+
+    def test_unresolvable_hostname_blocked(self, monkeypatch):
+        import socket as _socket
+        monkeypatch.setattr(
+            _socket, "getaddrinfo",
+            lambda *a, **kw: (_ for _ in ()).throw(_socket.gaierror("Name not resolved"))
+        )
+        with pytest.raises(ValueError, match="private"):
+            validate_download_url("https://not-a-real-host-xyz123.example/")
+
     def test_http_blocked(self):
         with pytest.raises(ValueError, match="scheme"):
             validate_download_url("http://example.com/model.glb")
