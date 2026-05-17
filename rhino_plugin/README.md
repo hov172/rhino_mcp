@@ -11,6 +11,7 @@ The Rhino-side TCP socket server for the Rhino MCP project. This plugin runs ins
 | `MCPStart` | Start the socket server. Binds to `127.0.0.1:1999` by default. Prints confirmation: `RhinoMCP: Listening on 127.0.0.1:1999`. |
 | `MCPStop` | Stop the socket server and release the port. |
 | `MCPStatus` | Print the current server status. Prints `Rhino MCP server running on {address}:{port}` or `Rhino MCP server is stopped.` |
+| `MCPHelp` | Open the full documentation in the default browser. |
 
 **Auto-start tip:** Add `MCPStart` to *Rhino Options → General → Command Lists → Startup commands* so the server starts automatically every time Rhino opens.
 
@@ -128,6 +129,24 @@ All GH commands require Grasshopper to be open.
 | `gh_save_definition` | Save the active definition |
 | `gh_close_definition` | Close the active definition |
 
+### Grasshopper 2 Canvas
+
+All GH2 commands require Rhino 8 with Grasshopper 2 loaded. Commands use runtime reflection — no compile-time dependency on Grasshopper2.dll.
+
+| Command | Description |
+|---|---|
+| `gh2_start` | Launch the Grasshopper 2 editor. |
+| `gh2_get_canvas_graph` | Full snapshot of the active GH2 canvas: components, wires, volatile data samples. `sample_size` controls how many data items to return per output. |
+| `gh2_apply_graph` | Atomically place components and wire them in one call. Accepts `components` (list of `{key, type_name, x, y}`) and `wires` (list of `{from_key, from_output, to_key, to_input}`). Returns `{ok, placed: {key: instanceGuid}, wired: N, errors: [...]}`. |
+| `gh2_place_component` | Place a GH2 component by `name` (type name) or `component_guid`. Returns `instance_guid`. |
+| `gh2_place_slider` | Place a GH2 Number Slider with `min`, `max`, `value`, `decimals`, and canvas `x`/`y`. Returns `instance_guid`. |
+| `gh2_connect` | Wire a single output to an input. `from_output` and `to_input` can be index (int) or param name (str). |
+| `gh2_connect_many` | Wire multiple connections at once; continues past individual failures. Returns `{ok, wired: N, errors: [...]}`. |
+| `gh2_describe_component` | Get metadata for a component (category, description, input/output param names and types). Accepts `instance_guid` or `name`. |
+| `gh2_search_components` | Search available GH2 components by name, nickname, or description. Optional `category` filter. |
+| `gh2_solve_graph` | Expire and re-solve the active GH2 canvas. Returns list of errors. |
+| `gh2_clear_canvas` | Clear all objects from the active GH2 canvas. Requires `confirm: true`. |
+
 ---
 
 ## Thread Safety
@@ -166,3 +185,9 @@ The repository also includes `.github/workflows/release-plugin.yml` for automate
 | Target framework | `net8.0` | |
 | `RHINO_MCP_BIND_HOST` | `127.0.0.1` | Bind address. `0.0.0.0` = any interface. |
 | `RHINO_MCP_PLUGIN_SECRET` | *(unset)* | Pre-shared key for authentication. Required when binding to a non-loopback address. |
+
+**Slot Announcement**
+
+The plugin writes a `{pid}.json` file to `Path.GetTempPath()/rhino-mcp-slots/` when the TCP listener starts. This allows the Python server to discover all running Rhino instances via `get_rhino_instances`. The file is removed when the plugin unloads or the server stops.
+
+JSON fields: `pid`, `host`, `port`, `version`, `rhino_version`, `started_at`.

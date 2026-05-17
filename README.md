@@ -40,12 +40,13 @@ Control Rhino 3D from Claude, Cursor, Codex, and any other MCP-capable AI tool. 
   - [Manual Installation](#manual-installation)
   - [File-based Installation](#file-based-installation)
   - [Checking Plugin Status](#checking-plugin-status)
-- [All 334 Tools](#all-334-tools)
+- [All 347 Tools](#all-347-tools)
   - [Plugin Management](#plugin-management)
   - [Grasshopper — Canvas](#grasshopper--canvas)
   - [Grasshopper — Parameters](#grasshopper--parameters)
   - [Grasshopper — Solution & Baking](#grasshopper--solution--baking)
   - [Grasshopper — Definition Management](#grasshopper--definition-management)
+  - [Grasshopper 2 (GH2)](#grasshopper-2-gh2)
   - [Grasshopper — Pufferfish (Geometry Morphing)](#grasshopper--pufferfish-geometry-morphing)
   - [Grasshopper — Weaverbird (Mesh Subdivision)](#grasshopper--weaverbird-mesh-subdivision)
   - [Grasshopper — LunchBox (Paneling)](#grasshopper--lunchbox-paneling)
@@ -140,11 +141,11 @@ Restart Rhino. The plugin loads automatically and starts its socket server on `1
 
 > **This is the only file that goes into Rhino.** The `rhino_plugin/package/rhino-mcp.rhp` file is the Rhino plugin binary. The rest of the repo (the `src/` folder) is the Python MCP server — a completely separate process that never touches Rhino's plug-ins folder.
 >
-> **Don't have the repo yet?** You can also download [`rhino-mcp.rhp`](https://github.com/hov172/rhino_mcp/releases/download/v0.10.0/rhino-mcp.rhp) directly from the latest release and copy it from `~/Downloads/` instead.
+> **Don't have the repo yet?** You can also download [`rhino-mcp.rhp`](https://github.com/hov172/rhino_mcp/releases/download/v0.11.0/rhino-mcp.rhp) directly from the latest release and copy it from `~/Downloads/` instead.
 
 #### Step 3 — Verify the Python MCP server
 
-> **This is the MCP server — not another plugin.** It runs as a separate Python process outside Rhino and exposes the 334 tools to your AI client. Claude Desktop spawns it automatically from the cloned folder.
+> **This is the MCP server — not another plugin.** It runs as a separate Python process outside Rhino and exposes the 347 tools to your AI client. Claude Desktop spawns it automatically from the cloned folder.
 
 ```bash
 uv run python -m rhmcp --help
@@ -201,7 +202,7 @@ The `command` + `args` lines are literally the shell command Claude Desktop runs
 
 #### Step 6 — Restart Claude Desktop and start using it
 
-Fully quit Claude Desktop (don't just close the window) and reopen it. Claude Desktop reads the config on launch, spawns the MCP server in the background, and the 334 Rhino tools become available automatically.
+Fully quit Claude Desktop (don't just close the window) and reopen it. Claude Desktop reads the config on launch, spawns the MCP server in the background, and the 347 Rhino tools become available automatically.
 
 Test it by typing in Claude:
 
@@ -290,7 +291,7 @@ Same as Path A Step 4. Open Rhino — the plugin auto-starts and prints `Rhino M
 
 #### Step 5 — Restart Claude Desktop and start using it
 
-Fully quit and reopen Claude Desktop. It connects to the running container and the 334 tools appear.
+Fully quit and reopen Claude Desktop. It connects to the running container and the 347 tools appear.
 
 **Connection flow:**
 ```
@@ -309,6 +310,7 @@ Claude Desktop → HTTP → localhost:8000 (Docker container)
 |---|---|
 | **Plugin Management** | Check if a plugin is installed, automatically install via Yak, install from `.gha`/`.rhp`/`.rhi` files, list all loaded plugins, introspect any plugin's commands |
 | **Grasshopper** | Place components, draw wires, set sliders/panels, run solutions, bake geometry to Rhino doc, add script components |
+| **Grasshopper 2 (GH2)** | Start GH2 editor, get canvas graph, atomically apply a full graph (components + wires), place components/sliders, connect wires, describe components, search component library, solve, clear canvas. `gh2_apply_graph` is the recommended way to build complex GH2 definitions in one round-trip. |
 | **GH — Pufferfish** | Tween curves, morph geometry between surfaces, blend surfaces, twist and bend objects |
 | **GH — Weaverbird** | Catmull-Clark / Loop / Butterfly subdivision, mesh frame, mesh thickening, face extrusion |
 | **GH — LunchBox** | Quad, triangle, diamond, and hexagonal paneling on surfaces; space frame generation |
@@ -332,6 +334,7 @@ Claude Desktop → HTTP → localhost:8000 (Docker container)
 | **Asset Libraries** | Search and import Poly Haven textures/HDRIs, download Sketchfab models |
 | **VisualARQ (BIM)** | Create walls, doors, windows, slabs, columns, stairs, railings, levels; query BIM properties; export IFC |
 | **Lands Design** | Place plants and trees from species library, generate terrain from contours, create paths and water features, export plant schedules |
+| **Multi-Rhino instances** | Discover all running Rhino processes with `get_rhino_instances` (slot registry), launch new ones with `launch_rhino`, and pass `rhino_id` to any tool to target a specific instance. |
 | **Remote host** | Run Rhino on a separate workstation or VM — set `RHINO_MCP_BIND_HOST=0.0.0.0` on the Rhino machine and point the MCP client at its IP |
 | **Telemetry** | Optional per-call usage log (JSONL on disk, opt-in, never leaves the machine) for debugging slow tools and measuring usage patterns |
 
@@ -487,7 +490,7 @@ The plugin is a `.rhp` file that runs a TCP socket server inside Rhino on port 1
 
 #### Option A — Copy the pre-built `.rhp` directly (fastest)
 
-Download [`rhino-mcp.rhp`](https://github.com/hov172/rhino_mcp/releases/download/v0.10.0/rhino-mcp.rhp) from the latest release, then copy it to the Rhino plug-ins folder:
+Download [`rhino-mcp.rhp`](https://github.com/hov172/rhino_mcp/releases/download/v0.11.0/rhino-mcp.rhp) from the latest release, then copy it to the Rhino plug-ins folder:
 
 ```bash
 # macOS — user plug-ins folder (no admin rights needed)
@@ -506,16 +509,16 @@ Then restart Rhino. The plugin loads automatically on startup.
 
 #### Option B — Install via Yak CLI
 
-Download [`rhino-mcp-0.10.0-rh8_17-any.yak`](https://github.com/hov172/rhino_mcp/releases/download/v0.10.0/rhino-mcp-0.10.0-rh8_17-any.yak) from the latest release, then run:
+Download [`rhino-mcp-0.11.0-rh8_17-any.yak`](https://github.com/hov172/rhino_mcp/releases/download/v0.11.0/rhino-mcp-0.11.0-rh8_17-any.yak) from the latest release, then run:
 
 ```bash
 # macOS
-"/Applications/Rhino 8.app/Contents/Resources/bin/yak" install --source ~/Downloads/rhino-mcp-0.10.0-rh8_17-any.yak
+"/Applications/Rhino 8.app/Contents/Resources/bin/yak" install --source ~/Downloads/rhino-mcp-0.11.0-rh8_17-any.yak
 ```
 
 ```powershell
 # Windows
-& "C:\Program Files\Rhino 8\System\yak.exe" install --source "$env:USERPROFILE\Downloads\rhino-mcp-0.10.0-rh8_17-any.yak"
+& "C:\Program Files\Rhino 8\System\yak.exe" install --source "$env:USERPROFILE\Downloads\rhino-mcp-0.11.0-rh8_17-any.yak"
 ```
 
 Restart Rhino after the install completes.
@@ -1024,7 +1027,9 @@ Use `get_rhino_backend_status` from any AI client to check which backends are cu
 
 | Tool | Description |
 |---|---|
-| `get_rhino_instances` | List all running Rhino processes with their `id`, `name`, and `version`. Use when more than one Rhino instance may be running — pass the returned `id` as `rhino_id` to any other tool to target that instance. |
+| `get_rhino_instances` | Discover all running Rhino MCP instances via the slot registry. Returns a list of `{id, host, port, version, rhino_version, pid, started_at}`. Pass the returned `id` as `rhino_id` to any other tool to target that instance. Works with the C# `SlotAnnouncer` — requires the plugin to be loaded in each Rhino process. |
+| `launch_rhino` | Launch a new Rhino process and wait for it to announce its slot (up to 60 s). Finds the Rhino executable via `RHINO_MCP_RHINO_PATH` or standard install paths. Returns `{ok, id, pid}` of the new instance. |
+| `get_rhinocode_instances` | List all running Rhino processes via the rhinocode CLI. Returns `id`, `name`, and `version`. Use when the plugin is not loaded and you only need the rhinocode backend. |
 | `get_rhino_backend_status` | Report which backends are currently reachable: plugin socket (port 1999) and rhinocode CLI. Shows the selected backend mode and any connection errors. |
 | `get_rhino_commands` | List all available Rhino command names, optionally filtered by substring (e.g. `filter="circle"`). `loaded_only=true` (default) restricts to currently loaded plugins; set `false` to include unloaded plugins. Use this before `run_rhino_command` to discover exact spellings. |
 | `list_rhino_plugins` | List plugins loaded in the current Rhino session, routed through the active backend. |
@@ -1054,6 +1059,8 @@ Use `get_rhino_backend_status` from any AI client to check which backends are cu
 | `RHINO_MCP_TELEMETRY_LOG` | `~/.rhino_mcp_telemetry.jsonl` | Path for the telemetry log file (JSONL format) |
 | `RHINO_MCP_READ_ROOTS` | `~` (home dir) | Colon-separated paths `read_*` tools may access. Default restricts reads to home directory. |
 | `RHINO_MCP_RATE_LIMIT_RPM` | `120` | HTTP transport: maximum requests per minute per token. |
+| `RHINO_MCP_USE_SLOT_REGISTRY` | *(unset)* | Set to `1` to always route `plugin_result()` via the slot registry (auto-discover Rhino instances). Default: off (uses `RHINO_MCP_HOST`/`RHINO_MCP_PORT` directly). |
+| `RHINO_MCP_RHINO_PATH` | *(auto-detected)* | Override path to the Rhino executable used by `launch_rhino`. Default: searches standard install locations. |
 
 ### Rhino Plugin (C# side)
 
@@ -1374,7 +1381,7 @@ You can also call `check_plugin_loaded(plugin_name="V-Ray")` directly to test wh
 
 ---
 
-## All 334 Tools
+## All 347 Tools
 
 ---
 
@@ -1466,6 +1473,37 @@ Requires the plugin backend and Grasshopper to be open in Rhino.
 | `gh_open_definition` | Open a `.gh` or `.ghx` file from disk. |
 | `gh_save_definition` | Save the active definition. Optionally specify a file path; if omitted, saves to the current path. |
 | `gh_close_definition` | Close the active definition. |
+
+---
+
+### Grasshopper 2 (GH2)
+
+Requires Rhino 8 with Grasshopper 2 installed. All GH2 handlers use runtime reflection — no compile-time dependency on Grasshopper2.dll. Returns a clear error when GH2 is not loaded.
+
+Every GH2 tool accepts an optional `rhino_id` parameter (from `get_rhino_instances`) to target a specific Rhino instance.
+
+| Tool | Description |
+|---|---|
+| `gh2_start` | Launch the Grasshopper 2 editor. |
+| `gh2_get_canvas_graph` | Get a full snapshot of the active GH2 canvas: components, wires, and volatile data samples. `sample_size` (default 3) controls how many data items are returned per output port. |
+| `gh2_apply_graph` | Atomically place components and wire them in one call. `components`: list of `{key, type_name, x, y}` or `{key, type="slider", min, max, value, x, y}`. `wires`: list of `{from_key, from_output, to_key, to_input}`. Returns `{ok, placed: {key: instanceGuid}, wired: N, errors: [...]}`. |
+| `gh2_place_component` | Place a GH2 component by `type_name` (e.g. `"Point"`, `"Circle"`) or `component_guid`. Returns `instance_guid`. |
+| `gh2_place_slider` | Place a GH2 Number Slider with `min`, `max`, `value`, `decimals`, and canvas `x`/`y`. Returns `instance_guid`. |
+| `gh2_connect` | Wire a single output to an input. `from_output` / `to_input` can be index (int) or param name (str). |
+| `gh2_connect_many` | Wire multiple connections in one call; continues past individual failures. `wires`: list of `{from_instance, from_output, to_instance, to_input}`. Returns `{ok, wired: N, errors: [...]}`. |
+| `gh2_describe_component` | Get metadata for a component: category, description, input/output param names and types. Accepts `instance_guid` (placed instance) or `name` (component type lookup). |
+| `gh2_search_components` | Search available GH2 components by name, nickname, or description. Optional `category` filter. |
+| `gh2_solve_graph` | Expire and re-solve the active GH2 canvas. Returns list of errors. |
+| `gh2_clear_canvas` | Clear all objects from the active GH2 canvas. Requires `confirm=True` to prevent accidental clears. |
+
+**Recommended GH2 workflow:**
+```
+1. gh2_start()                              → open GH2
+2. gh2_search_components("Circle")          → find component GUIDs
+3. gh2_apply_graph(components=[...], wires=[...])  → place + wire atomically
+4. gh2_solve_graph()                        → solve and check errors
+5. gh2_get_canvas_graph()                   → inspect outputs
+```
 
 ---
 
@@ -1789,7 +1827,7 @@ Read external design files — floor plans, specifications, spreadsheets, and re
 | `execute_rhino_csharp` | Run arbitrary C# code inside Rhino via Roslyn scripting. Returns stdout output or document changes. Requires RhinoCode C# support (Rhino 8). |
 | `get_rhino_commands` | List all available Rhino command names, optionally filtered by substring (`filter="circle"`). `loaded_only=true` (default) limits to loaded plugins. Call this before `run_rhino_command` to discover exact spellings. |
 | `run_rhino_command` | Execute a Rhino command macro string (e.g. `_Box 0,0,0 1,1,1`). `echo=true` echoes the command to Rhino's history. Returns `output` with captured command-window text so the AI can read results. Requires `MCPStart` in Rhino. |
-| `list_tool_categories` | **Start here for complex tasks.** Returns all 334 tool categories with counts. Use `include_tool_names=true` to list every tool name per category without loading all 334 descriptions into context. |
+| `list_tool_categories` | **Start here for complex tasks.** Returns all 347 tool categories with counts. Use `include_tool_names=true` to list every tool name per category without loading all 347 descriptions into context. |
 | `search_rhino_docs` | Full-text search of bundled Rhino scripting notes. |
 | `get_rhinoscript_docs` | Look up RhinoScriptSyntax module-level documentation. Pass a module name (`"curve"`, `"surface"`, `"object"`, etc.) to list its functions. |
 | `search_rhinoscript_functions` | Search RhinoScriptSyntax function reference by name or keyword. **Always call this before writing Python scripts** to avoid hallucinated function names. |

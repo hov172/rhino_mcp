@@ -8,10 +8,10 @@ This file gives AI coding agents (Claude, Codex, Gemini, etc.) the context neede
 
 **rhino-mcp** is an MCP (Model Context Protocol) server that lets AI assistants control Rhino 3D. It has two components:
 
-1. **Python MCP server** (`src/rhmcp/`) — FastMCP-based server exposing 334 tools to AI clients
+1. **Python MCP server** (`src/rhmcp/`) — FastMCP-based server exposing 347 tools to AI clients
 2. **C# Rhino plugin** (`rhino_plugin/`) — TCP socket server inside Rhino (port 1999) that receives and executes commands
 
-Current version: **0.9.0**
+Current version: **0.11.0**
 
 ---
 
@@ -41,8 +41,12 @@ Rhino 3D document
 | `src/rhmcp/tools_helpers/plugin_client.py` | TCP socket client with exponential backoff retry |
 | `src/rhmcp/tools_helpers/rhinocode.py` | rhinocode CLI fallback, temp-file polling for results |
 | `src/rhmcp/tools_helpers/validate.py` | Shared input validators returning error-dicts or None |
+| `src/rhmcp/tools_helpers/security.py` | Security helpers: `sanitise_rhino_path`, `validate_download_url`, `safe_extractall`, `clamp` |
+| `src/rhmcp/tools_helpers/slot_registry.py` | Multi-Rhino slot registry: `discover()`, `get()`, `wait_for_slot()` — reads `{pid}.json` files from system temp dir |
+| `src/rhmcp/tools_helpers/rhino_launcher.py` | Auto-launch Rhino and wait for slot announcement: `find_rhino()`, `launch()` |
+| `src/rhmcp/tools/gh2.py` | 11 GH2 tools — `rhino_id` aware, routes via `rhino.plugin_result()` |
+| `src/rhmcp/tools/slots.py` | `get_rhino_instances` (slot discovery) and `launch_rhino` (auto-launch) |
 | `src/rhmcp/tools_helpers/errors.py` | `normalize()` — ensures consistent `ok`/`error` shape |
-| `src/rhmcp/tools_helpers/security.py` | Security helpers: `sanitise_rhino_path`, `validate_download_url`, `safe_extractall`, `clamp`, `_validate_read_path`, `_validate_image_path`, `_safe_export_path` |
 | `rhino_plugin/RhinoMCPPlugin/` | C# Rhino plugin source |
 | `rhino_plugin/package/manifest.yml` | Yak package manifest |
 | `rhino_plugin/release/` | Built artifacts (.rhp, .yak) — gitignored |
@@ -113,7 +117,7 @@ uv run pytest tests/test_integration.py -v -m integration
 uvx ruff check src/rhmcp --select=E,W,F --ignore=E501,E701,E402,E741
 ```
 
-**262 tests** (unit, smoke, script-syntax, and security) must pass before any commit. The CI workflow (`.github/workflows/ci.yml`) runs these on Python 3.10/3.11/3.12.
+**334 tests** (unit, smoke, script-syntax, and security) must pass before any commit. The CI workflow (`.github/workflows/ci.yml`) runs these on Python 3.10/3.11/3.12.
 
 ---
 
@@ -133,7 +137,7 @@ Artifacts land in `rhino_plugin/release/` (gitignored — upload to GitHub relea
 
 ## Version Bumping Checklist
 
-When bumping the version (e.g. `0.9.0` → `0.10.0`):
+When bumping the version (e.g. `0.11.0` → `0.12.0`):
 
 1. `pyproject.toml` — `version = "..."`
 2. `rhino_plugin/RhinoMCPPlugin/RhinoMCPPlugin.csproj` — `<Version>...</Version>`

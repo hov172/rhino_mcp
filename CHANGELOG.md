@@ -5,7 +5,46 @@ Versioning follows [Semantic Versioning](https://semver.org/).
 
 ---
 
-## [0.10.0] — 2026-05-17
+## [0.11.0] — 2026-05-17
+
+### Added
+
+**Grasshopper 2 (GH2) support — 11 new tools**
+
+- `gh2_start` — launch the Grasshopper 2 editor
+- `gh2_get_canvas_graph` — full snapshot of the active GH2 canvas (components, wires, volatile data samples)
+- `gh2_apply_graph` — atomically place components and wire them in one call; returns placed GUIDs and wired count
+- `gh2_place_component` — place a GH2 component by type name or component GUID
+- `gh2_place_slider` — place a GH2 Number Slider with min/max/value/decimals
+- `gh2_connect` — wire a single output to an input
+- `gh2_connect_many` — wire multiple connections at once; continues past individual failures
+- `gh2_describe_component` — get metadata (category, description, input/output param names and types) for any component
+- `gh2_search_components` — search available GH2 components by name, nickname, or description
+- `gh2_solve_graph` — expire and re-solve the active GH2 canvas
+- `gh2_clear_canvas` — clear all objects from the active GH2 canvas (requires `confirm=True`)
+
+All GH2 handlers use runtime reflection — no compile-time dependency on Grasshopper2.dll. Two-tier graceful degradation: returns a clear error when GH2 is not loaded.
+
+**Multi-Rhino instance management**
+
+- `get_rhino_instances` — discover all running Rhino processes via slot registry JSON files in the system temp dir
+- `launch_rhino` — launch a new Rhino process and wait for it to announce its slot (uses `RHINO_MCP_RHINO_PATH` env var or auto-detected install)
+- C# `SlotAnnouncer` — on TCP listener start, writes `{pid}.json` to `Path.GetTempPath()/rhino-mcp-slots/` with pid, host, port, version, rhino_version, started_at
+- Python `slot_registry.py` — `discover()`, `get()`, `wait_for_slot()` mirror the C# slot dir via `tempfile.gettempdir()`
+- `backend.py` — routes `plugin_result()` via slot registry when `rhino_id` is provided or `RHINO_MCP_USE_SLOT_REGISTRY=1` is set
+
+**`host_app` field on ping / health_check**
+
+- `ping` response now includes `host_app` — returns the process name when Rhino is hosted (e.g. Rhino.Inside Revit/AutoCAD); returns `"Rhino"` otherwise
+- `health_check()` in `plugin_client.py` surfaces `host_app` from the ping result
+
+**New environment variables**
+- `RHINO_MCP_USE_SLOT_REGISTRY` — set to `1` to always route via slot registry (default: off)
+- `RHINO_MCP_RHINO_PATH` — override path to the Rhino executable used by `launch_rhino`
+
+**Tests**
+- 334 tests passing (was 262 before this release)
+- New `test_gh2.py` (27 tests), `test_rhinoinside.py` (7 tests), `test_slot_registry.py` (21 tests), `test_rhino_launcher.py` (14 tests), `test_install_scripts.py` (14 tests)
 
 ### Security hardening (comprehensive — 8-round audit)
 
@@ -59,8 +98,7 @@ Versioning follows [Semantic Versioning](https://semver.org/).
 - `RHINO_MCP_RATE_LIMIT_RPM` — HTTP rate limit (default: 120 requests/minute)
 
 **Tests:**
-- 262 tests passing (was 248 before this release)
-- New `test_security.py` with 38 tests covering all security helpers
+- New `test_security.py` with 31 tests covering all security helpers
 
 ---
 
