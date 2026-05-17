@@ -131,6 +131,7 @@ def health_check(timeout: float = 3.0) -> dict[str, Any]:
                 "latency_ms": latency,
                 "version": inner.get("version"),
                 "rhino": inner.get("rhino"),
+                "host_app": inner.get("host_app", "Rhino"),
             }
         return {"ok": False, "host": host, "port": port, "error": "Unexpected ping response", "error_code": "HEALTH_CHECK_FAILED", "raw": resp}
     except OSError as ex:
