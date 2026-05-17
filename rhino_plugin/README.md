@@ -10,7 +10,7 @@ The Rhino-side TCP socket server for the Rhino MCP project. This plugin runs ins
 |---|---|
 | `MCPStart` | Start the socket server. Binds to `127.0.0.1:1999` by default. Prints confirmation: `RhinoMCP: Listening on 127.0.0.1:1999`. |
 | `MCPStop` | Stop the socket server and release the port. |
-| `MCPStatus` | Print the current server status (running / stopped, bound address). |
+| `MCPStatus` | Print the current server status. Prints `Rhino MCP server running on {address}:{port}` or `Rhino MCP server is stopped.` |
 
 **Auto-start tip:** Add `MCPStart` to *Rhino Options → General → Command Lists → Startup commands* so the server starts automatically every time Rhino opens.
 
@@ -21,19 +21,21 @@ The Rhino-side TCP socket server for the Rhino MCP project. This plugin runs ins
 The Python MCP server connects over a local TCP socket and sends newline-delimited JSON messages. Each message has the shape:
 
 ```json
-{"type": "<command_type>", "params": { ... }}
+{"type": "<command_type>", "params": { ... }, "secret": "<psk-or-omit>"}
 ```
+
+The `secret` field is optional. Include it when `RHINO_MCP_PLUGIN_SECRET` is configured on the plugin side — the plugin rejects requests with a missing or wrong secret.
 
 The plugin dispatches to a C# handler, executes on the Rhino main UI thread via `RhinoApp.InvokeOnUiThread`, and replies with:
 
 ```json
-{"ok": true, "result": { ... }}
+{"status": "ok", "result": { ... }}
 ```
 
 or on error:
 
 ```json
-{"ok": false, "error": "<message>"}
+{"status": "error", "message": "<message>"}
 ```
 
 ---
@@ -155,10 +157,12 @@ The repository also includes `.github/workflows/release-plugin.yml` for automate
 
 ## Environment
 
-| Setting | Value |
-|---|---|
-| Bind address | `127.0.0.1` |
-| Port | `1999` |
-| Protocol | TCP, newline-delimited JSON |
-| Rhino versions | Rhino 7 and Rhino 8 |
-| Target framework | `net8.0` |
+| Setting | Default | Description |
+|---|---|---|
+| Bind address | `127.0.0.1` | Set via `RHINO_MCP_BIND_HOST` env var. Use `0.0.0.0` for network access. |
+| Port | `1999` | TCP port the plugin listens on |
+| Protocol | TCP, JSON (one request per connection) | |
+| Rhino versions | Rhino 7 and Rhino 8 | |
+| Target framework | `net8.0` | |
+| `RHINO_MCP_BIND_HOST` | `127.0.0.1` | Bind address. `0.0.0.0` = any interface. |
+| `RHINO_MCP_PLUGIN_SECRET` | *(unset)* | Pre-shared key for authentication. Required when binding to a non-loopback address. |

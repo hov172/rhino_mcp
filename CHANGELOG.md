@@ -5,6 +5,65 @@ Versioning follows [Semantic Versioning](https://semver.org/).
 
 ---
 
+## [0.10.0] — 2026-05-17
+
+### Security hardening (comprehensive — 8-round audit)
+
+**HTTP transport (Python MCP server):**
+- Bearer token auth middleware — random 64-hex token generated at startup, printed to stderr; required on all requests except `/health` and OPTIONS preflight
+- CORS restricted to `localhost` / `127.0.0.1` only (was wildcard)
+- Rate limiting — 120 req/min sliding window per token (configurable via `RHINO_MCP_RATE_LIMIT_RPM`); exempt: `/health`, OPTIONS
+- `/health` endpoint returns `{"status": "ok"}` — used by Docker and Cloud Run health checks
+
+**Input validation & injection prevention:**
+- Macro injection: `sanitise_rhino_path()` applied at all Rhino macro / `rs.Command()` / `RhinoApp.RunScript()` call sites where user-supplied paths are embedded
+- C# verbatim string escaping: corrected `replace('"', '""')` throughout (was `replace('"', '\\"')` — wrong for `@"..."` strings)
+- Python code injection: `layer_prefix` and other user strings embedded into IronPython scripts now use `repr()` instead of raw f-string interpolation
+- `material_name` validated against `^[\w\s.\-]{1,128}$` regex; `object_id` validated as UUID before C# interpolation
+- `install_plugin`: restricted to `.rhi`, `.rhp`, `.yak` file types with path resolution
+
+**Path traversal & file safety:**
+- Zip Slip prevention: `safe_extractall()` blocks symlinks and path escapes (Poly Haven / Sketchfab downloads)
+- `read_*` document tools: `_validate_read_path()` restricts file reads to `~` or `RHINO_MCP_READ_ROOTS`
+- Urban `export_path` and `save_project_version` directory restricted to home or temp via `_safe_export_path()`
+- AI generation download filename: regex allowlist `[A-Za-z0-9_.\-]` applied before `os.path.join()`
+- Sketchfab `model_uid` validated as 32 hex chars before URL and path use
+- API-supplied filenames: `os.path.basename()` applied
+
+**SSRF prevention:**
+- `validate_download_url()`: blocks private IPs, loopback, IPv4-mapped IPv6, non-HTTPS URLs; DNS fail-closed
+- Applied to all download paths: AI generation, Poly Haven, Sketchfab, fal.ai; redirect loops revalidate every hop
+- cairosvg (`read_svg`): custom `url_fetcher` blocks all external resource loading including `file://` and `http://`
+
+**Other fixes:**
+- Jinja2 `autoescape=True` in urban PDF report template
+- API keys removed from `_JOB_STORE` (were accidentally persisted in job metadata)
+- `_JOB_STORE` bounded to 1000 entries (OrderedDict LRU) + `threading.Lock()` for concurrent access
+- Input clamping: `clamp()` applied to DPI, image dimensions, quality, max rows, paragraphs
+- Code execution tools: 200 KB length cap
+- Prompt / text inputs: 8000 char cap; style parameters: 2000 char cap
+- API error bodies truncated to 200 chars before returning to clients
+- Telemetry error strings truncated to 120 chars
+- `rhinocode` binary path validated with `os.path.isfile` + `os.X_OK` before use
+
+**Plugin TCP security:**
+- Pre-shared key (PSK) authentication via `RHINO_MCP_PLUGIN_SECRET` environment variable
+- Plugin validates PSK using SHA-256 + `CryptographicOperations.FixedTimeEquals` (constant-time) before dispatching any command
+- Python client automatically includes the secret in every request when the env var is set
+- Rhino console warning printed when binding to a non-loopback address without a secret configured
+- Backward compatible: if `RHINO_MCP_PLUGIN_SECRET` is not set, all connections accepted (existing localhost setups unaffected)
+
+**New environment variables:**
+- `RHINO_MCP_PLUGIN_SECRET` — shared secret between Rhino plugin and Python server (required for network use)
+- `RHINO_MCP_READ_ROOTS` — colon-separated paths the `read_*` tools may access (default: `~`)
+- `RHINO_MCP_RATE_LIMIT_RPM` — HTTP rate limit (default: 120 requests/minute)
+
+**Tests:**
+- 262 tests passing (was 248 before this release)
+- New `test_security.py` with 38 tests covering all security helpers
+
+---
+
 ## [0.9.0] — 2026-05-11
 
 ### Added
