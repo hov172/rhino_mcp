@@ -7,10 +7,12 @@ from __future__ import annotations
 
 import io
 import os
+import socket
 import struct
 import tempfile
 import zipfile
 import unittest
+from unittest.mock import patch
 
 from rhmcp.tools_helpers.security import (
     clamp,
@@ -76,6 +78,30 @@ class TestValidateDownloadUrl(unittest.TestCase):
     def test_empty_blocked(self) -> None:
         with self.assertRaises(ValueError):
             validate_download_url("")
+
+    def test_decimal_ip_localhost_blocked(self) -> None:
+        with patch("socket.getaddrinfo",
+                   return_value=[(None, None, None, None, ("127.0.0.1", 0))]):
+            with self.assertRaises(ValueError, msg="decimal IP for loopback should be blocked"):
+                validate_download_url("https://2130706433/secret")
+
+    def test_ipv4_mapped_ipv6_loopback_blocked(self) -> None:
+        with patch("socket.getaddrinfo",
+                   return_value=[(None, None, None, None, ("::ffff:127.0.0.1", 0))]):
+            with self.assertRaises(ValueError, msg="IPv4-mapped IPv6 loopback should be blocked"):
+                validate_download_url("https://some-host/secret")
+
+    def test_trailing_dot_localhost_blocked(self) -> None:
+        with patch("socket.getaddrinfo",
+                   return_value=[(None, None, None, None, ("127.0.0.1", 0))]):
+            with self.assertRaises(ValueError, msg="trailing-dot hostname should be blocked"):
+                validate_download_url("https://localhost./secret")
+
+    def test_zero_ip_blocked(self) -> None:
+        with patch("socket.getaddrinfo",
+                   return_value=[(None, None, None, None, ("0.0.0.0", 0))]):
+            with self.assertRaises(ValueError, msg="0.0.0.0 should be blocked"):
+                validate_download_url("https://0.0.0.0/secret")
 
 
 class TestClamp(unittest.TestCase):
