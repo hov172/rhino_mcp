@@ -388,3 +388,98 @@ def register(mcp: FastMCP) -> None:
             "crossings_before": crossings_before,
             "crossings_after":  crossings_after,
         }
+
+    @mcp.tool(annotations=ToolAnnotations(title="Migrate GH1 Definition to GH2", destructiveHint=True))
+    def gh_migrate_to_gh2(
+        confirm: bool = False,
+        close_gh1: bool = False,
+        rhino_id: str | None = None,
+    ) -> dict[str, object]:
+        """
+        Migrate the active GH1 definition to a new GH2 canvas.
+        Requires Rhino 9 — GH2 is not available in stable Rhino 8.
+
+        confirm: Must be True to execute (safety guard against accidental migration).
+        close_gh1: If True, close the GH1 definition after migration (default False —
+                   leaves both open for side-by-side comparison).
+
+        Returns {ok, migrated, unmapped[], gh2_errors[], gh1_closed}.
+        unmapped[] always present (empty list if all components have GH2 equivalents).
+        Components with no GH2 mapping are reported and skipped — migration continues.
+        """
+        if not confirm:
+            return {
+                "ok":         False,
+                "error":      "Set confirm=True to execute the migration.",
+                "error_code": "CONFIRMATION_REQUIRED",
+            }
+
+        # Step 1: export GH1 data
+        export = _gh_intel("gh1_export_migration_data", {}, rhino_id=rhino_id)
+        if not export.get("ok"):
+            return export
+
+        components = export.get("components", [])
+
+        # Step 2: map types via YAML
+        mapped   = []
+        unmapped = []
+        for comp in components:
+            type_guid = comp.get("type_guid", "").lower()
+            gh2_name  = _GH1_TO_GH2_MAP.get(type_guid)
+            if gh2_name:
+                mapped.append({
+                    "key":        comp["instance_guid"],
+                    "type_name":  gh2_name,
+                    "x":          comp.get("x", 0.0),
+                    "y":          comp.get("y", 0.0),
+                })
+            else:
+                unmapped.append({
+                    "gh1_guid":  comp.get("type_guid", ""),
+                    "nickname":  comp.get("nick_name", ""),
+                    "reason":    "No GH2 equivalent in mapping table",
+                })
+
+        # Build wires for mapped components only
+        mapped_keys = {c["key"] for c in mapped}
+        wires = []
+        for comp in components:
+            if comp["instance_guid"] not in mapped_keys:
+                continue
+            for conn in comp.get("connections", []):
+                to_key = conn.get("to_id", "")
+                if to_key in mapped_keys:
+                    wires.append({
+                        "from_key":    comp["instance_guid"],
+                        "from_output": conn.get("from_output", "0"),
+                        "to_key":      to_key,
+                        "to_input":    conn.get("to_input", "0"),
+                    })
+
+        # Step 3: ensure GH2 is open
+        start = _gh_intel("gh2_start", {}, rhino_id=rhino_id)
+        if not start.get("ok"):
+            return start
+
+        # Step 4: apply graph
+        apply_result = _gh_intel(
+            "gh2_apply_graph",
+            {"components": mapped, "wires": wires},
+            rhino_id=rhino_id,
+        )
+        gh2_errors = apply_result.get("errors", []) if apply_result.get("ok") else [apply_result.get("error", "")]
+
+        # Step 5: optionally close GH1
+        gh1_closed = False
+        if close_gh1:
+            close_result = _gh_intel("gh_close_document", {}, rhino_id=rhino_id)
+            gh1_closed = close_result.get("ok", False)
+
+        return {
+            "ok":        True,
+            "migrated":  len(mapped),
+            "unmapped":  unmapped,
+            "gh2_errors": gh2_errors,
+            "gh1_closed": gh1_closed,
+        }

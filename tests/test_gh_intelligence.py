@@ -242,5 +242,112 @@ class TestGh2RefactorCanvas(unittest.TestCase):
         self.assertEqual(len(move_calls), len(self._GH2_GRAPH["components"]))
 
 
+_EXPORT_DATA = {
+    "ok": True,
+    "count": 3,
+    "components": [
+        {
+            "instance_guid": "comp-1",
+            "type_guid": "57da07bd-ecab-415d-9d86-be1145e9f0eb",
+            "nick_name": "Pt",
+            "type_name": "GH_Point",
+            "x": 0.0, "y": 0.0,
+            "inputs": [], "outputs": [{"name": "Pt", "type_name": "Point3d"}],
+            "values": {},
+            "connections": [{"from_output": "Pt", "to_id": "comp-2", "to_input": "C"}],
+        },
+        {
+            "instance_guid": "comp-2",
+            "type_guid": "87f87f55-92ef-4298-ba26-3d7dbde42ad8",
+            "nick_name": "Circle",
+            "type_name": "GH_Circle",
+            "x": 200.0, "y": 0.0,
+            "inputs": [{"name": "C", "type_name": "Point3d"}, {"name": "R", "type_name": "Number"}],
+            "outputs": [{"name": "C", "type_name": "Circle"}],
+            "values": {},
+            "connections": [],
+        },
+        {
+            "instance_guid": "comp-3",
+            "type_guid": "unknown-guid-not-in-map",
+            "nick_name": "LegacyComp",
+            "type_name": "GH_SomeLegacyThing",
+            "x": 400.0, "y": 0.0,
+            "inputs": [], "outputs": [],
+            "values": {},
+            "connections": [],
+        },
+    ],
+}
+
+
+class TestGhMigrateToGh2(unittest.TestCase):
+    @classmethod
+    def setUpClass(cls):
+        cls.tools = _register()
+
+    def test_confirm_false_returns_confirmation_required(self):
+        fn = self.tools["gh_migrate_to_gh2"]
+        result = fn(confirm=False)
+        self.assertFalse(result["ok"])
+        self.assertEqual(result.get("error_code"), "CONFIRMATION_REQUIRED")
+
+    def test_confirm_false_never_calls_plugin(self):
+        fn = self.tools["gh_migrate_to_gh2"]
+        with patch("rhmcp.tools_helpers.backend.plugin_result") as mock_pr:
+            fn(confirm=False)
+        mock_pr.assert_not_called()
+
+    def test_unmapped_component_in_unmapped_list(self):
+        """Components with no GH2 mapping must appear in unmapped, not crash."""
+        fn = self.tools["gh_migrate_to_gh2"]
+
+        def mock_plugin(command, params, rhino_id=None):
+            if command == "gh1_export_migration_data":
+                return _EXPORT_DATA
+            if command in ("gh2_start", "gh2_apply_graph"):
+                return {"ok": True, "placed": {}, "wired": 0, "errors": []}
+            return {"ok": False, "error": f"unexpected: {command}"}
+
+        with patch("rhmcp.tools_helpers.backend.plugin_result", side_effect=mock_plugin):
+            result = fn(confirm=True)
+
+        self.assertTrue(result.get("ok"))
+        self.assertIsInstance(result.get("unmapped"), list)
+        unmapped_guids = [u["gh1_guid"] for u in result["unmapped"]]
+        self.assertIn("unknown-guid-not-in-map", unmapped_guids)
+
+    def test_export_error_propagated(self):
+        fn = self.tools["gh_migrate_to_gh2"]
+        with patch("rhmcp.tools_helpers.backend.plugin_result",
+                   return_value={"ok": False, "error": "GH not open"}):
+            result = fn(confirm=True)
+        self.assertFalse(result["ok"])
+
+    def test_unmapped_always_present(self):
+        """unmapped key must exist even when all components mapped."""
+        fn = self.tools["gh_migrate_to_gh2"]
+        export_all_mapped = {
+            "ok": True, "count": 1,
+            "components": [{
+                "instance_guid": "c1",
+                "type_guid": "57da07bd-ecab-415d-9d86-be1145e9f0eb",
+                "nick_name": "Pt", "type_name": "GH_Point",
+                "x": 0.0, "y": 0.0,
+                "inputs": [], "outputs": [], "values": {}, "connections": [],
+            }],
+        }
+        def mock_plugin(command, params, rhino_id=None):
+            if command == "gh1_export_migration_data":
+                return export_all_mapped
+            return {"ok": True, "placed": {}, "wired": 0, "errors": []}
+
+        with patch("rhmcp.tools_helpers.backend.plugin_result", side_effect=mock_plugin):
+            result = fn(confirm=True)
+
+        self.assertIn("unmapped", result)
+        self.assertIsInstance(result["unmapped"], list)
+
+
 if __name__ == "__main__":
     unittest.main()
