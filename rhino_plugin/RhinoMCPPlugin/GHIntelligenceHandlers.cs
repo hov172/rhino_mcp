@@ -48,13 +48,15 @@ public static class GHIntelligenceHandlers
                         {
                             foreach (var r in op.Recipients)
                             {
-                                var toGuid = r.Attributes.GetTopLevel.DocObject.InstanceGuid;
+                                var topLevel = r.Attributes?.GetTopLevel?.DocObject;
+                                if (topLevel == null) continue;
+                                var toGuid = topLevel.InstanceGuid;
                                 if (!fwd.ContainsKey(toGuid)) continue;
                                 fwd[obj.InstanceGuid].Add(toGuid);
                                 rev[toGuid].Add(obj.InstanceGuid);
                                 connectionCount++;
                                 // Backward edge heuristic: right-to-left wires cross left-to-right wires
-                                if (obj.Attributes.Pivot.X > r.Attributes.GetTopLevel.DocObject.Attributes.Pivot.X)
+                                if (obj.Attributes.Pivot.X > topLevel.Attributes.Pivot.X)
                                     crossingEstimate++;
                             }
                         }
@@ -63,12 +65,14 @@ public static class GHIntelligenceHandlers
                     {
                         foreach (var r in param.Recipients)
                         {
-                            var toGuid = r.Attributes.GetTopLevel.DocObject.InstanceGuid;
+                            var topLevel = r.Attributes?.GetTopLevel?.DocObject;
+                            if (topLevel == null) continue;
+                            var toGuid = topLevel.InstanceGuid;
                             if (!fwd.ContainsKey(toGuid)) continue;
                             fwd[obj.InstanceGuid].Add(toGuid);
                             rev[toGuid].Add(obj.InstanceGuid);
                             connectionCount++;
-                            if (obj.Attributes.Pivot.X > r.Attributes.GetTopLevel.DocObject.Attributes.Pivot.X)
+                            if (obj.Attributes.Pivot.X > topLevel.Attributes.Pivot.X)
                                 crossingEstimate++;
                         }
                     }
@@ -175,7 +179,9 @@ public static class GHIntelligenceHandlers
                         foreach (var op in comp.Params.Output)
                             foreach (var r in op.Recipients)
                             {
-                                var toGuid = r.Attributes.GetTopLevel.DocObject.InstanceGuid;
+                                var topLevel = r.Attributes?.GetTopLevel?.DocObject;
+                                if (topLevel == null) continue;
+                                var toGuid = topLevel.InstanceGuid;
                                 if (!compGuids.Contains(toGuid)) continue;
                                 connections.Add(new
                                 {
@@ -188,7 +194,9 @@ public static class GHIntelligenceHandlers
                     {
                         foreach (var r in param.Recipients)
                         {
-                            var toGuid = r.Attributes.GetTopLevel.DocObject.InstanceGuid;
+                            var topLevel = r.Attributes?.GetTopLevel?.DocObject;
+                            if (topLevel == null) continue;
+                            var toGuid = topLevel.InstanceGuid;
                             if (!compGuids.Contains(toGuid)) continue;
                             connections.Add(new
                             {
@@ -220,6 +228,9 @@ public static class GHIntelligenceHandlers
                 var doc      = GHDocumentHandlers.ActiveDoc();
                 var exported = new List<object>();
 
+                var knownGuids = new HashSet<Guid>(
+                    doc.Objects.Where(o => !(o is GH_Group)).Select(o => o.InstanceGuid));
+
                 foreach (var obj in doc.Objects)
                 {
                     if (obj is GH_Group) continue;
@@ -237,12 +248,31 @@ public static class GHIntelligenceHandlers
                         {
                             outputs.Add(new { name = op.NickName, type_name = op.TypeName });
                             foreach (var r in op.Recipients)
+                            {
+                                var topLevel = r.Attributes?.GetTopLevel?.DocObject;
+                                if (topLevel == null || !knownGuids.Contains(topLevel.InstanceGuid)) continue;
                                 connections.Add(new
                                 {
                                     from_output = op.NickName,
-                                    to_id       = r.Attributes.GetTopLevel.DocObject.InstanceGuid.ToString(),
+                                    to_id       = topLevel.InstanceGuid.ToString(),
                                     to_input    = r.NickName
                                 });
+                            }
+                        }
+                    }
+                    else if (obj is IGH_Param standaloneParam)
+                    {
+                        outputs.Add(new { name = standaloneParam.NickName, type_name = standaloneParam.TypeName });
+                        foreach (var r in standaloneParam.Recipients)
+                        {
+                            var topLevel = r.Attributes?.GetTopLevel?.DocObject;
+                            if (topLevel == null || !knownGuids.Contains(topLevel.InstanceGuid)) continue;
+                            connections.Add(new
+                            {
+                                from_output = standaloneParam.NickName,
+                                to_id       = topLevel.InstanceGuid.ToString(),
+                                to_input    = r.NickName
+                            });
                         }
                     }
 
