@@ -260,7 +260,7 @@ def register(mcp: FastMCP) -> None:
         group_clusters: Add GH2 groups per detected cluster when apply=True.
         """
         # Read GH2 canvas (GH2 graph already exposes positions + connections)
-        graph = _gh_intel("gh2_get_canvas_graph", {"sample_size": 0}, rhino_id=rhino_id)
+        graph = _gh_intel("gh2_get_canvas_graph", {"sample_size": 0}, rhino_id=rhino_id)  # 0 = return all components
         if not graph.get("ok"):
             return graph
 
@@ -312,11 +312,14 @@ def register(mcp: FastMCP) -> None:
                         queue.append(nb)
             clusters.append({"member_ids": members, "label": f"Cluster {len(clusters) + 1}"})
 
+        # Build pos_by_id before crossings_before to avoid redundant linear scans
+        pos_by_id = {c["id"]: {"x": c["x"], "y": c["y"]} for c in components}
+
         crossings_before = sum(
             1 for conn in connections
             if conn["from_id"] in id_set and conn["to_id"] in id_set
-            and next((c["x"] for c in components if c["id"] == conn["from_id"]), 0)
-            > next((c["x"] for c in components if c["id"] == conn["to_id"]),   0)
+            and pos_by_id.get(conn["from_id"], {}).get("x", 0)
+            > pos_by_id.get(conn["to_id"], {}).get("x", 0)
         )
 
         raw_layout = _compute_layout(components, connections)
@@ -329,8 +332,6 @@ def register(mcp: FastMCP) -> None:
                 "error_code": "LAYOUT_VALIDATION_FAILED", "invalid_ids": invalid,
             }
         layout = _clamp_positions(raw_layout)
-
-        pos_by_id = {c["id"]: {"x": c["x"], "y": c["y"]} for c in components}
         moves = [{"component_id": id_, "from": pos_by_id.get(id_, {}), "to": pos}
                  for id_, pos in layout.items()]
 
@@ -368,7 +369,7 @@ def register(mcp: FastMCP) -> None:
                     if r.get("ok"):
                         groups_added += 1
 
-        after = _gh_intel("gh2_get_canvas_graph", {"sample_size": 0}, rhino_id=rhino_id)
+        after = _gh_intel("gh2_get_canvas_graph", {"sample_size": 0}, rhino_id=rhino_id)  # 0 = return all components
         crossings_after = 0
         if after.get("ok"):
             after_comps = {c.get("instance_guid", c.get("id", "")): c
