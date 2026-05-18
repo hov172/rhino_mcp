@@ -1,8 +1,8 @@
 FROM python:3.13-slim
 
 LABEL org.opencontainers.image.title="rhino-mcp" \
-      org.opencontainers.image.version="0.11.0" \
-      org.opencontainers.image.description="MCP server for Rhino 3D — 334 tools" \
+      org.opencontainers.image.version="0.12.0" \
+      org.opencontainers.image.description="MCP server for Rhino 3D — 353 tools" \
       org.opencontainers.image.source="https://github.com/hov172/rhino_mcp"
 
 # System libraries required by Python dependencies:
