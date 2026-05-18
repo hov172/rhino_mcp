@@ -1,3 +1,7 @@
+<div align="center">
+  <img src="docs/images/readme_header_logo.png" alt="Rhino MCP Banner" width="100%" />
+</div>
+
 # Rhino MCP
 
 Control Rhino 3D from Claude, Cursor, Codex, and any other MCP-capable AI tool. Create geometry, manipulate objects, run Grasshopper definitions, manage layers and materials, install plugins, bake results, generate AI 3D models, read design documents (PDFs, drawings, floor plans, spreadsheets, Word docs, SVGs, images), and more — all through natural language.
