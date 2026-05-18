@@ -49,7 +49,7 @@ public static class CommandDispatcher
         {
             var result = request.Type switch
             {
-                "ping" => McpResponse.Ok(new { ok = true, version = "0.12.0", rhino = RhinoApp.Version.ToString(), host_app = DetectHostApp() }),
+                "ping" => McpResponse.Ok(new { ok = true, version = PluginVersion(), rhino = RhinoApp.Version.ToString(), host_app = DetectHostApp() }),
                 "get_document_summary" => McpResponse.Ok(RhinoHandlers.GetDocumentSummary()),
                 "get_objects" => McpResponse.Ok(RhinoHandlers.GetObjects(p)),
                 "get_object_info" => McpResponse.Ok(RhinoHandlers.GetObjectInfo(p)),
@@ -162,6 +162,13 @@ public static class CommandDispatcher
                 doc.EndUndoRecord(undoRecord);
         }
     }
+
+    private static string PluginVersion() =>
+        typeof(CommandDispatcher).Assembly
+            .GetCustomAttributes(typeof(System.Reflection.AssemblyInformationalVersionAttribute), false)
+            is System.Reflection.AssemblyInformationalVersionAttribute[] { Length: > 0 } attrs
+            ? attrs[0].InformationalVersion
+            : typeof(CommandDispatcher).Assembly.GetName().Version?.ToString() ?? "unknown";
 
     private static string DetectHostApp()
     {
