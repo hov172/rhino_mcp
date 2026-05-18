@@ -45,7 +45,7 @@ Control Rhino 3D from Claude, Cursor, Codex, and any other MCP-capable AI tool. 
   - [Manual Installation](#manual-installation)
   - [File-based Installation](#file-based-installation)
   - [Checking Plugin Status](#checking-plugin-status)
-- [All 353 Tools](#all-353-tools)
+- [All 300+ Tools](#all-353-tools)
   - [Plugin Management](#plugin-management)
   - [Grasshopper — Canvas](#grasshopper--canvas)
   - [Grasshopper — Parameters](#grasshopper--parameters)
@@ -151,7 +151,7 @@ Restart Rhino. The plugin loads automatically and starts its socket server on `1
 
 #### Step 3 — Verify the Python MCP server
 
-> **This is the MCP server — not another plugin.** It runs as a separate Python process outside Rhino and exposes the 353 tools to your AI client. Claude Desktop spawns it automatically from the cloned folder.
+> **This is the MCP server — not another plugin.** It runs as a separate Python process outside Rhino and exposes the 300+ tools to your AI client. Claude Desktop spawns it automatically from the cloned folder.
 
 ```bash
 uv run python -m rhmcp --help
@@ -208,7 +208,7 @@ The `command` + `args` lines are literally the shell command Claude Desktop runs
 
 #### Step 6 — Restart Claude Desktop and start using it
 
-Fully quit Claude Desktop (don't just close the window) and reopen it. Claude Desktop reads the config on launch, spawns the MCP server in the background, and the 353 Rhino tools become available automatically.
+Fully quit Claude Desktop (don't just close the window) and reopen it. Claude Desktop reads the config on launch, spawns the MCP server in the background, and the 300+ Rhino tools become available automatically.
 
 Test it by typing in Claude:
 
@@ -297,7 +297,7 @@ Same as Path A Step 4. Open Rhino — the plugin auto-starts and prints `Rhino M
 
 #### Step 5 — Restart Claude Desktop and start using it
 
-Fully quit and reopen Claude Desktop. It connects to the running container and the 353 tools appear.
+Fully quit and reopen Claude Desktop. It connects to the running container and the 300+ tools appear.
 
 **Connection flow:**
 ```
@@ -1443,7 +1443,7 @@ You can also call `check_plugin_loaded(plugin_name="V-Ray")` directly to test wh
 
 ---
 
-## All 353 Tools
+## All 300+ Tools
 
 ---
 
