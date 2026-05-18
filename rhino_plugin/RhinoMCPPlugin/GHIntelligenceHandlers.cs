@@ -42,17 +42,32 @@ public static class GHIntelligenceHandlers
 
                 foreach (var obj in comps)
                 {
-                    if (obj is not IGH_Component comp) continue;
-                    foreach (var op in comp.Params.Output)
+                    if (obj is IGH_Component comp)
                     {
-                        foreach (var r in op.Recipients)
+                        foreach (var op in comp.Params.Output)
+                        {
+                            foreach (var r in op.Recipients)
+                            {
+                                var toGuid = r.Attributes.GetTopLevel.DocObject.InstanceGuid;
+                                if (!fwd.ContainsKey(toGuid)) continue;
+                                fwd[obj.InstanceGuid].Add(toGuid);
+                                rev[toGuid].Add(obj.InstanceGuid);
+                                connectionCount++;
+                                // Backward edge heuristic: right-to-left wires cross left-to-right wires
+                                if (obj.Attributes.Pivot.X > r.Attributes.GetTopLevel.DocObject.Attributes.Pivot.X)
+                                    crossingEstimate++;
+                            }
+                        }
+                    }
+                    else if (obj is IGH_Param param)
+                    {
+                        foreach (var r in param.Recipients)
                         {
                             var toGuid = r.Attributes.GetTopLevel.DocObject.InstanceGuid;
                             if (!fwd.ContainsKey(toGuid)) continue;
                             fwd[obj.InstanceGuid].Add(toGuid);
                             rev[toGuid].Add(obj.InstanceGuid);
                             connectionCount++;
-                            // Backward edge heuristic: right-to-left wires cross left-to-right wires
                             if (obj.Attributes.Pivot.X > r.Attributes.GetTopLevel.DocObject.Attributes.Pivot.X)
                                 crossingEstimate++;
                         }
@@ -151,17 +166,37 @@ public static class GHIntelligenceHandlers
                     name = o.NickName ?? ""
                 }).ToList<object>();
 
+                var compGuids = new HashSet<Guid>(comps.Select(o => o.InstanceGuid));
                 var connections = new List<object>();
                 foreach (var obj in comps)
                 {
-                    if (obj is not IGH_Component comp) continue;
-                    foreach (var op in comp.Params.Output)
-                        foreach (var r in op.Recipients)
+                    if (obj is IGH_Component comp)
+                    {
+                        foreach (var op in comp.Params.Output)
+                            foreach (var r in op.Recipients)
+                            {
+                                var toGuid = r.Attributes.GetTopLevel.DocObject.InstanceGuid;
+                                if (!compGuids.Contains(toGuid)) continue;
+                                connections.Add(new
+                                {
+                                    from_id = obj.InstanceGuid.ToString(),
+                                    to_id   = toGuid.ToString()
+                                });
+                            }
+                    }
+                    else if (obj is IGH_Param param)
+                    {
+                        foreach (var r in param.Recipients)
+                        {
+                            var toGuid = r.Attributes.GetTopLevel.DocObject.InstanceGuid;
+                            if (!compGuids.Contains(toGuid)) continue;
                             connections.Add(new
                             {
                                 from_id = obj.InstanceGuid.ToString(),
-                                to_id   = r.Attributes.GetTopLevel.DocObject.InstanceGuid.ToString()
+                                to_id   = toGuid.ToString()
                             });
+                        }
+                    }
                 }
 
                 result = new { ok = true, components, connections };
