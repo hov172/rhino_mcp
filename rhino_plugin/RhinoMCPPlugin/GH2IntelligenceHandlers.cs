@@ -16,6 +16,13 @@ namespace RhinoMCPPlugin;
 /// </summary>
 public static class GH2IntelligenceHandlers
 {
+    // NOTE: All public handlers in this class use RhinoApp.InvokeOnUiThread, which
+    // is synchronous when called from the Rhino UI thread (as it is here via
+    // RhinoMcpServer.InvokeOnRhinoThread → CommandDispatcher.Dispatch). The inner
+    // lambda therefore executes and returns before InvokeOnUiThread itself returns,
+    // so capturing `result` in a closure and reading it afterwards is safe and correct.
+    // This matches the pattern used by GH2Handlers, GHDocumentHandlers, and GHCanvasHandlers.
+
     private static Assembly? _gh2Asm;
 
     private static Assembly? GetGH2Assembly()
@@ -189,7 +196,13 @@ public static class GH2IntelligenceHandlers
                         addMeth.Invoke(grp, new object[] { g });
 
                 // Add group to document
-                doc.GetType().GetMethod("AddObject")?.Invoke(doc, new object[] { grp, false });
+                var addDocMethod = doc.GetType().GetMethod("AddObject");
+                if (addDocMethod == null)
+                {
+                    result = new { ok = false, error = "GH2 document AddObject method not found in this build" };
+                    return;
+                }
+                addDocMethod.Invoke(doc, new object[] { grp, false });
 
                 var groupId = (groupType.GetProperty("InstanceGuid") ?? groupType.GetProperty("Id"))
                     ?.GetValue(grp)?.ToString() ?? Guid.NewGuid().ToString();
