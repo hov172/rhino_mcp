@@ -23,7 +23,7 @@ Versioning follows [Semantic Versioning](https://semver.org/).
 - `gh2_solve_graph` — expire and re-solve the active GH2 canvas
 - `gh2_clear_canvas` — clear all objects from the active GH2 canvas (requires `confirm=True`)
 
-All GH2 handlers use runtime reflection — no compile-time dependency on Grasshopper2.dll. Two-tier graceful degradation: returns a clear error when GH2 is not loaded.
+All GH2 handlers use runtime reflection — no compile-time dependency on Grasshopper2.dll. Two-tier graceful degradation: returns a clear error when GH2 is not loaded. **Requires Rhino 9** — Grasshopper 2 is not available in stable Rhino 8.
 
 **Multi-Rhino instance management**
 

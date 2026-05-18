@@ -131,7 +131,7 @@ All GH commands require Grasshopper to be open.
 
 ### Grasshopper 2 Canvas
 
-All GH2 commands require Rhino 8 with Grasshopper 2 loaded. Commands use runtime reflection — no compile-time dependency on Grasshopper2.dll.
+All GH2 commands require **Rhino 9** with Grasshopper 2 loaded. Grasshopper 2 is not available in stable Rhino 8. Commands use runtime reflection — no compile-time dependency on Grasshopper2.dll. On Rhino 8, all GH2 commands return a clear error and degrade gracefully.
 
 | Command | Description |
 |---|---|
@@ -155,6 +155,26 @@ All command handlers that touch Rhino or Grasshopper state run on the Rhino main
 
 ---
 
+## Upgrading
+
+Having two copies of the plugin installed simultaneously causes a port conflict — both attempt to bind port 1999 on load and the second one fails silently. Before upgrading, remove the old installation:
+
+```bash
+# macOS — remove from both possible locations
+rm -f "$HOME/Library/Application Support/McNeel/Rhinoceros/8.0/Plug-ins/rhino-mcp.rhp"
+rm -rf "$HOME/Library/Application Support/McNeel/Rhinoceros/packages/8.0/rhino-mcp"
+```
+
+```powershell
+# Windows
+Remove-Item "$env:APPDATA\McNeel\Rhinoceros\8.0\Plug-ins\rhino-mcp.rhp" -ErrorAction SilentlyContinue
+Remove-Item "$env:APPDATA\McNeel\Rhinoceros\packages\8.0\rhino-mcp" -Recurse -ErrorAction SilentlyContinue
+```
+
+Restart Rhino, then install the new version.
+
+---
+
 ## Building
 
 ```bash
@@ -163,6 +183,8 @@ All command handlers that touch Rhino or Grasshopper state run on the Rhino main
 ```
 
 On macOS, the PostBuild step in `RhinoMCPPlugin.csproj` copies the built `rhino-mcp.rhp` to `/Applications/Rhino 8.app/Contents/PlugIns/` automatically. Restart Rhino after each build.
+
+> **If you previously installed via Yak or PackageManager**, remove the Yak package before building from source — otherwise both copies will try to load and the build copy will lose the port race. Run `rm -rf "$HOME/Library/Application Support/McNeel/Rhinoceros/packages/8.0/rhino-mcp"` (macOS) first.
 
 ```bash
 # Package for Yak distribution

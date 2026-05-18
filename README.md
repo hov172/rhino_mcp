@@ -15,6 +15,7 @@ Control Rhino 3D from Claude, Cursor, Codex, and any other MCP-capable AI tool. 
 - [Architecture Overview](#architecture-overview)
 - [Requirements](#requirements)
 - [Installation](#installation)
+  - [Upgrading from a Previous Version](#upgrading-from-a-previous-version)
   - [1. Install the Rhino Plugin](#1-install-the-rhino-plugin)
   - [2. Install the Python MCP Server](#2-install-the-python-mcp-server)
   - [3. Configure API Keys (Studio Pipeline)](#3-configure-api-keys-studio-pipeline)
@@ -310,7 +311,7 @@ Claude Desktop → HTTP → localhost:8000 (Docker container)
 |---|---|
 | **Plugin Management** | Check if a plugin is installed, automatically install via Yak, install from `.gha`/`.rhp`/`.rhi` files, list all loaded plugins, introspect any plugin's commands |
 | **Grasshopper** | Place components, draw wires, set sliders/panels, run solutions, bake geometry to Rhino doc, add script components |
-| **Grasshopper 2 (GH2)** | Start GH2 editor, get canvas graph, atomically apply a full graph (components + wires), place components/sliders, connect wires, describe components, search component library, solve, clear canvas. `gh2_apply_graph` is the recommended way to build complex GH2 definitions in one round-trip. |
+| **Grasshopper 2 (GH2)** | Start GH2 editor, get canvas graph, atomically apply a full graph (components + wires), place components/sliders, connect wires, describe components, search component library, solve, clear canvas. `gh2_apply_graph` is the recommended way to build complex GH2 definitions in one round-trip. **Requires Rhino 9** (not available in stable Rhino 8). |
 | **GH — Pufferfish** | Tween curves, morph geometry between surfaces, blend surfaces, twist and bend objects |
 | **GH — Weaverbird** | Catmull-Clark / Loop / Butterfly subdivision, mesh frame, mesh thickening, face extrusion |
 | **GH — LunchBox** | Quad, triangle, diamond, and hexagonal paneling on surfaces; space frame generation |
@@ -477,6 +478,48 @@ A `rhinocode` fallback path (Rhino 8.11+ only) is also available for most non-Gr
 ---
 
 ## Installation
+
+### Upgrading from a Previous Version
+
+> **Important:** Having two copies of the plugin installed at the same time causes a port conflict — both try to bind port 1999 on load and the second one fails silently. Always remove the old installation before installing a new version.
+
+#### Step 1 — Remove the old plugin
+
+**macOS — check both locations:**
+
+```bash
+# Remove from user plug-ins folder (manual .rhp install)
+rm -f "$HOME/Library/Application Support/McNeel/Rhinoceros/8.0/Plug-ins/rhino-mcp.rhp"
+
+# Remove Yak-installed package (if you installed via yak or PackageManager)
+rm -rf "$HOME/Library/Application Support/McNeel/Rhinoceros/packages/8.0/rhino-mcp"
+```
+
+**Windows — check both locations:**
+
+```powershell
+# Remove from user plug-ins folder (manual .rhp install)
+Remove-Item "$env:APPDATA\McNeel\Rhinoceros\8.0\Plug-ins\rhino-mcp.rhp" -ErrorAction SilentlyContinue
+
+# Remove Yak-installed package (if you installed via yak or PackageManager)
+Remove-Item "$env:APPDATA\McNeel\Rhinoceros\packages\8.0\rhino-mcp" -Recurse -ErrorAction SilentlyContinue
+```
+
+> **Not sure which install method you used?** Remove both. If neither path exists, nothing happens.
+
+#### Step 2 — Restart Rhino
+
+Close Rhino completely before installing the new version. Rhino caches loaded plugin state in memory — a full restart ensures the old plugin is unloaded.
+
+#### Step 3 — Install the new version
+
+Follow the [Install the Rhino Plugin](#1-install-the-rhino-plugin) instructions below using the latest `.rhp` or `.yak` from [GitHub Releases](https://github.com/hov172/rhino_mcp/releases).
+
+#### Step 4 — Verify auto-start
+
+After restarting Rhino you should see `Rhino MCP listening on 127.0.0.1:1999` in the command history. If the message doesn't appear, type `MCPStart` manually, then run `MCPStatus` to confirm. If you still see a port error, a stale install may remain — re-check both paths in Step 1.
+
+---
 
 ### Quick install options
 
@@ -1478,7 +1521,7 @@ Requires the plugin backend and Grasshopper to be open in Rhino.
 
 ### Grasshopper 2 (GH2)
 
-Requires Rhino 8 with Grasshopper 2 installed. All GH2 handlers use runtime reflection — no compile-time dependency on Grasshopper2.dll. Returns a clear error when GH2 is not loaded.
+Requires **Rhino 9** with Grasshopper 2 installed. Grasshopper 2 is not included in stable Rhino 8 — it ships with Rhino 9. All GH2 handlers use runtime reflection — no compile-time dependency on Grasshopper2.dll. Returns a clear error when GH2 is not available, so tools degrade gracefully on Rhino 8.
 
 Every GH2 tool accepts an optional `rhino_id` parameter (from `get_rhino_instances`) to target a specific Rhino instance.
 
