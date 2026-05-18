@@ -348,6 +348,26 @@ class TestGhMigrateToGh2(unittest.TestCase):
         self.assertIn("unmapped", result)
         self.assertIsInstance(result["unmapped"], list)
 
+    def test_close_gh1_calls_close_definition(self):
+        """close_gh1=True must call gh_close_definition."""
+        fn = self.tools["gh_migrate_to_gh2"]
+
+        def mock_plugin(command, params, rhino_id=None):
+            if command == "gh1_export_migration_data":
+                return {"ok": True, "count": 0, "components": []}
+            if command in ("gh2_start", "gh2_apply_graph"):
+                return {"ok": True, "placed": {}, "wired": 0, "errors": []}
+            if command == "gh_close_definition":
+                return {"ok": True}
+            return {"ok": False, "error": f"unexpected: {command}"}
+
+        with patch("rhmcp.tools_helpers.backend.plugin_result", side_effect=mock_plugin) as mock_pr:
+            result = fn(confirm=True, close_gh1=True)
+
+        self.assertTrue(result.get("gh1_closed"))
+        close_calls = [c for c in mock_pr.call_args_list if c.args[0] == "gh_close_definition"]
+        self.assertEqual(len(close_calls), 1)
+
 
 if __name__ == "__main__":
     unittest.main()

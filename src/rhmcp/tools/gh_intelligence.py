@@ -473,7 +473,7 @@ def register(mcp: FastMCP) -> None:
         # Step 5: optionally close GH1
         gh1_closed = False
         if close_gh1:
-            close_result = _gh_intel("gh_close_document", {}, rhino_id=rhino_id)
+            close_result = _gh_intel("gh_close_definition", {}, rhino_id=rhino_id)
             gh1_closed = close_result.get("ok", False)
 
         return {
