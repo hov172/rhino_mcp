@@ -32,19 +32,6 @@ _PLUGIN_OK_ANALYSIS = {
     "suggestions": ["5 wire crossings detected"],
 }
 
-_PLUGIN_OK_GRAPH = {
-    "ok": True,
-    "components": [
-        {"id": "aaa", "x": 0.0, "y": 0.0, "name": "Point"},
-        {"id": "bbb", "x": 200.0, "y": 0.0, "name": "Circle"},
-        {"id": "ccc", "x": 400.0, "y": 0.0, "name": "Extrude"},
-    ],
-    "connections": [
-        {"from_id": "aaa", "to_id": "bbb"},
-        {"from_id": "bbb", "to_id": "ccc"},
-    ],
-}
-
 
 class TestLayoutUtility(unittest.TestCase):
     def setUp(self):

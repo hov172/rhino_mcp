@@ -21,7 +21,7 @@ from rhmcp.tools_helpers import backend as rhino
 
 _MAX_COORD = 100_000.0
 _MAP_PATH = Path(__file__).parent.parent / "data" / "gh1_to_gh2_map.yml"
-_GROUP_NAME_RE = re.compile(r'^[\w\s.\-]{1,64}$')
+_GROUP_NAME_RE = re.compile(r'^[\w\s.\-]{1,64}$')  # used by gh_refactor_canvas for group label validation
 _LAYER_W = 200.0    # horizontal spacing between layers
 _NODE_H  = 120.0    # vertical spacing within a layer
 
@@ -39,7 +39,7 @@ def _compute_layout(
     components: list of {id, x, y, name}
     connections: list of {from_id, to_id}
     Returns dict of {id: {x: float, y: float}} with left-to-right data flow.
-    Nodes in cycles or with no path keep their relative position at layer 0.
+    Nodes in cycles or unreachable nodes are placed at layer 0 with fresh coordinates.
     """
     ids    = [c["id"] for c in components]
     id_set = set(ids)
