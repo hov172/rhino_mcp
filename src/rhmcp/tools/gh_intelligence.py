@@ -21,7 +21,7 @@ from rhmcp.tools_helpers import backend as rhino
 
 _MAX_COORD = 100_000.0
 _MAP_PATH = Path(__file__).parent.parent / "data" / "gh1_to_gh2_map.yml"
-_GROUP_NAME_RE = re.compile(r'^[\w\s.\-]{1,64}$')  # used by gh_refactor_canvas for group label validation
+_GROUP_NAME_RE = re.compile(r'^[\w\s.\-]{1,64}$')  # group label validation pattern for user-supplied labels
 _LAYER_W = 200.0    # horizontal spacing between layers
 _NODE_H  = 120.0    # vertical spacing within a layer
 
