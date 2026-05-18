@@ -567,7 +567,7 @@ Then restart Rhino. The plugin loads automatically on startup.
 
 #### Option B — Install via Yak CLI
 
-Download [`rhino-mcp-0.12.0-rh8_17-any.yak`](https://github.com/hov172/rhino_mcp/releases/download/v0.11.0/rhino-mcp-0.12.0-rh8_17-any.yak) from the latest release, then run:
+Download [`rhino-mcp-0.12.0-rh8_17-any.yak`](https://github.com/hov172/rhino_mcp/releases/download/v0.12.0/rhino-mcp-0.12.0-rh8_17-any.yak) from the latest release, then run:
 
 ```bash
 # macOS
