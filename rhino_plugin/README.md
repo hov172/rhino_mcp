@@ -8,12 +8,12 @@ The Rhino-side TCP socket server for the Rhino MCP project. This plugin runs ins
 
 | Command | Description |
 |---|---|
-| `MCPStart` | Start the socket server. Binds to `127.0.0.1:1999` by default. Prints confirmation: `RhinoMCP: Listening on 127.0.0.1:1999`. |
+| `MCPStart` | Manually start the socket server (fallback if auto-start failed). Binds to `127.0.0.1:1999` by default. Prints `Rhino MCP listening on 127.0.0.1:1999`. |
 | `MCPStop` | Stop the socket server and release the port. |
 | `MCPStatus` | Print the current server status. Prints `Rhino MCP server running on {address}:{port}` or `Rhino MCP server is stopped.` |
 | `MCPHelp` | Open the full documentation in the default browser. |
 
-**Auto-start tip:** Add `MCPStart` to *Rhino Options → General → Command Lists → Startup commands* so the server starts automatically every time Rhino opens.
+**Auto-start:** The plugin starts its TCP server automatically when Rhino opens — no `MCPStart` required. You should see `Rhino MCP listening on 127.0.0.1:1999` in the command history immediately after Rhino loads. `MCPStart` is available as a manual fallback if auto-start fails (e.g. port conflict).
 
 ---
 

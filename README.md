@@ -143,7 +143,7 @@ Restart Rhino. The plugin loads automatically and starts its socket server on `1
 
 > **This is the only file that goes into Rhino.** The `rhino_plugin/package/rhino-mcp.rhp` file is the Rhino plugin binary. The rest of the repo (the `src/` folder) is the Python MCP server — a completely separate process that never touches Rhino's plug-ins folder.
 >
-> **Don't have the repo yet?** You can also download [`rhino-mcp.rhp`](https://github.com/hov172/rhino_mcp/releases/download/v0.12.0/rhino-mcp.rhp) directly from the latest release and copy it from `~/Downloads/` instead.
+> **Don't have the repo yet?** You can also download [`rhino-mcp.rhp`](https://github.com/hov172/rhino_mcp/releases/download/v0.12.1/rhino-mcp.rhp) directly from the latest release and copy it from `~/Downloads/` instead.
 
 #### Step 3 — Verify the Python MCP server
 
@@ -548,7 +548,7 @@ The plugin is a `.rhp` file that runs a TCP socket server inside Rhino on port 1
 
 #### Option A — Copy the pre-built `.rhp` directly (fastest)
 
-Download [`rhino-mcp.rhp`](https://github.com/hov172/rhino_mcp/releases/download/v0.12.0/rhino-mcp.rhp) from the latest release, then copy it to the Rhino plug-ins folder:
+Download [`rhino-mcp.rhp`](https://github.com/hov172/rhino_mcp/releases/download/v0.12.1/rhino-mcp.rhp) from the latest release, then copy it to the Rhino plug-ins folder:
 
 ```bash
 # macOS — user plug-ins folder (no admin rights needed)
@@ -567,16 +567,16 @@ Then restart Rhino. The plugin loads automatically on startup.
 
 #### Option B — Install via Yak CLI
 
-Download [`rhino-mcp-0.12.0-rh8_17-any.yak`](https://github.com/hov172/rhino_mcp/releases/download/v0.12.0/rhino-mcp-0.12.0-rh8_17-any.yak) from the latest release, then run:
+Download [`rhino-mcp-0.12.1-rh8_17-any.yak`](https://github.com/hov172/rhino_mcp/releases/download/v0.12.1/rhino-mcp-0.12.1-rh8_17-any.yak) from the latest release, then run:
 
 ```bash
 # macOS
-"/Applications/Rhino 8.app/Contents/Resources/bin/yak" install --source ~/Downloads/rhino-mcp-0.12.0-rh8_17-any.yak
+"/Applications/Rhino 8.app/Contents/Resources/bin/yak" install --source ~/Downloads/rhino-mcp-0.12.1-rh8_17-any.yak
 ```
 
 ```powershell
 # Windows
-& "C:\Program Files\Rhino 8\System\yak.exe" install --source "$env:USERPROFILE\Downloads\rhino-mcp-0.12.0-rh8_17-any.yak"
+& "C:\Program Files\Rhino 8\System\yak.exe" install --source "$env:USERPROFILE\Downloads\rhino-mcp-0.12.1-rh8_17-any.yak"
 ```
 
 Restart Rhino after the install completes.
@@ -1922,7 +1922,7 @@ Read external design files — floor plans, specifications, spreadsheets, and re
 | `execute_rhino_python` | Run arbitrary Python code inside Rhino with full RhinoScriptSyntax and RhinoCommon access. Assign a JSON-serialisable value to `result` to return data. **Auto-revert:** if the script raises an exception, any objects added during that run are automatically deleted, keeping the document clean. Pass `verified_functions=["rs.AddBox", ...]` to document which API calls were looked up — omitting it adds an `api_warning` to the response as a reminder to verify RhinoScript names before use. |
 | `execute_rhino_csharp` | Run arbitrary C# code inside Rhino via Roslyn scripting. Returns stdout output or document changes. Requires RhinoCode C# support (Rhino 8). |
 | `get_rhino_commands` | List all available Rhino command names, optionally filtered by substring (`filter="circle"`). `loaded_only=true` (default) limits to loaded plugins. Call this before `run_rhino_command` to discover exact spellings. |
-| `run_rhino_command` | Execute a Rhino command macro string (e.g. `_Box 0,0,0 1,1,1`). `echo=true` echoes the command to Rhino's history. Returns `output` with captured command-window text so the AI can read results. Requires `MCPStart` in Rhino. |
+| `run_rhino_command` | Execute a Rhino command macro string (e.g. `_Box 0,0,0 1,1,1`). `echo=true` echoes the command to Rhino's history. Returns `output` with captured command-window text so the AI can read results. Requires the Rhino plugin to be running (auto-starts with Rhino). |
 | `list_tool_categories` | **Start here for complex tasks.** Returns all 353 tool categories with counts. Use `include_tool_names=true` to list every tool name per category without loading all 353 descriptions into context. |
 | `search_rhino_docs` | Full-text search of bundled Rhino scripting notes. |
 | `get_rhinoscript_docs` | Look up RhinoScriptSyntax module-level documentation. Pass a module name (`"curve"`, `"surface"`, `"object"`, etc.) to list its functions. |
