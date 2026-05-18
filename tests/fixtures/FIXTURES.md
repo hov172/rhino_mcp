@@ -65,19 +65,117 @@ Keep it simple: 4–6 components, a few wires. No clusters needed.
 
 **Required by:** `TestGh2RefactorCanvas` (Rhino 9 only)
 
+**Status:** ⚠️ NOT YET CREATED — requires Rhino 9. `TestGh2RefactorCanvas` auto-skips on Rhino 8.
+
 **What it should contain:**
 
 Same structure as `messy_canvas.gh` but saved as a GH2 definition in Rhino 9.
 
 - 12+ components in a tangled layout
-- ≥8 wire crossings
-- No pre-existing groups
+- ≥8 wire crossings (wires going right-to-left count as crossings)
+- No pre-existing groups (the refactor tool will add them)
 
-**How to create:**
+**How to create (Rhino 9 + Rhino MCP running):**
 
-1. Open Rhino 9 and start GH2 (`Grasshopper2` command)
-2. Build an equivalent messy canvas as described for `messy_canvas.gh`
-3. Save as `tests/fixtures/messy_gh2_canvas.gh`
+The fastest path is to use the Rhino MCP `execute_rhinoscript_python_code` tool or paste
+the script below into **Tools → PythonScript → Edit** in Rhino 9 and run it. It uses
+the GH2 Python API directly to build the canvas programmatically.
+
+```python
+# Run inside Rhino 9 with Grasshopper2 loaded.
+# Paste into Tools > PythonScript > Edit and click Run.
+import Rhino
+import System.Drawing as sd
+
+# Open GH2
+Rhino.RhinoApp.RunScript("Grasshopper2", False)
+
+# Get the GH2 document
+import clr
+clr.AddReference("Grasshopper2")
+import Grasshopper2 as GH2
+
+doc = GH2.Instances.ActiveCanvas.Document
+
+# Helper: place a component by type name
+def place(type_name, x, y):
+    comp = doc.CreateObject(type_name)
+    if comp is None:
+        raise Exception("Unknown type: " + type_name)
+    comp.Attributes.Pivot = sd.PointF(x, y)
+    doc.AddObject(comp, False)
+    return comp
+
+# Helper: wire output → input
+def wire(src, src_idx, dst, dst_idx):
+    dst.Params.Input[dst_idx].AddSource(src.Params.Output[src_idx])
+
+# --- Cluster A: math (left side, sources far right so wires cross) ---
+sl1  = place("NumberSlider", 800, 100)
+sl2  = place("NumberSlider", 800, 200)
+sl3  = place("NumberSlider", 800, 300)
+add1 = place("Addition",     400, 150)
+sub1 = place("Subtraction",  400, 250)
+pan1 = place("Panel",        100, 200)
+
+wire(sl1, 0, add1, 0)
+wire(sl2, 0, add1, 1)
+wire(sl2, 0, sub1, 0)
+wire(sl3, 0, sub1, 1)
+wire(add1, 0, pan1, 0)
+
+# --- Cluster B: geometry (middle) ---
+sl4  = place("NumberSlider", 800, 450)
+sl5  = place("NumberSlider", 800, 550)
+mul1 = place("Multiplication", 400, 500)
+pt1  = place("Point",          100, 500)
+
+wire(sl4, 0, mul1, 0)
+wire(sl5, 0, mul1, 1)
+wire(mul1, 0, pt1, 0)   # X
+wire(sub1, 0, pt1, 1)   # Y — crosses cluster A wires
+
+# --- Cluster C: output (bottom) ---
+sl6  = place("NumberSlider", 800, 700)
+sl7  = place("NumberSlider", 800, 800)
+div1 = place("Division",     400, 750)
+pan2 = place("Panel",        100, 750)
+
+wire(sl6, 0, div1, 0)
+wire(sl7, 0, div1, 1)
+wire(div1, 0, pan2, 0)
+
+doc.NewSolution(False)
+
+# Save
+import os
+repo = os.path.expanduser("~/Developer/GitHub/rhino_mcp")  # adjust if needed
+path = os.path.join(repo, "tests", "fixtures", "messy_gh2_canvas.gh")
+doc.SaveAs(path)
+print("Saved: " + path)
+```
+
+**Adjust the `repo` path** on line near the end if your clone is not at
+`~/Developer/GitHub/rhino_mcp`.
+
+**Manual alternative (if the script fails):**
+
+1. Open Rhino 9 and run the `Grasshopper2` command.
+2. Add 3 Number Sliders, connect them to Addition and Subtraction components.
+3. Feed outputs into Point and Panel components.
+4. Add 3–4 more sliders connected to Multiply and Division, feeding another Panel.
+5. Arrange components so sources are to the **right** of their targets — this creates
+   backward wires that the crossing heuristic counts (aim for ≥8).
+6. Do **not** add any GH groups.
+7. File → Save As → `tests/fixtures/messy_gh2_canvas.gh`
+
+**Verification after creation:**
+
+```bash
+uv run pytest tests/test_gh_intelligence_integration.py::TestGh2RefactorCanvas -v -m integration
+```
+
+Expected: 1 test collected and passing (not skipped).
 
 ---
 
