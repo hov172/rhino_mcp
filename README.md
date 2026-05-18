@@ -41,13 +41,14 @@ Control Rhino 3D from Claude, Cursor, Codex, and any other MCP-capable AI tool. 
   - [Manual Installation](#manual-installation)
   - [File-based Installation](#file-based-installation)
   - [Checking Plugin Status](#checking-plugin-status)
-- [All 347 Tools](#all-347-tools)
+- [All 353 Tools](#all-353-tools)
   - [Plugin Management](#plugin-management)
   - [Grasshopper — Canvas](#grasshopper--canvas)
   - [Grasshopper — Parameters](#grasshopper--parameters)
   - [Grasshopper — Solution & Baking](#grasshopper--solution--baking)
   - [Grasshopper — Definition Management](#grasshopper--definition-management)
   - [Grasshopper 2 (GH2)](#grasshopper-2-gh2)
+  - [Grasshopper — Intelligence (GH1 Analysis, Refactor & Migration)](#grasshopper--intelligence-gh1-analysis-refactor--migration)
   - [Grasshopper — Pufferfish (Geometry Morphing)](#grasshopper--pufferfish-geometry-morphing)
   - [Grasshopper — Weaverbird (Mesh Subdivision)](#grasshopper--weaverbird-mesh-subdivision)
   - [Grasshopper — LunchBox (Paneling)](#grasshopper--lunchbox-paneling)
@@ -142,11 +143,11 @@ Restart Rhino. The plugin loads automatically and starts its socket server on `1
 
 > **This is the only file that goes into Rhino.** The `rhino_plugin/package/rhino-mcp.rhp` file is the Rhino plugin binary. The rest of the repo (the `src/` folder) is the Python MCP server — a completely separate process that never touches Rhino's plug-ins folder.
 >
-> **Don't have the repo yet?** You can also download [`rhino-mcp.rhp`](https://github.com/hov172/rhino_mcp/releases/download/v0.11.0/rhino-mcp.rhp) directly from the latest release and copy it from `~/Downloads/` instead.
+> **Don't have the repo yet?** You can also download [`rhino-mcp.rhp`](https://github.com/hov172/rhino_mcp/releases/download/v0.12.0/rhino-mcp.rhp) directly from the latest release and copy it from `~/Downloads/` instead.
 
 #### Step 3 — Verify the Python MCP server
 
-> **This is the MCP server — not another plugin.** It runs as a separate Python process outside Rhino and exposes the 347 tools to your AI client. Claude Desktop spawns it automatically from the cloned folder.
+> **This is the MCP server — not another plugin.** It runs as a separate Python process outside Rhino and exposes the 353 tools to your AI client. Claude Desktop spawns it automatically from the cloned folder.
 
 ```bash
 uv run python -m rhmcp --help
@@ -203,7 +204,7 @@ The `command` + `args` lines are literally the shell command Claude Desktop runs
 
 #### Step 6 — Restart Claude Desktop and start using it
 
-Fully quit Claude Desktop (don't just close the window) and reopen it. Claude Desktop reads the config on launch, spawns the MCP server in the background, and the 347 Rhino tools become available automatically.
+Fully quit Claude Desktop (don't just close the window) and reopen it. Claude Desktop reads the config on launch, spawns the MCP server in the background, and the 353 Rhino tools become available automatically.
 
 Test it by typing in Claude:
 
@@ -292,7 +293,7 @@ Same as Path A Step 4. Open Rhino — the plugin auto-starts and prints `Rhino M
 
 #### Step 5 — Restart Claude Desktop and start using it
 
-Fully quit and reopen Claude Desktop. It connects to the running container and the 347 tools appear.
+Fully quit and reopen Claude Desktop. It connects to the running container and the 353 tools appear.
 
 **Connection flow:**
 ```
@@ -481,43 +482,57 @@ A `rhinocode` fallback path (Rhino 8.11+ only) is also available for most non-Gr
 
 ### Upgrading from a Previous Version
 
-> **Important:** Having two copies of the plugin installed at the same time causes a port conflict — both try to bind port 1999 on load and the second one fails silently. Always remove the old installation before installing a new version.
+> **Important:** Having two copies of the plugin installed at the same time causes a **port conflict** — both try to bind port 1999 on load, the second one fails silently, and Rhino gives no error. The result is that MCP commands either go to the wrong version or fail with `connection refused`, with no obvious indication of why.
 
-#### Step 1 — Remove the old plugin
+#### How to tell if you have a conflict
 
-**macOS — check both locations:**
+Run `MCPStatus` in the Rhino command line. If it says the server is running but MCP calls still fail, or if you see unexpected tool behaviour after upgrading, a stale copy is almost certainly the cause.
+
+You can also check what is loaded: in Rhino, go to **Tools → Options → Plug-ins** and search for "rhino-mcp". If two entries appear, or if the path shown is old, remove both and reinstall from scratch.
+
+#### Step 1 — Remove ALL old copies
+
+Check **both** install locations — you may have installed once via `.rhp` copy and once via Yak.
+
+**macOS:**
 
 ```bash
-# Remove from user plug-ins folder (manual .rhp install)
+# Manual .rhp install location
 rm -f "$HOME/Library/Application Support/McNeel/Rhinoceros/8.0/Plug-ins/rhino-mcp.rhp"
 
-# Remove Yak-installed package (if you installed via yak or PackageManager)
+# Yak / PackageManager install location
 rm -rf "$HOME/Library/Application Support/McNeel/Rhinoceros/packages/8.0/rhino-mcp"
 ```
 
-**Windows — check both locations:**
+> If the `rm` commands fail with "Operation not permitted" (macOS sandbox), open Finder, press `⌘⇧G`, paste the path, and delete the file/folder manually.
+
+**Windows:**
 
 ```powershell
-# Remove from user plug-ins folder (manual .rhp install)
+# Manual .rhp install location
 Remove-Item "$env:APPDATA\McNeel\Rhinoceros\8.0\Plug-ins\rhino-mcp.rhp" -ErrorAction SilentlyContinue
 
-# Remove Yak-installed package (if you installed via yak or PackageManager)
+# Yak / PackageManager install location
 Remove-Item "$env:APPDATA\McNeel\Rhinoceros\packages\8.0\rhino-mcp" -Recurse -ErrorAction SilentlyContinue
 ```
 
 > **Not sure which install method you used?** Remove both. If neither path exists, nothing happens.
 
-#### Step 2 — Restart Rhino
+#### Step 2 — Close Rhino completely
 
-Close Rhino completely before installing the new version. Rhino caches loaded plugin state in memory — a full restart ensures the old plugin is unloaded.
+Do not just close the Rhino window — quit the process. On macOS: `⌘Q` or right-click the Dock icon → Quit. On Windows: close all Rhino windows, then check Task Manager to confirm `Rhino.exe` is gone. Rhino keeps plugins in memory until the process exits — a full quit is required.
 
 #### Step 3 — Install the new version
 
 Follow the [Install the Rhino Plugin](#1-install-the-rhino-plugin) instructions below using the latest `.rhp` or `.yak` from [GitHub Releases](https://github.com/hov172/rhino_mcp/releases).
 
-#### Step 4 — Verify auto-start
+#### Step 4 — Restart Rhino and verify
 
-After restarting Rhino you should see `Rhino MCP listening on 127.0.0.1:1999` in the command history. If the message doesn't appear, type `MCPStart` manually, then run `MCPStatus` to confirm. If you still see a port error, a stale install may remain — re-check both paths in Step 1.
+After restarting Rhino you should see `Rhino MCP listening on 127.0.0.1:1999` in the command history. If it doesn't appear automatically, type `MCPStart` manually.
+
+Run `MCPStatus` — it should print the address and port. Run `ping` from the MCP client side (`uv run python -m rhmcp ping`) to confirm end-to-end connectivity.
+
+If you still see a port error after doing all this, open **Tools → Options → Plug-ins**, search "rhino-mcp", and check the path. If it points to an old location you missed, delete that file and restart Rhino again.
 
 ---
 
@@ -533,7 +548,7 @@ The plugin is a `.rhp` file that runs a TCP socket server inside Rhino on port 1
 
 #### Option A — Copy the pre-built `.rhp` directly (fastest)
 
-Download [`rhino-mcp.rhp`](https://github.com/hov172/rhino_mcp/releases/download/v0.11.0/rhino-mcp.rhp) from the latest release, then copy it to the Rhino plug-ins folder:
+Download [`rhino-mcp.rhp`](https://github.com/hov172/rhino_mcp/releases/download/v0.12.0/rhino-mcp.rhp) from the latest release, then copy it to the Rhino plug-ins folder:
 
 ```bash
 # macOS — user plug-ins folder (no admin rights needed)
@@ -552,16 +567,16 @@ Then restart Rhino. The plugin loads automatically on startup.
 
 #### Option B — Install via Yak CLI
 
-Download [`rhino-mcp-0.11.0-rh8_17-any.yak`](https://github.com/hov172/rhino_mcp/releases/download/v0.11.0/rhino-mcp-0.11.0-rh8_17-any.yak) from the latest release, then run:
+Download [`rhino-mcp-0.12.0-rh8_17-any.yak`](https://github.com/hov172/rhino_mcp/releases/download/v0.11.0/rhino-mcp-0.12.0-rh8_17-any.yak) from the latest release, then run:
 
 ```bash
 # macOS
-"/Applications/Rhino 8.app/Contents/Resources/bin/yak" install --source ~/Downloads/rhino-mcp-0.11.0-rh8_17-any.yak
+"/Applications/Rhino 8.app/Contents/Resources/bin/yak" install --source ~/Downloads/rhino-mcp-0.12.0-rh8_17-any.yak
 ```
 
 ```powershell
 # Windows
-& "C:\Program Files\Rhino 8\System\yak.exe" install --source "$env:USERPROFILE\Downloads\rhino-mcp-0.11.0-rh8_17-any.yak"
+& "C:\Program Files\Rhino 8\System\yak.exe" install --source "$env:USERPROFILE\Downloads\rhino-mcp-0.12.0-rh8_17-any.yak"
 ```
 
 Restart Rhino after the install completes.
@@ -1424,7 +1439,7 @@ You can also call `check_plugin_loaded(plugin_name="V-Ray")` directly to test wh
 
 ---
 
-## All 347 Tools
+## All 353 Tools
 
 ---
 
@@ -1546,6 +1561,37 @@ Every GH2 tool accepts an optional `rhino_id` parameter (from `get_rhino_instanc
 3. gh2_apply_graph(components=[...], wires=[...])  → place + wire atomically
 4. gh2_solve_graph()                        → solve and check errors
 5. gh2_get_canvas_graph()                   → inspect outputs
+```
+
+---
+
+### Grasshopper — Intelligence (GH1 Analysis, Refactor & Migration)
+
+Tools for analysing, reorganising, and migrating Grasshopper definitions. All read-only tools (`gh_get_canvas_analysis`, `gh_get_graph_data`, `gh1_export_migration_data`) work on the active GH1 canvas. Write tools route through the appropriate GH1 or GH2 handlers.
+
+| Tool | Description |
+|---|---|
+| `gh_get_canvas_analysis` | Analyse the active GH1 canvas: component count, wire count, estimated wire crossings, identified logical clusters (groups of connected components), and orphaned components. Returns structured data for the AI to decide how to refactor. |
+| `gh_get_graph_data` | Export the full component graph as nodes + edges. Includes each component's instance GUID, type, canvas position, and all wire connections. Used as input for layout-optimisation reasoning. |
+| `gh_refactor_canvas` | Refactor the active GH1 canvas: re-layout components to reduce wire crossings and add named groups for each detected logical cluster. Optional `dry_run=true` returns the proposed moves without applying them. Returns `{moved: N, groups_added: N}`. |
+| `gh1_export_migration_data` | Export migration metadata from the active GH1 canvas: each component's instance GUID, type GUID, type name, and canvas position. Cross-references `gh1_to_gh2_map.yml` to indicate which components have a known GH2 equivalent and which are `unmapped`. |
+| `gh_migrate_to_gh2` | Migrate the active GH1 canvas to GH2. Reads migration data, opens GH2, places GH2 equivalents for all mapped components, and wires them. Returns `{placed: N, wired: N, unmapped: [...]}`. Components without a GH2 equivalent are listed in `unmapped` but do not block the migration. Requires Rhino 9. |
+| `gh2_move_component` | Move a GH2 component to new canvas coordinates. Accepts `instance_guid` and `x`/`y` canvas position. |
+| `gh2_add_group` | Create a named group in the GH2 canvas around a list of component instance GUIDs. Optional `color` as `[r, g, b]`. |
+
+**Recommended GH Intelligence workflow (GH1 → cleaner GH1):**
+```
+1. gh_get_canvas_analysis()      → understand current state (crossings, clusters)
+2. gh_refactor_canvas(dry_run=True)  → preview proposed moves and groups
+3. gh_refactor_canvas()          → apply layout + grouping
+```
+
+**Recommended GH1 → GH2 migration workflow:**
+```
+1. gh1_export_migration_data()   → see what maps and what doesn't
+2. gh_migrate_to_gh2()           → place GH2 equivalents + wire them
+3. gh2_solve_graph()             → check for errors
+4. gh2_get_canvas_graph()        → inspect outputs
 ```
 
 ---
@@ -1870,7 +1916,7 @@ Read external design files — floor plans, specifications, spreadsheets, and re
 | `execute_rhino_csharp` | Run arbitrary C# code inside Rhino via Roslyn scripting. Returns stdout output or document changes. Requires RhinoCode C# support (Rhino 8). |
 | `get_rhino_commands` | List all available Rhino command names, optionally filtered by substring (`filter="circle"`). `loaded_only=true` (default) limits to loaded plugins. Call this before `run_rhino_command` to discover exact spellings. |
 | `run_rhino_command` | Execute a Rhino command macro string (e.g. `_Box 0,0,0 1,1,1`). `echo=true` echoes the command to Rhino's history. Returns `output` with captured command-window text so the AI can read results. Requires `MCPStart` in Rhino. |
-| `list_tool_categories` | **Start here for complex tasks.** Returns all 347 tool categories with counts. Use `include_tool_names=true` to list every tool name per category without loading all 347 descriptions into context. |
+| `list_tool_categories` | **Start here for complex tasks.** Returns all 353 tool categories with counts. Use `include_tool_names=true` to list every tool name per category without loading all 353 descriptions into context. |
 | `search_rhino_docs` | Full-text search of bundled Rhino scripting notes. |
 | `get_rhinoscript_docs` | Look up RhinoScriptSyntax module-level documentation. Pass a module name (`"curve"`, `"surface"`, `"object"`, etc.) to list its functions. |
 | `search_rhinoscript_functions` | Search RhinoScriptSyntax function reference by name or keyword. **Always call this before writing Python scripts** to avoid hallucinated function names. |

@@ -157,21 +157,47 @@ All command handlers that touch Rhino or Grasshopper state run on the Rhino main
 
 ## Upgrading
 
-Having two copies of the plugin installed simultaneously causes a port conflict — both attempt to bind port 1999 on load and the second one fails silently. Before upgrading, remove the old installation:
+Having two copies of the plugin installed simultaneously causes a **port conflict** — both attempt to bind port 1999 on load, the second one fails silently, and all MCP calls go to the wrong version or return `connection refused`. Rhino does not warn you.
+
+### Step 1 — Remove ALL old copies
+
+There are two possible install locations. Check both — you may have installed once via `.rhp` copy and once via Yak or PackageManager.
+
+**macOS:**
 
 ```bash
-# macOS — remove from both possible locations
+# Manual .rhp install
 rm -f "$HOME/Library/Application Support/McNeel/Rhinoceros/8.0/Plug-ins/rhino-mcp.rhp"
+
+# Yak / PackageManager install
 rm -rf "$HOME/Library/Application Support/McNeel/Rhinoceros/packages/8.0/rhino-mcp"
 ```
 
+> If `rm` fails with "Operation not permitted" (macOS sandbox), use Finder: press `⌘⇧G`, paste the path, and delete manually.
+
+**Windows:**
+
 ```powershell
-# Windows
+# Manual .rhp install
 Remove-Item "$env:APPDATA\McNeel\Rhinoceros\8.0\Plug-ins\rhino-mcp.rhp" -ErrorAction SilentlyContinue
+
+# Yak / PackageManager install
 Remove-Item "$env:APPDATA\McNeel\Rhinoceros\packages\8.0\rhino-mcp" -Recurse -ErrorAction SilentlyContinue
 ```
 
-Restart Rhino, then install the new version.
+Not sure which method you used? Remove both — if neither exists, nothing happens.
+
+### Step 2 — Quit Rhino completely
+
+Close all Rhino windows and confirm the process is gone (Task Manager on Windows, Activity Monitor on macOS). Rhino holds plugins in memory until the process exits — closing the window is not enough.
+
+### Step 3 — Install the new version
+
+Copy the new `.rhp` to the plug-ins folder or run the Yak installer. See the main [README.md](../README.md#upgrading-from-a-previous-version) for full instructions.
+
+### Step 4 — Verify
+
+Restart Rhino. You should see `Rhino MCP listening on 127.0.0.1:1999` in the command history. Run `MCPStatus` to confirm. If a port error appears, go to **Tools → Options → Plug-ins**, search "rhino-mcp", and check whether an old path is still registered.
 
 ---
 

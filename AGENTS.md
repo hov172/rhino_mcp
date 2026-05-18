@@ -8,10 +8,10 @@ This file gives AI coding agents (Claude, Codex, Gemini, etc.) the context neede
 
 **rhino-mcp** is an MCP (Model Context Protocol) server that lets AI assistants control Rhino 3D. It has two components:
 
-1. **Python MCP server** (`src/rhmcp/`) — FastMCP-based server exposing 347 tools to AI clients
+1. **Python MCP server** (`src/rhmcp/`) — FastMCP-based server exposing 353 tools to AI clients
 2. **C# Rhino plugin** (`rhino_plugin/`) — TCP socket server inside Rhino (port 1999) that receives and executes commands
 
-Current version: **0.11.0**
+Current version: **0.12.0**
 
 ---
 
@@ -45,6 +45,8 @@ Rhino 3D document
 | `src/rhmcp/tools_helpers/slot_registry.py` | Multi-Rhino slot registry: `discover()`, `get()`, `wait_for_slot()` — reads `{pid}.json` files from system temp dir |
 | `src/rhmcp/tools_helpers/rhino_launcher.py` | Auto-launch Rhino and wait for slot announcement: `find_rhino()`, `launch()` |
 | `src/rhmcp/tools/gh2.py` | 11 GH2 tools — `rhino_id` aware, routes via `rhino.plugin_result()` |
+| `src/rhmcp/tools/gh_intelligence.py` | GH Intelligence tools: `gh_get_canvas_analysis`, `gh_get_graph_data`, `gh_refactor_canvas`, `gh1_export_migration_data`, `gh_migrate_to_gh2` |
+| `src/rhmcp/tools/gh2_intelligence.py` | GH2 write tools: `gh2_move_component`, `gh2_add_group` |
 | `src/rhmcp/tools/slots.py` | `get_rhino_instances` (slot discovery) and `launch_rhino` (auto-launch) |
 | `src/rhmcp/tools_helpers/errors.py` | `normalize()` — ensures consistent `ok`/`error` shape |
 | `rhino_plugin/RhinoMCPPlugin/` | C# Rhino plugin source |
@@ -108,7 +110,7 @@ All return `{"ok": False, "error": "...", "error_code": "..."}` on failure, `Non
 
 ```bash
 # Unit + smoke + script-syntax + security (no Rhino needed)
-uv run pytest tests/ --ignore=tests/test_integration.py --ignore=tests/test_gh_integration.py --ignore=tests/test_studio_pipeline_integration.py -q
+uv run pytest tests/ --ignore=tests/test_integration.py --ignore=tests/test_gh_integration.py --ignore=tests/test_studio_pipeline_integration.py --ignore=tests/test_gh_intelligence_integration.py -q
 
 # Integration tests (requires Rhino running with plugin loaded)
 uv run pytest tests/test_integration.py -v -m integration
@@ -117,7 +119,7 @@ uv run pytest tests/test_integration.py -v -m integration
 uvx ruff check src/rhmcp --select=E,W,F --ignore=E501,E701,E402,E741
 ```
 
-**334 tests** (unit, smoke, script-syntax, and security) must pass before any commit. The CI workflow (`.github/workflows/ci.yml`) runs these on Python 3.10/3.11/3.12.
+**360 tests** (unit, smoke, script-syntax, and security) must pass before any commit. The CI workflow (`.github/workflows/ci.yml`) runs these on Python 3.10/3.11/3.12.
 
 ---
 

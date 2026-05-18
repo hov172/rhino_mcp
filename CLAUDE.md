@@ -1,6 +1,6 @@
 # Rhino MCP — Development Guide
 
-MCP server that exposes 347 tools for controlling Rhino 3D from AI clients (Claude, Cursor, Codex, etc.).
+MCP server that exposes 353 tools for controlling Rhino 3D from AI clients (Claude, Cursor, Codex, etc.).
 
 ## Project Structure
 
