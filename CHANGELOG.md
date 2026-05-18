@@ -5,6 +5,14 @@ Versioning follows [Semantic Versioning](https://semver.org/).
 
 ---
 
+## [0.12.1] — 2026-05-17
+
+### Fixed
+
+- **Plugin autostart** — set `PlugInLoadTime.AtStartup` on the plugin class. Without this, Rhino defaulted to `WhenNeeded`, meaning the TCP socket server only started after the user manually ran `MCPStart` for the first time. Now the server is ready immediately when Rhino opens, before any user interaction.
+
+---
+
 ## [0.12.0] — 2026-05-17
 
 ### Added
