@@ -34,7 +34,11 @@ public static class CommandDispatcher
             "gh2_start" or
             "gh2_get_canvas_graph" or
             "gh2_search_components" or
-            "gh2_describe_component";
+            "gh2_describe_component" or
+            // GH Intelligence read-only
+            "gh_get_canvas_analysis" or
+            "gh_get_graph_data" or
+            "gh1_export_migration_data";
 
         var doc = Rhino.RhinoDoc.ActiveDoc;
         uint undoRecord = uint.MaxValue;
@@ -45,7 +49,7 @@ public static class CommandDispatcher
         {
             var result = request.Type switch
             {
-                "ping" => McpResponse.Ok(new { ok = true, version = "0.11.0", rhino = RhinoApp.Version.ToString(), host_app = DetectHostApp() }),
+                "ping" => McpResponse.Ok(new { ok = true, version = "0.12.0", rhino = RhinoApp.Version.ToString(), host_app = DetectHostApp() }),
                 "get_document_summary" => McpResponse.Ok(RhinoHandlers.GetDocumentSummary()),
                 "get_objects" => McpResponse.Ok(RhinoHandlers.GetObjects(p)),
                 "get_object_info" => McpResponse.Ok(RhinoHandlers.GetObjectInfo(p)),
@@ -141,6 +145,13 @@ public static class CommandDispatcher
                 "gh2_search_components"  => McpResponse.Ok(GH2Handlers.SearchComponents(p)),
                 "gh2_solve_graph"        => McpResponse.Ok(GH2Handlers.SolveGraph(p)),
                 "gh2_clear_canvas"       => McpResponse.Ok(GH2Handlers.ClearCanvas(p)),
+                // GH Intelligence — read-only
+                "gh_get_canvas_analysis"    => McpResponse.Ok(GHIntelligenceHandlers.GetCanvasAnalysis(p)),
+                "gh_get_graph_data"         => McpResponse.Ok(GHIntelligenceHandlers.GetGraphData(p)),
+                "gh1_export_migration_data" => McpResponse.Ok(GHIntelligenceHandlers.ExportMigrationData(p)),
+                // GH2 Intelligence — write
+                "gh2_move_component"        => McpResponse.Ok(GH2IntelligenceHandlers.MoveComponent(p)),
+                "gh2_add_group"             => McpResponse.Ok(GH2IntelligenceHandlers.AddGroup(p)),
                 _ => McpResponse.Error($"Unsupported command type: {request.Type}")
             };
             return result;
