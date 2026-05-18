@@ -108,5 +108,88 @@ class TestGhAnalyzeCanvas(unittest.TestCase):
         self.assertFalse(result["ok"])
 
 
+_PLUGIN_OK_GRAPH = {
+    "ok": True,
+    "components": [
+        {"id": "aaa", "x": 0.0, "y": 0.0, "name": "Point"},
+        {"id": "bbb", "x": 200.0, "y": 0.0, "name": "Circle"},
+        {"id": "ccc", "x": 400.0, "y": 0.0, "name": "Extrude"},
+    ],
+    "connections": [
+        {"from_id": "aaa", "to_id": "bbb"},
+        {"from_id": "bbb", "to_id": "ccc"},
+    ],
+}
+
+
+class TestGhRefactorCanvas(unittest.TestCase):
+    @classmethod
+    def setUpClass(cls):
+        cls.tools = _register()
+
+    def _mock_plugin(self, command, params, rhino_id=None):
+        if command == "gh_get_canvas_analysis":
+            return _PLUGIN_OK_ANALYSIS
+        if command == "gh_get_graph_data":
+            return _PLUGIN_OK_GRAPH
+        if command == "gh_move_component":
+            return {"ok": True}
+        if command == "gh_add_group":
+            return {"ok": True, "group_id": "new-group-id"}
+        return {"ok": False, "error": f"Unexpected command: {command}"}
+
+    def test_preview_mode_makes_no_mutations(self):
+        """apply=False must not call gh_move_component."""
+        fn = self.tools["gh_refactor_canvas"]
+        with patch("rhmcp.tools_helpers.backend.plugin_result", side_effect=self._mock_plugin) as mock_pr:
+            result = fn(apply=False)
+        self.assertTrue(result.get("ok"))
+        self.assertTrue(result.get("preview"))
+        # gh_move_component must never have been called
+        move_calls = [c for c in mock_pr.call_args_list if c.args[0] == "gh_move_component"]
+        self.assertEqual(len(move_calls), 0)
+
+    def test_apply_mode_calls_move_for_each_component(self):
+        """apply=True must call gh_move_component once per component."""
+        fn = self.tools["gh_refactor_canvas"]
+        with patch("rhmcp.tools_helpers.backend.plugin_result", side_effect=self._mock_plugin) as mock_pr:
+            result = fn(apply=True)
+        self.assertTrue(result.get("ok"))
+        move_calls = [c for c in mock_pr.call_args_list if c.args[0] == "gh_move_component"]
+        self.assertEqual(len(move_calls), len(_PLUGIN_OK_GRAPH["components"]))
+
+    def test_dry_run_fails_on_out_of_bounds_position(self):
+        """If layout produces out-of-bounds positions, abort before first move."""
+        fn = self.tools["gh_refactor_canvas"]
+
+        def bad_graph(command, params, rhino_id=None):
+            if command == "gh_get_canvas_analysis":
+                return _PLUGIN_OK_ANALYSIS
+            if command == "gh_get_graph_data":
+                return {"ok": True, "components": [{"id": "z", "x": 0.0, "y": 0.0, "name": "X"}], "connections": []}
+            return {"ok": False, "error": "unexpected"}
+
+        # Patch _compute_layout to return an out-of-bounds position
+        mod = importlib.import_module("rhmcp.tools.gh_intelligence")
+        original = mod._compute_layout
+        mod._compute_layout = lambda comps, conns: {"z": {"x": 200_000.0, "y": 0.0}}
+        try:
+            with patch("rhmcp.tools_helpers.backend.plugin_result", side_effect=bad_graph) as mock_pr:
+                result = fn(apply=True)
+            self.assertFalse(result.get("ok"))
+            self.assertEqual(result.get("error_code"), "LAYOUT_VALIDATION_FAILED")
+            move_calls = [c for c in mock_pr.call_args_list if c.args[0] == "gh_move_component"]
+            self.assertEqual(len(move_calls), 0)
+        finally:
+            mod._compute_layout = original
+
+    def test_analysis_error_propagated(self):
+        fn = self.tools["gh_refactor_canvas"]
+        with patch("rhmcp.tools_helpers.backend.plugin_result",
+                   return_value={"ok": False, "error": "GH not open"}):
+            result = fn(apply=False)
+        self.assertFalse(result["ok"])
+
+
 if __name__ == "__main__":
     unittest.main()

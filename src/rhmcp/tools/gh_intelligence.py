@@ -143,3 +143,105 @@ def register(mcp: FastMCP) -> None:
         No side effects — safe to call at any time.
         """
         return _gh_intel("gh_get_canvas_analysis", {}, rhino_id=rhino_id)
+
+    @mcp.tool(annotations=ToolAnnotations(title="Refactor GH1 Canvas Layout", destructiveHint=True))
+    def gh_refactor_canvas(
+        apply: bool = False,
+        group_clusters: bool = True,
+        rhino_id: str | None = None,
+    ) -> dict[str, object]:
+        """
+        Reorganise the active GH1 canvas to reduce wire crossings and add logical groups.
+
+        apply: False (default) returns the layout plan without touching the canvas.
+               True executes all moves and group additions.
+        group_clusters: Add GH groups per detected cluster when apply=True (default True).
+
+        Returns {ok, preview, moves[], groups_to_add, estimated_crossings_after} when apply=False.
+        Returns {ok, moved, groups_added, crossings_before, crossings_after} when apply=True.
+        """
+        analysis = _gh_intel("gh_get_canvas_analysis", {}, rhino_id=rhino_id)
+        if not analysis.get("ok"):
+            return analysis
+
+        graph = _gh_intel("gh_get_graph_data", {}, rhino_id=rhino_id)
+        if not graph.get("ok"):
+            return graph
+
+        components        = graph.get("components", [])
+        connections       = graph.get("connections", [])
+        clusters          = analysis.get("clusters", [])
+        crossings_before  = int(analysis.get("wire_crossing_estimate", 0))
+
+        # Compute layout via shared Python algorithm
+        raw_layout = _compute_layout(components, connections)
+
+        # Dry-run: validate all positions are within bounds (check before clamping)
+        invalid = [id_ for id_, pos in raw_layout.items()
+                   if abs(pos["x"]) > _MAX_COORD or abs(pos["y"]) > _MAX_COORD]
+        if invalid:
+            return {
+                "ok":         False,
+                "error":      "Layout validation failed — positions out of bounds",
+                "error_code": "LAYOUT_VALIDATION_FAILED",
+                "invalid_ids": invalid,
+            }
+
+        layout = _clamp_positions(raw_layout)
+
+        # Build moves list (include from position for preview)
+        pos_by_id = {c["id"]: {"x": c["x"], "y": c["y"]} for c in components}
+        moves = [
+            {"component_id": id_, "from": pos_by_id.get(id_, {}), "to": pos}
+            for id_, pos in layout.items()
+        ]
+
+        if not apply:
+            return {
+                "ok":                       True,
+                "preview":                  True,
+                "moves":                    moves,
+                "groups_to_add":            len(clusters) if group_clusters else 0,
+                "estimated_crossings_after": max(0, crossings_before - len(moves) // 4),
+            }
+
+        # Apply moves
+        moved  = 0
+        failed = []
+        for id_, pos in layout.items():
+            r = _gh_intel("gh_move_component",
+                          {"instance_guid": id_, "x": pos["x"], "y": pos["y"]},
+                          rhino_id=rhino_id)
+            if r.get("ok"):
+                moved += 1
+            else:
+                failed.append({"id": id_, "error": r.get("error", "")})
+
+        if failed:
+            return {"ok": False, "moved": moved, "failed": failed}
+
+        # Add groups per cluster
+        groups_added = 0
+        if group_clusters:
+            for cluster in clusters:
+                member_ids = cluster.get("member_ids", [])
+                if len(member_ids) >= 2:
+                    r = _gh_intel(
+                        "gh_add_group",
+                        {"instance_guids": member_ids, "label": cluster.get("label", "")},
+                        rhino_id=rhino_id,
+                    )
+                    if r.get("ok"):
+                        groups_added += 1
+
+        # Re-read crossings after
+        after = _gh_intel("gh_get_canvas_analysis", {}, rhino_id=rhino_id)
+        crossings_after = int(after.get("wire_crossing_estimate", 0)) if after.get("ok") else 0
+
+        return {
+            "ok":              True,
+            "moved":           moved,
+            "groups_added":    groups_added,
+            "crossings_before": crossings_before,
+            "crossings_after": crossings_after,
+        }
