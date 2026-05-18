@@ -5,6 +5,37 @@ Versioning follows [Semantic Versioning](https://semver.org/).
 
 ---
 
+## [0.12.0] — 2026-05-17
+
+### Added
+
+**Grasshopper intelligence — 6 new tools**
+
+- `gh_analyze_canvas` — canvas metrics (component count, wire count, clusters), wire-crossing estimate, complexity score, and actionable refactor suggestions
+- `gh_refactor_canvas` — GH1 de-spaghettify: topological sort, grid layout, dry-run safety (`apply=False` preview mode)
+- `gh2_refactor_canvas` — same topological-sort layout for the GH2 canvas (Rhino 9 only)
+- `gh_migrate_to_gh2` — structured GH1→GH2 migration via YAML type mapping with a confirm gate before applying changes
+- `gh2_move_component` — move a GH2 component to new canvas coordinates by GUID
+- `gh2_add_group` — create a named group around specified components on the GH2 canvas
+
+**New C# plugin handlers**
+- `gh_get_canvas_analysis` — cluster detection, wire-crossing heuristic, per-component degree stats
+- `gh_get_graph_data` — full adjacency snapshot used by the refactor tools
+- `gh1_export_migration_data` — serialise GH1 canvas to migration-ready JSON for `gh_migrate_to_gh2`
+- `gh2_move_component` — reposition a single GH2 component
+- `gh2_add_group` — create and populate a GH2 component group
+
+**New data file**
+- `src/rhmcp/data/gh1_to_gh2_map.yml` — 20 GH1→GH2 type mappings used by the migration tool
+
+**Tests**
+- `tests/test_gh_intelligence.py` — 26 unit tests (all non-integration)
+- `tests/test_gh_intelligence_integration.py` — 9 integration tests (require live Rhino)
+
+Brings total tool count to **353** (up from 347).
+
+---
+
 ## [0.11.0] — 2026-05-17
 
 ### Added
