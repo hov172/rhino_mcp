@@ -69,13 +69,17 @@ def plugin_result(
             from rhmcp.tools_helpers import slot_registry
             slot = slot_registry.get(rhino_id)
             host, port = slot.host, slot.port
-        except RuntimeError:
+        except RuntimeError as ex:
             if rhino_id is not None:
-                raise  # explicit routing failure must surface to caller
+                raise RuntimeError(
+                    f"Cannot route to Rhino instance {rhino_id!r}: {ex}. "
+                    "Use get_rhino_instances to list available instances."
+                ) from ex
             pass  # auto-select failure → env-var default is acceptable
     response = plugin_client.send_command(command_type, params, host=host, port=port)
     if response.get("status") == "error":
-        return normalize({"ok": False, "backend": BACKEND_PLUGIN, **response})
+        msg = response.get("message") or response.get("error") or "Plugin returned status=error with no message"
+        return normalize({"ok": False, "backend": BACKEND_PLUGIN, "error": msg, **response})
     if "result" in response:
         out = {"ok": True, "backend": BACKEND_PLUGIN, "result": response.get("result"), "raw": response}
         # Promote script_result from nested result when present.
@@ -176,7 +180,14 @@ def run_plugin_or_python(
             return plugin_result(command_type, params, rhino_id=rhino_id)
         except OSError as ex:
             if mode == BACKEND_PLUGIN:
-                return normalize({"ok": False, "backend": BACKEND_PLUGIN, "error": str(ex), "error_code": "SOCKET_UNAVAILABLE"})
+                host, port, _ = plugin_client.connection_settings()
+                return normalize({
+                    "ok": False,
+                    "backend": BACKEND_PLUGIN,
+                    "error": str(ex),
+                    "error_code": "SOCKET_UNAVAILABLE",
+                    "hint": f"Verify Rhino is running and MCPStart is active at {host}:{port}.",
+                })
             _plugin_error = str(ex)
     result = rhinocode.execute_python(python_code, rhino_id=rhino_id)
     resp = normalize({"backend": BACKEND_RHINOCODE, **result})
@@ -184,7 +195,7 @@ def run_plugin_or_python(
         resp["plugin_error"] = _plugin_error
     if not resp.get("ok") and result.get("status") == "unknown":
         resp["error_code"] = "RHINOCODE_DISPATCH_FAILED"
-        resp.setdefault("error", "Rhino did not execute the script. Ensure MCPStart is running or set RHINO_MCP_BACKEND=plugin.")
+        resp.setdefault("error", "Rhino did not execute the script. Ensure MCPStart is running or set RHINO_MCP_BACKEND=rhinocode.")
     return resp
 
 
@@ -201,9 +212,22 @@ def run_plugin_or_csharp(
             return plugin_result(command_type, params, rhino_id=rhino_id)
         except OSError as ex:
             if mode == BACKEND_PLUGIN:
-                return normalize({"ok": False, "backend": BACKEND_PLUGIN, "error": str(ex), "error_code": "SOCKET_UNAVAILABLE"})
+                host, port, _ = plugin_client.connection_settings()
+                return normalize({
+                    "ok": False,
+                    "backend": BACKEND_PLUGIN,
+                    "error": str(ex),
+                    "error_code": "SOCKET_UNAVAILABLE",
+                    "hint": f"Verify Rhino is running and MCPStart is active at {host}:{port}.",
+                })
     if mode == BACKEND_PLUGIN:
-        return normalize({"ok": False, "backend": BACKEND_PLUGIN, "error": "Plug-in backend unavailable.", "error_code": "SOCKET_UNAVAILABLE"})
+        host, port, _ = plugin_client.connection_settings()
+        return normalize({
+            "ok": False,
+            "backend": BACKEND_PLUGIN,
+            "error": f"Plug-in backend unavailable at {host}:{port}.",
+            "error_code": "SOCKET_UNAVAILABLE",
+        })
     result = rhinocode.execute_script(csharp_code, ".cs", rhino_id=rhino_id)
     return normalize({"backend": BACKEND_RHINOCODE, **result})
 
@@ -217,8 +241,15 @@ def run_command(command: str, echo: bool = False, rhino_id: str | None = None, b
     if mode in {BACKEND_AUTO, BACKEND_PLUGIN}:
         try:
             return plugin_result("run_command", {"command": command, "echo": echo}, rhino_id=rhino_id)
-        except OSError:
+        except OSError as ex:
             if mode == BACKEND_PLUGIN:
-                return normalize({"ok": False, "backend": BACKEND_PLUGIN, "error": "Plugin socket unavailable.", "error_code": "SOCKET_UNAVAILABLE"})
+                host, port, _ = plugin_client.connection_settings()
+                return normalize({
+                    "ok": False,
+                    "backend": BACKEND_PLUGIN,
+                    "error": str(ex),
+                    "error_code": "SOCKET_UNAVAILABLE",
+                    "hint": f"Verify Rhino is running and MCPStart is active at {host}:{port}.",
+                })
     result = rhinocode.run_command(command, rhino_id=rhino_id)
     return normalize({"backend": BACKEND_RHINOCODE, **result})

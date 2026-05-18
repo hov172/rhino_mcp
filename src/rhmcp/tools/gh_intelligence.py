@@ -94,10 +94,18 @@ def _clamp_positions(layout: dict[str, dict]) -> dict[str, dict]:
 # ---------------------------------------------------------------------------
 
 def _load_gh1_to_gh2_map() -> dict[str, str]:
-    """Load gh1_to_gh2_map.yml. Returns empty dict on any error."""
+    """Load gh1_to_gh2_map.yml. Logs specific failure reason; returns empty dict on error."""
+    import logging
+    _log = logging.getLogger(__name__)
     try:
         with open(_MAP_PATH) as f:
             data = yaml.safe_load(f)
+        if data is None:
+            _log.warning("gh1_to_gh2_map.yml is empty — GH1→GH2 migration will report all components as unmapped")
+            return {}
+        if not isinstance(data, dict):
+            _log.error("gh1_to_gh2_map.yml has unexpected format (expected a YAML mapping, got %s) — migration disabled", type(data).__name__)
+            return {}
         result: dict[str, str] = {}
         for entry in data.get("mappings", []):
             gh1 = entry.get("gh1_guid", "")
@@ -105,7 +113,17 @@ def _load_gh1_to_gh2_map() -> dict[str, str]:
             if gh1 and gh2:
                 result[gh1.lower()] = gh2
         return result
-    except Exception:
+    except FileNotFoundError:
+        _log.error("gh1_to_gh2_map.yml not found at %s — GH1→GH2 migration will report all components as unmapped", _MAP_PATH)
+        return {}
+    except PermissionError as ex:
+        _log.error("Cannot read gh1_to_gh2_map.yml (permission denied: %s) — migration disabled", ex)
+        return {}
+    except yaml.YAMLError as ex:
+        _log.error("gh1_to_gh2_map.yml is malformed YAML: %s — migration disabled", ex)
+        return {}
+    except Exception as ex:
+        _log.error("Unexpected error loading gh1_to_gh2_map.yml (%s: %s) — migration disabled", type(ex).__name__, ex)
         return {}
 
 
@@ -121,13 +139,48 @@ def _gh_intel(
     rhino_id: str | None = None,
 ) -> dict[str, object]:
     """Plugin-only dispatch with optional rhino_id routing. Unwraps the inner result dict."""
+    from rhmcp.tools_helpers.plugin_client import connection_settings
+    host, port, _ = connection_settings()
     try:
         r = rhino.plugin_result(command, params or {}, rhino_id=rhino_id)
         if isinstance(r, dict) and r.get("ok") and isinstance(r.get("result"), dict):
             return r["result"]
         return r
-    except OSError:
-        return {"ok": False, "error": "Grasshopper plugin is not connected. Ensure Rhino is running with the RhinoMCP plugin loaded."}
+    except OSError as ex:
+        return {
+            "ok": False,
+            "error": (
+                f"Cannot reach the Rhino plugin at {host}:{port} — {ex}. "
+                "Ensure Rhino is running, the RhinoMCP plugin is loaded (run MCPStart), "
+                "and Grasshopper is open."
+            ),
+            "error_code": "SOCKET_UNAVAILABLE",
+            "host": host,
+            "port": port,
+        }
+    except TimeoutError as ex:
+        return {
+            "ok": False,
+            "error": (
+                f"Timed out waiting for Rhino plugin response on {host}:{port} — {ex}. "
+                "The Grasshopper canvas may be busy; try again in a moment."
+            ),
+            "error_code": "TIMEOUT",
+            "host": host,
+            "port": port,
+        }
+    except ValueError as ex:
+        return {
+            "ok": False,
+            "error": f"Malformed response from Rhino plugin (command={command!r}): {ex}",
+            "error_code": "MALFORMED_RESPONSE",
+        }
+    except Exception as ex:
+        return {
+            "ok": False,
+            "error": f"Unexpected error communicating with Rhino plugin (command={command!r}, {type(ex).__name__}): {ex}",
+            "error_code": "INTERNAL_ERROR",
+        }
 
 # ---------------------------------------------------------------------------
 # Tool registration
@@ -209,6 +262,7 @@ def register(mcp: FastMCP) -> None:
             }
 
         # Apply moves
+        name_by_id = {c["id"]: c.get("name", "") for c in components}
         moved  = 0
         failed = []
         for id_, pos in layout.items():
@@ -218,10 +272,23 @@ def register(mcp: FastMCP) -> None:
             if r.get("ok"):
                 moved += 1
             else:
-                failed.append({"id": id_, "error": r.get("error", "")})
+                name = name_by_id.get(id_, "")
+                failed.append({
+                    "id": id_,
+                    "name": name,
+                    "target": pos,
+                    "error": r.get("error") or r.get("message") or "Unknown move failure",
+                    "error_code": r.get("error_code", ""),
+                })
 
         if failed:
-            return {"ok": False, "moved": moved, "failed": failed}
+            return {
+                "ok": False,
+                "error": f"Failed to move {len(failed)} of {len(layout)} component(s). See 'failed' for details.",
+                "error_code": "MOVE_PARTIAL_FAILURE",
+                "moved": moved,
+                "failed": failed,
+            }
 
         # Add groups per cluster
         groups_added = 0
@@ -347,6 +414,7 @@ def register(mcp: FastMCP) -> None:
                 "estimated_crossings_after": max(0, crossings_before - len(moves) // 4),
             }
 
+        name_by_id_gh2 = {c["id"]: c.get("name", "") for c in components}
         moved = 0
         failed = []
         for id_, pos in layout.items():
@@ -356,10 +424,23 @@ def register(mcp: FastMCP) -> None:
             if r.get("ok"):
                 moved += 1
             else:
-                failed.append({"id": id_, "error": r.get("error", "")})
+                name = name_by_id_gh2.get(id_, "")
+                failed.append({
+                    "id": id_,
+                    "name": name,
+                    "target": pos,
+                    "error": r.get("error") or r.get("message") or "Unknown move failure",
+                    "error_code": r.get("error_code", ""),
+                })
 
         if failed:
-            return {"ok": False, "moved": moved, "failed": failed}
+            return {
+                "ok": False,
+                "error": f"Failed to move {len(failed)} of {len(layout)} GH2 component(s). See 'failed' for details.",
+                "error_code": "MOVE_PARTIAL_FAILURE",
+                "moved": moved,
+                "failed": failed,
+            }
 
         groups_added = 0
         if group_clusters:
@@ -424,6 +505,18 @@ def register(mcp: FastMCP) -> None:
 
         components = export.get("components", [])
 
+        if not _GH1_TO_GH2_MAP:
+            return {
+                "ok": False,
+                "error": (
+                    "GH1→GH2 component map could not be loaded. "
+                    f"Expected file: {_MAP_PATH}. "
+                    "Check that the file exists, is readable, and is valid YAML. "
+                    "See server logs for the specific load error."
+                ),
+                "error_code": "MAP_LOAD_FAILED",
+            }
+
         # Step 2: map types via YAML
         mapped   = []
         unmapped = []
@@ -471,7 +564,20 @@ def register(mcp: FastMCP) -> None:
             {"components": mapped, "wires": wires},
             rhino_id=rhino_id,
         )
-        gh2_errors = apply_result.get("errors", []) if apply_result.get("ok") else [apply_result.get("error", "")]
+        if not apply_result.get("ok"):
+            return {
+                "ok": False,
+                "error": (
+                    apply_result.get("error")
+                    or apply_result.get("message")
+                    or "gh2_apply_graph returned an error with no message"
+                ),
+                "error_code": apply_result.get("error_code", "APPLY_GRAPH_FAILED"),
+                "migrated": 0,
+                "unmapped": unmapped,
+                "gh2_errors": apply_result.get("errors", []),
+            }
+        gh2_errors = apply_result.get("errors", [])
 
         # Step 5: optionally close GH1
         gh1_closed = False

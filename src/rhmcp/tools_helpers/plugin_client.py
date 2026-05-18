@@ -29,6 +29,22 @@ def connection_settings(
     )
 
 
+_MAX_RAW_DISPLAY = 200  # chars of raw response shown in error messages
+
+
+def _decode_chunks(chunks: list[bytes]) -> str:
+    """Decode accumulated chunks as UTF-8, raising ValueError on binary/non-UTF-8 data."""
+    raw = b"".join(chunks)
+    try:
+        return raw.decode("utf-8")
+    except UnicodeDecodeError as ex:
+        raise ValueError(
+            f"Plugin response contains non-UTF-8 bytes at position {ex.start} — "
+            f"this usually means a binary protocol mismatch or corrupted data. "
+            f"First {_MAX_RAW_DISPLAY} bytes: {raw[:_MAX_RAW_DISPLAY]!r}"
+        ) from ex
+
+
 def _attempt(
     command_type: str,
     params: dict[str, Any],
@@ -51,16 +67,36 @@ def _attempt(
             if not chunk:
                 break
             chunks.append(chunk)
-            text = b"".join(chunks).decode("utf-8", errors="replace")
+            text = _decode_chunks(chunks)  # raises ValueError on binary data
             try:
                 parsed, _end = decoder.raw_decode(text)
             except json.JSONDecodeError:
                 continue
             if isinstance(parsed, dict):
                 return parsed
-            return {"status": "error", "message": "Plug-in returned non-object JSON.", "raw": parsed}
-    raw = b"".join(chunks).decode("utf-8", errors="replace")
-    return {"status": "error", "message": "Incomplete or invalid JSON response", "raw": raw}
+            snippet = repr(parsed)[:_MAX_RAW_DISPLAY]
+            return {
+                "status": "error",
+                "message": f"Plug-in returned non-object JSON (got {type(parsed).__name__}): {snippet}",
+                "raw": parsed,
+            }
+    # Connection closed without a complete JSON object
+    try:
+        raw_text = _decode_chunks(chunks)
+    except ValueError as ex:
+        return {"status": "error", "message": str(ex), "error_code": "BINARY_RESPONSE"}
+    snippet = raw_text[:_MAX_RAW_DISPLAY]
+    total = len(raw_text)
+    return {
+        "status": "error",
+        "message": (
+            f"Connection to {target_host}:{target_port} closed before a complete JSON response was received "
+            f"({total} bytes received). "
+            + (f"Response preview: {snippet!r}" if raw_text else "No data received — the plugin may have crashed or timed out.")
+        ),
+        "error_code": "INCOMPLETE_RESPONSE",
+        "raw": raw_text,
+    }
 
 
 def send_command(
@@ -95,7 +131,12 @@ def send_command(
                 time.sleep(delay)
                 delay *= 2
 
-    raise last_exc  # type: ignore[misc]
+    total_attempts = max_retries + 1
+    raise OSError(
+        f"Could not connect to Rhino plugin at {target_host}:{target_port} after {total_attempts} attempt(s): {last_exc}. "
+        "Ensure Rhino is running with MCPStart active. "
+        "If using Docker or a remote host, verify RHINO_MCP_HOST and RHINO_MCP_PORT are set correctly."
+    ) from last_exc
 
 
 def probe(timeout: float = 1.0) -> dict[str, Any]:
@@ -122,8 +163,11 @@ def health_check(timeout: float = 3.0) -> dict[str, Any]:
     try:
         resp = send_command("ping", {}, timeout=timeout, retries=0)
         latency = round((time.monotonic() - t0) * 1000, 1)
-        if resp.get("ok") or resp.get("status") == "ok":
+        is_ok = resp.get("ok") is True or resp.get("status") == "ok"
+        if is_ok:
             inner = resp.get("result", resp)
+            if not isinstance(inner, dict):
+                inner = resp
             return {
                 "ok": True,
                 "host": host,
@@ -133,6 +177,25 @@ def health_check(timeout: float = 3.0) -> dict[str, Any]:
                 "rhino": inner.get("rhino"),
                 "host_app": inner.get("host_app", "Rhino"),
             }
-        return {"ok": False, "host": host, "port": port, "error": "Unexpected ping response", "error_code": "HEALTH_CHECK_FAILED", "raw": resp}
+        snippet = repr(resp)[:_MAX_RAW_DISPLAY]
+        return {
+            "ok": False,
+            "host": host,
+            "port": port,
+            "error": (
+                f"Ping command succeeded but the response was not a success acknowledgment. "
+                f"This may indicate a version mismatch between the Python server and the Rhino plugin. "
+                f"Response: {snippet}"
+            ),
+            "error_code": "HEALTH_CHECK_FAILED",
+            "raw": resp,
+        }
     except OSError as ex:
-        return {"ok": False, "host": host, "port": port, "error": str(ex), "error_code": "SOCKET_UNAVAILABLE"}
+        return {
+            "ok": False,
+            "host": host,
+            "port": port,
+            "error": str(ex),
+            "error_code": "SOCKET_UNAVAILABLE",
+            "hint": "Ensure Rhino is running and MCPStart has been executed inside Rhino.",
+        }

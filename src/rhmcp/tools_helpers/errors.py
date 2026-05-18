@@ -29,6 +29,9 @@ def err(
     return {"ok": False, "error": message, "error_code": code, **extra}
 
 
+_MAX_REPR_LEN = 300  # max chars for repr() in error messages to avoid flooding logs
+
+
 def normalize(resp: dict[str, Any]) -> dict[str, Any]:
     """
     Ensure every backend response has ``ok`` and, when ok=False, ``error``.
@@ -37,7 +40,10 @@ def normalize(resp: dict[str, Any]) -> dict[str, Any]:
     to call this explicitly.
     """
     if not isinstance(resp, dict):
-        return {"ok": False, "error": repr(resp), "error_code": "BAD_RESPONSE"}
+        raw = repr(resp)
+        if len(raw) > _MAX_REPR_LEN:
+            raw = raw[:_MAX_REPR_LEN] + f"… (truncated, full length {len(raw)})"
+        return {"ok": False, "error": f"Backend returned a non-dict response: {raw}", "error_code": "BAD_RESPONSE"}
 
     # Infer ok from legacy status/success fields when absent.
     if "ok" not in resp:
@@ -46,14 +52,15 @@ def normalize(resp: dict[str, Any]) -> dict[str, Any]:
         else:
             resp["ok"] = True
 
-    # Ensure error message is always present on failure.
-    if not resp["ok"] and "error" not in resp:
-        resp["error"] = (
-            resp.get("message")
-            or resp.get("error_message")
-            or resp.get("details")
-            or "Unknown error"
-        )
+    # Ensure error message is always present and non-empty on failure.
+    if not resp["ok"]:
+        if not resp.get("error"):
+            resp["error"] = (
+                resp.get("message")
+                or resp.get("error_message")
+                or resp.get("details")
+                or "Unknown error — the plugin returned ok=false with no message"
+            )
         resp.setdefault("error_code", "ERROR")
 
     return resp
