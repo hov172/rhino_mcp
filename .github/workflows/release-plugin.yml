@@ -1,9 +1,9 @@
 name: Release Rhino plugin
 
+# Requires a self-hosted macOS runner with Rhino 8 installed and labelled
+# [self-hosted, macOS, Rhino]. Triggered manually — run locally with
+# scripts/package-plugin.sh + gh release upload when no runner is available.
 on:
-  push:
-    tags:
-      - "v*"
   workflow_dispatch:
 
 permissions:
@@ -15,7 +15,7 @@ jobs:
 
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
 
       - name: Set up .NET
         uses: actions/setup-dotnet@v4
