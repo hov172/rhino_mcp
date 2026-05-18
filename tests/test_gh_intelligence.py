@@ -191,5 +191,56 @@ class TestGhRefactorCanvas(unittest.TestCase):
         self.assertFalse(result["ok"])
 
 
+class TestGh2RefactorCanvas(unittest.TestCase):
+    @classmethod
+    def setUpClass(cls):
+        cls.tools = _register()
+
+    _GH2_GRAPH = {
+        "ok": True,
+        "components": [
+            {"id": "g1", "x": 0.0,   "y": 0.0,   "instance_guid": "g1"},
+            {"id": "g2", "x": 100.0, "y": 200.0,  "instance_guid": "g2"},
+        ],
+        "connections": [{"from_id": "g1", "to_id": "g2"}],
+        "groups": [],
+    }
+
+    def _mock_gh2_plugin(self, command, params, rhino_id=None):
+        if command == "gh2_get_canvas_graph":
+            return self._GH2_GRAPH
+        if command == "gh2_move_component":
+            return {"ok": True}
+        if command == "gh2_add_group":
+            return {"ok": True, "group_id": "gh2-grp"}
+        return {"ok": False, "error": f"Unexpected: {command}"}
+
+    def test_gh2_not_available_returns_error(self):
+        fn = self.tools["gh2_refactor_canvas"]
+        with patch("rhmcp.tools_helpers.backend.plugin_result",
+                   return_value={"ok": False, "error": "GH2 not available", "error_code": "GH2_NOT_AVAILABLE"}):
+            result = fn(apply=False)
+        self.assertFalse(result["ok"])
+
+    def test_preview_makes_no_mutations(self):
+        fn = self.tools["gh2_refactor_canvas"]
+        with patch("rhmcp.tools_helpers.backend.plugin_result",
+                   side_effect=self._mock_gh2_plugin) as mock_pr:
+            result = fn(apply=False)
+        self.assertTrue(result.get("ok"))
+        self.assertTrue(result.get("preview"))
+        move_calls = [c for c in mock_pr.call_args_list if c.args[0] == "gh2_move_component"]
+        self.assertEqual(len(move_calls), 0)
+
+    def test_apply_calls_gh2_move(self):
+        fn = self.tools["gh2_refactor_canvas"]
+        with patch("rhmcp.tools_helpers.backend.plugin_result",
+                   side_effect=self._mock_gh2_plugin) as mock_pr:
+            result = fn(apply=True)
+        self.assertTrue(result.get("ok"))
+        move_calls = [c for c in mock_pr.call_args_list if c.args[0] == "gh2_move_component"]
+        self.assertEqual(len(move_calls), len(self._GH2_GRAPH["components"]))
+
+
 if __name__ == "__main__":
     unittest.main()

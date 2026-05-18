@@ -245,3 +245,145 @@ def register(mcp: FastMCP) -> None:
             "crossings_before": crossings_before,
             "crossings_after": crossings_after,
         }
+
+    @mcp.tool(annotations=ToolAnnotations(title="Refactor GH2 Canvas Layout", destructiveHint=True))
+    def gh2_refactor_canvas(
+        apply: bool = False,
+        group_clusters: bool = True,
+        rhino_id: str | None = None,
+    ) -> dict[str, object]:
+        """
+        Reorganise the active GH2 canvas to reduce wire crossings and add logical groups.
+        Requires Rhino 9 — returns GH2_NOT_AVAILABLE on Rhino 8.
+
+        apply: False (default) returns layout plan; True executes all moves + groups.
+        group_clusters: Add GH2 groups per detected cluster when apply=True.
+        """
+        # Read GH2 canvas (GH2 graph already exposes positions + connections)
+        graph = _gh_intel("gh2_get_canvas_graph", {"sample_size": 0}, rhino_id=rhino_id)
+        if not graph.get("ok"):
+            return graph
+
+        # Normalise GH2 graph data to same shape as GH1 graph data
+        raw_comps = graph.get("components", [])
+        components = [
+            {
+                "id": c.get("instance_guid") or c.get("id", ""),
+                "x":  float(c.get("x", 0)),
+                "y":  float(c.get("y", 0)),
+                "name": c.get("name", ""),
+            }
+            for c in raw_comps
+        ]
+        raw_conns = graph.get("connections", graph.get("wires", []))
+        connections = [
+            {
+                "from_id": w.get("from_instance") or w.get("from_id", ""),
+                "to_id":   w.get("to_instance")   or w.get("to_id", ""),
+            }
+            for w in raw_conns
+        ]
+
+        # Compute clusters from connections (BFS)
+        id_set = {c["id"] for c in components}
+        adj: dict[str, list] = {c["id"]: [] for c in components}
+        rev: dict[str, list] = {c["id"]: [] for c in components}
+        for conn in connections:
+            f, t = conn["from_id"], conn["to_id"]
+            if f in id_set and t in id_set:
+                adj[f].append(t)
+                rev[t].append(f)
+
+        visited: set[str] = set()
+        clusters = []
+        for comp in components:
+            cid = comp["id"]
+            if cid in visited:
+                continue
+            members: list[str] = []
+            queue: deque[str] = deque([cid])
+            visited.add(cid)
+            while queue:
+                node = queue.popleft()
+                members.append(node)
+                for nb in adj[node] + rev[node]:
+                    if nb not in visited:
+                        visited.add(nb)
+                        queue.append(nb)
+            clusters.append({"member_ids": members, "label": f"Cluster {len(clusters) + 1}"})
+
+        crossings_before = sum(
+            1 for conn in connections
+            if conn["from_id"] in id_set and conn["to_id"] in id_set
+            and next((c["x"] for c in components if c["id"] == conn["from_id"]), 0)
+            > next((c["x"] for c in components if c["id"] == conn["to_id"]),   0)
+        )
+
+        raw_layout = _compute_layout(components, connections)
+        # Validate before clamping (same pattern as gh_refactor_canvas)
+        invalid = [id_ for id_, pos in raw_layout.items()
+                   if abs(pos["x"]) > _MAX_COORD or abs(pos["y"]) > _MAX_COORD]
+        if invalid:
+            return {
+                "ok": False, "error": "Layout validation failed",
+                "error_code": "LAYOUT_VALIDATION_FAILED", "invalid_ids": invalid,
+            }
+        layout = _clamp_positions(raw_layout)
+
+        pos_by_id = {c["id"]: {"x": c["x"], "y": c["y"]} for c in components}
+        moves = [{"component_id": id_, "from": pos_by_id.get(id_, {}), "to": pos}
+                 for id_, pos in layout.items()]
+
+        if not apply:
+            return {
+                "ok":                       True,
+                "preview":                  True,
+                "moves":                    moves,
+                "groups_to_add":            len(clusters) if group_clusters else 0,
+                "estimated_crossings_after": max(0, crossings_before - len(moves) // 4),
+            }
+
+        moved = 0
+        failed = []
+        for id_, pos in layout.items():
+            r = _gh_intel("gh2_move_component",
+                          {"instance_guid": id_, "x": pos["x"], "y": pos["y"]},
+                          rhino_id=rhino_id)
+            if r.get("ok"):
+                moved += 1
+            else:
+                failed.append({"id": id_, "error": r.get("error", "")})
+
+        if failed:
+            return {"ok": False, "moved": moved, "failed": failed}
+
+        groups_added = 0
+        if group_clusters:
+            for cluster in clusters:
+                members = cluster.get("member_ids", [])
+                if len(members) >= 2:
+                    r = _gh_intel("gh2_add_group",
+                                  {"instance_guids": members, "label": cluster.get("label", "")},
+                                  rhino_id=rhino_id)
+                    if r.get("ok"):
+                        groups_added += 1
+
+        after = _gh_intel("gh2_get_canvas_graph", {"sample_size": 0}, rhino_id=rhino_id)
+        crossings_after = 0
+        if after.get("ok"):
+            after_comps = {c.get("instance_guid", c.get("id", "")): c
+                           for c in after.get("components", [])}
+            after_wires = after.get("connections", after.get("wires", []))
+            crossings_after = sum(
+                1 for w in after_wires
+                if (after_comps.get(w.get("from_instance", w.get("from_id", "")), {}).get("x", 0))
+                > (after_comps.get(w.get("to_instance",   w.get("to_id",   "")), {}).get("x", 0))
+            )
+
+        return {
+            "ok":               True,
+            "moved":            moved,
+            "groups_added":     groups_added,
+            "crossings_before": crossings_before,
+            "crossings_after":  crossings_after,
+        }
