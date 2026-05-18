@@ -8,6 +8,11 @@ public sealed class RhinoMcpPlugin : PlugIn
     public static RhinoMcpPlugin Instance { get; private set; } = null!;
     public RhinoMcpServer? Server { get; private set; }
 
+    // Load at Rhino startup so OnLoad fires immediately and the TCP server is ready
+    // before the user runs any commands. Without this, Rhino defaults to WhenNeeded
+    // and the plugin only loads (and the socket only opens) on the first MCPStart call.
+    public override PlugInLoadTime LoadTime => PlugInLoadTime.AtStartup;
+
     public RhinoMcpPlugin()
     {
         Instance = this;
