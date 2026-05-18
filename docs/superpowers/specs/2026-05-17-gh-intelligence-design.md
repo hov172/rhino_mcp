@@ -16,7 +16,7 @@ Add three GH intelligence features to rhino_mcp that match and exceed McNeel's o
 
 rhino_mcp's approach: direct tool execution with validated structured data, not script generation. Smaller attack surface, deterministic results, fully auditable.
 
-**New tool count:** 351 (up from 347)
+**New tool count:** 353 (up from 347)
 
 ---
 
@@ -29,7 +29,7 @@ Added to `CommandDispatcher.cs` and implemented in a new `GHIntelligenceHandlers
 | Handler | Description |
 |---|---|
 | `gh_get_canvas_analysis` | Reads GH1 canvas via GH object model. Returns: component count, connection count, estimated wire crossing count, connected subgraphs (clusters), ungrouped components, isolated nodes, canvas bounds. |
-| `gh_get_layout_plan` | Runs topological sort on component graph, returns suggested `{component_id: {x, y}}` per component using layer-based left-to-right layout to minimise crossings. Read-only, no side effects. |
+| `gh_get_graph_data` | Returns raw graph data for the GH1 canvas: component positions, adjacency list (connections between components). Read-only, no side effects. Python uses this alongside `gh_get_canvas_analysis` to run the topological sort and compute the layout plan. |
 | `gh1_export_migration_data` | Exports every GH1 component as structured JSON: type GUID, nickname, input/output param names and types, current persistent values, all connections. Sufficient to reconstruct in GH2. Read-only. |
 
 All three handlers:
@@ -42,8 +42,8 @@ All three handlers:
 | Tool | Description |
 |---|---|
 | `gh_analyze_canvas` | Calls `gh_get_canvas_analysis`, returns structured report + human-readable summary with suggestions. |
-| `gh_refactor_canvas` | Orchestrates GH1 canvas reorganisation: analyze → layout plan → dry-run → apply moves + groups. |
-| `gh2_refactor_canvas` | Same as above but reads via `gh2_get_canvas_graph` and writes via GH2 tools. |
+| `gh_refactor_canvas` | Orchestrates GH1 canvas reorganisation: analyze → get graph data → Python topological sort → dry-run → apply moves + groups. |
+| `gh2_refactor_canvas` | Same as above but reads via `gh2_get_canvas_graph`. Layout computed by the same Python topological sort. Writes via `gh2_move_component` + `gh2_add_group`. |
 | `gh_migrate_to_gh2` | Exports GH1 data → maps types via YAML → calls `gh2_start` + `gh2_apply_graph`. |
 
 ### Data file — `src/rhmcp/data/gh1_to_gh2_map.yml`
@@ -104,10 +104,11 @@ mappings:
 
 **Flow:**
 1. Call `gh_get_canvas_analysis` → get clusters and current metrics
-2. Call `gh_get_layout_plan` → get `{component_id: {x, y}}` for all components
-3. **Dry-run:** validate all positions are within bounds — abort if any invalid
-4. If `apply=False`: return plan as preview (no canvas changes)
-5. If `apply=True` and dry-run passes:
+2. Call `gh_get_graph_data` → get component positions + adjacency list
+3. Python: run topological sort on adjacency list → compute `{component_id: {x, y}}` using layer-based left-to-right layout
+4. **Dry-run:** validate all positions are within bounds — abort if any invalid
+5. If `apply=False`: return plan as preview (no canvas changes)
+6. If `apply=True` and dry-run passes:
    - Call `gh_move_component` for each component
    - Call `gh_add_group` for each cluster (if `group_clusters=True`)
    - Return result
@@ -141,9 +142,9 @@ mappings:
 ### `gh2_refactor_canvas(apply=False, group_clusters=True, rhino_id?)`
 
 Identical contract to `gh_refactor_canvas`. Differences in implementation only:
-- Reads canvas via `gh2_get_canvas_graph` instead of `gh_get_canvas_analysis`
-- Layout plan computed Python-side from GH2 graph data (no separate C# handler needed — GH2 graph already exposes position data)
-- Writes via GH2 move/group tools
+- Reads canvas via `gh2_get_canvas_graph` (already exposes positions + connections — no separate C# handler needed)
+- Layout plan computed by the same Python topological sort used for GH1 (single implementation, no duplication)
+- Writes via `gh2_move_component` + `gh2_add_group` (two new GH2 tools added in this release)
 - Returns `error_code: GH2_NOT_AVAILABLE` on Rhino 8
 
 ---
@@ -192,7 +193,8 @@ Identical contract to `gh_refactor_canvas`. Differences in implementation only:
 gh_refactor_canvas(apply=True)
   │
   ├─→ C#: gh_get_canvas_analysis   → clusters, metrics
-  ├─→ C#: gh_get_layout_plan       → {id: {x,y}} per component
+  ├─→ C#: gh_get_graph_data        → positions + adjacency list
+  ├─→ Python: topological sort     → {id: {x,y}} per component
   ├─→ Python: dry-run validation   → abort if any position invalid
   ├─→ gh_move_component × N        → reposition each component
   ├─→ gh_add_group × clusters      → group by cluster
@@ -273,22 +275,23 @@ gh_migrate_to_gh2(confirm=True)
 
 - `gh_intelligence` module imports without error
 - All 4 new tools register with unique names
-- Total tool count is 351
+- Total tool count is 353
 
 ### Integration tests — `tests/test_gh_intelligence_integration.py`
 
 Marked `@pytest.mark.integration`. Require live Rhino 8 with GH open.
 
 Fixtures (checked into `tests/fixtures/`):
-- `messy_canvas.gh` — known definition with ≥8 wire crossings and ≥3 identifiable clusters
+- `messy_canvas.gh` — GH1 definition with ≥8 wire crossings and ≥3 identifiable clusters
 - `simple_migration.gh` — GH1 definition using only components with confirmed GH2 equivalents, zero unmapped
+- `messy_gh2_canvas.gh` — GH2 definition with ≥8 wire crossings (Rhino 9 only)
 
 Tests:
 - Open `messy_canvas.gh` → `gh_analyze_canvas` returns `cluster_count >= 3` and `wire_crossing_estimate >= 8`
 - `gh_refactor_canvas(apply=False)` returns plan without moving anything (verify component positions unchanged)
 - `gh_refactor_canvas(apply=True)` → `crossings_after < crossings_before`
 - Open `simple_migration.gh` → `gh_migrate_to_gh2(confirm=True)` → `unmapped == []`, GH2 canvas has correct component count
-- `gh2_refactor_canvas(apply=True)` on a messy GH2 canvas → `crossings_after < crossings_before` *(Rhino 9 only)*
+- `gh2_refactor_canvas(apply=True)` on `messy_gh2_canvas.gh` → `crossings_after < crossings_before` *(Rhino 9 only)*
 
 ### What is not tested
 
@@ -308,7 +311,7 @@ Tests:
 | Attack surface | Smaller — no code execution path | Larger — script generation |
 | Partial failure handling | ✅ dry-run + partial result | Unknown |
 | Preview before apply | ✅ apply=False default | Unknown |
-| 347 other Rhino tools | ✅ | ✗ |
+| 347 existing Rhino tools | ✅ | ✗ |
 
 ---
 
@@ -316,15 +319,17 @@ Tests:
 
 | File | Change |
 |---|---|
-| `rhino_plugin/RhinoMCPPlugin/GHIntelligenceHandlers.cs` | New — 3 C# handlers |
+| `rhino_plugin/RhinoMCPPlugin/GHIntelligenceHandlers.cs` | New — 3 C# handlers (`gh_get_canvas_analysis`, `gh_get_graph_data`, `gh1_export_migration_data`) |
+| `rhino_plugin/RhinoMCPPlugin/GH2IntelligenceHandlers.cs` | New — 2 GH2 C# handlers (`gh2_move_component`, `gh2_add_group`) |
 | `rhino_plugin/RhinoMCPPlugin/CommandDispatcher.cs` | Wire new handlers |
-| `rhino_plugin/RhinoMCPPlugin/RhinoMCPPlugin.csproj` | Add new file |
-| `src/rhmcp/tools/gh_intelligence.py` | New — 4 Python tools |
+| `rhino_plugin/RhinoMCPPlugin/RhinoMCPPlugin.csproj` | Add new files |
+| `src/rhmcp/tools/gh_intelligence.py` | New — 4 Python tools + shared topological sort layout function |
 | `src/rhmcp/data/gh1_to_gh2_map.yml` | New — GH1→GH2 type mapping |
 | `tests/test_gh_intelligence.py` | New — unit tests |
 | `tests/test_gh_intelligence_integration.py` | New — integration tests |
-| `tests/fixtures/messy_canvas.gh` | New — refactor test fixture |
+| `tests/fixtures/messy_canvas.gh` | New — GH1 refactor test fixture |
 | `tests/fixtures/simple_migration.gh` | New — migration test fixture |
-| `tests/test_smoke.py` | Update tool count to 351 |
+| `tests/fixtures/messy_gh2_canvas.gh` | New — GH2 refactor test fixture (Rhino 9) |
+| `tests/test_smoke.py` | Update tool count to 353 |
 | `pyproject.toml` | Bump version to 0.12.0 |
 | `CHANGELOG.md` | Add v0.12.0 entry |
