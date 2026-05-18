@@ -43,7 +43,7 @@ class TestAllModulesLoad(unittest.TestCase):
             except Exception as exc:
                 errors.append(f"{info.name}: {exc}")
         self.assertFalse(errors, "Register errors:\n" + "\n".join(errors))
-        self.assertGreaterEqual(total, 300, f"Expected ≥300 tools, got {total}")
+        self.assertGreaterEqual(total, 353, f"Expected ≥353 tools, got {total}")
 
     def test_tool_names_unique(self) -> None:
         """No two tools may share the same name across all modules."""
