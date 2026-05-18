@@ -483,3 +483,42 @@ def register(mcp: FastMCP) -> None:
             "gh2_errors": gh2_errors,
             "gh1_closed": gh1_closed,
         }
+
+    @mcp.tool(annotations=ToolAnnotations(title="Move GH2 Component", destructiveHint=True))
+    def gh2_move_component(
+        instance_guid: str,
+        x: float,
+        y: float,
+        rhino_id: str | None = None,
+    ) -> dict[str, object]:
+        """
+        Move a GH2 component to new canvas coordinates.
+        Requires Rhino 9 — returns GH2_NOT_AVAILABLE on Rhino 8.
+
+        instance_guid: UUID of the GH2 component to move.
+        x, y: Target canvas coordinates.
+        """
+        return _gh_intel(
+            "gh2_move_component",
+            {"instance_guid": instance_guid, "x": x, "y": y},
+            rhino_id=rhino_id,
+        )
+
+    @mcp.tool(annotations=ToolAnnotations(title="Add GH2 Group", destructiveHint=True))
+    def gh2_add_group(
+        instance_guids: list[str],
+        label: str = "",
+        rhino_id: str | None = None,
+    ) -> dict[str, object]:
+        """
+        Add a group containing the specified GH2 components.
+        Requires Rhino 9 — returns GH2_NOT_AVAILABLE on Rhino 8.
+
+        instance_guids: List of GH2 component UUIDs to include in the group.
+        label: Optional display label for the group.
+        """
+        return _gh_intel(
+            "gh2_add_group",
+            {"instance_guids": instance_guids, "label": label},
+            rhino_id=rhino_id,
+        )

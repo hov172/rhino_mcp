@@ -369,5 +369,41 @@ class TestGhMigrateToGh2(unittest.TestCase):
         self.assertEqual(len(close_calls), 1)
 
 
+class TestGh2IntelligenceTools(unittest.TestCase):
+    @classmethod
+    def setUpClass(cls):
+        cls.tools = _register()
+
+    def test_gh2_move_component_registered(self):
+        self.assertIn("gh2_move_component", self.tools)
+
+    def test_gh2_add_group_registered(self):
+        self.assertIn("gh2_add_group", self.tools)
+
+    def test_gh2_move_component_passes_through(self):
+        fn = self.tools["gh2_move_component"]
+        with patch("rhmcp.tools_helpers.backend.plugin_result",
+                   return_value={"ok": True}) as mock_pr:
+            result = fn(instance_guid="abc-123", x=100.0, y=200.0)
+        self.assertTrue(result["ok"])
+        mock_pr.assert_called_once_with(
+            "gh2_move_component",
+            {"instance_guid": "abc-123", "x": 100.0, "y": 200.0},
+            rhino_id=None,
+        )
+
+    def test_gh2_add_group_passes_through(self):
+        fn = self.tools["gh2_add_group"]
+        with patch("rhmcp.tools_helpers.backend.plugin_result",
+                   return_value={"ok": True, "group_id": "grp-1"}) as mock_pr:
+            result = fn(instance_guids=["a", "b"], label="My Group")
+        self.assertTrue(result["ok"])
+        mock_pr.assert_called_once_with(
+            "gh2_add_group",
+            {"instance_guids": ["a", "b"], "label": "My Group"},
+            rhino_id=None,
+        )
+
+
 if __name__ == "__main__":
     unittest.main()
