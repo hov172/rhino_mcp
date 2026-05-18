@@ -1,10 +1,10 @@
 # GH1 component type GUID → GH2 type name mapping
 # last_verified_rhino_version: keep up to date when testing against new Rhino 9 builds
-last_verified_rhino_version: "9.0-wip"
+last_verified_rhino_version: "8.31"
 
 mappings:
-  # Math
-  - gh1_guid: "57da07bd-ecab-415d-9d86-be1145e9f0eb"
+  # Verified against Rhino 8.31 — ComponentGuid values from live Grasshopper instance
+  - gh1_guid: "3581f42a-9592-4549-bd6b-1c0fc39d067b"
     gh2_name: "Point"
   - gh1_guid: "f9a19ce4-3001-4fb2-a2be-b16d5f5de13d"
     gh2_name: "Number"
@@ -12,15 +12,15 @@ mappings:
     gh2_name: "Integer"
   - gh1_guid: "59e0b89a-e487-49f8-bab8-b5bab16be14c"
     gh2_name: "Panel"
-  - gh1_guid: "57da07bd-ecab-415d-9d86-be1145e9f0f1"
+  - gh1_guid: "57da07bd-ecab-415d-9d86-af36d7073abc"
     gh2_name: "NumberSlider"
-  - gh1_guid: "e1de9900-1f29-4479-af45-8ad5b04f2c59"
+  - gh1_guid: "a0d62394-a118-422d-abb3-6af115c75b25"
     gh2_name: "Addition"
-  - gh1_guid: "0f4dd8f2-ef33-4a69-a717-67ef07c7f1da"
+  - gh1_guid: "2c56ab33-c7cc-4129-886c-d5856b714010"
     gh2_name: "Subtraction"
-  - gh1_guid: "d69dc0fe-e234-4b5f-9fd7-2de1c1d9bd44"
+  - gh1_guid: "b8963bb1-aa57-476e-a20e-ed6cf635a49c"
     gh2_name: "Multiplication"
-  - gh1_guid: "5f90d98d-ef25-49a2-9c90-0e9e09e8e79b"
+  - gh1_guid: "9c85271f-89fa-4e9f-9f4a-d75802120ccc"
     gh2_name: "Division"
   - gh1_guid: "87f87f55-92ef-4298-ba26-3d7dbde42ad8"
     gh2_name: "Circle"
