@@ -9,21 +9,22 @@ Versioning follows [Semantic Versioning](https://semver.org/).
 
 ### Added
 
-**Grasshopper intelligence — 6 new tools**
+**Grasshopper Intelligence — 7 new tools**
 
-- `gh_analyze_canvas` — canvas metrics (component count, wire count, clusters), wire-crossing estimate, complexity score, and actionable refactor suggestions
-- `gh_refactor_canvas` — GH1 de-spaghettify: topological sort, grid layout, dry-run safety (`apply=False` preview mode)
-- `gh2_refactor_canvas` — same topological-sort layout for the GH2 canvas (Rhino 9 only)
-- `gh_migrate_to_gh2` — structured GH1→GH2 migration via YAML type mapping with a confirm gate before applying changes
+Works on **Rhino 8 (GH1)**:
+- `gh_get_canvas_analysis` — canvas metrics (component count, wire count, clusters), wire-crossing estimate, complexity score, and actionable refactor suggestions
+- `gh_get_graph_data` — full adjacency snapshot (nodes + edges) used by layout and migration tools
+- `gh_refactor_canvas` — GH1 de-spaghettify: re-layout to reduce crossings, auto-group clusters, `dry_run=True` preview mode
+- `gh1_export_migration_data` — serialise GH1 canvas to migration-ready JSON; flags which components have a known GH2 equivalent
+
+Requires **Rhino 9 + GH2** (return a clear error on Rhino 8):
+- `gh_migrate_to_gh2` — place GH2 equivalents for all mapped GH1 components and wire them; lists unmapped components
 - `gh2_move_component` — move a GH2 component to new canvas coordinates by GUID
 - `gh2_add_group` — create a named group around specified components on the GH2 canvas
 
 **New C# plugin handlers**
-- `gh_get_canvas_analysis` — cluster detection, wire-crossing heuristic, per-component degree stats
-- `gh_get_graph_data` — full adjacency snapshot used by the refactor tools
-- `gh1_export_migration_data` — serialise GH1 canvas to migration-ready JSON for `gh_migrate_to_gh2`
-- `gh2_move_component` — reposition a single GH2 component
-- `gh2_add_group` — create and populate a GH2 component group
+- `gh_get_canvas_analysis`, `gh_get_graph_data`, `gh1_export_migration_data` — read-only GH1 analysis (GHIntelligenceHandlers.cs)
+- `gh2_move_component`, `gh2_add_group` — GH2 write operations (GH2IntelligenceHandlers.cs)
 
 **New data file**
 - `src/rhmcp/data/gh1_to_gh2_map.yml` — 20 GH1→GH2 type mappings used by the migration tool

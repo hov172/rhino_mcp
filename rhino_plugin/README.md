@@ -147,6 +147,25 @@ All GH2 commands require **Rhino 9** with Grasshopper 2 loaded. Grasshopper 2 is
 | `gh2_solve_graph` | Expire and re-solve the active GH2 canvas. Returns list of errors. |
 | `gh2_clear_canvas` | Clear all objects from the active GH2 canvas. Requires `confirm: true`. |
 
+### Grasshopper — Intelligence
+
+**Works on Rhino 8 (GH1):**
+
+| Command | Description |
+|---|---|
+| `gh_get_canvas_analysis` | Canvas metrics: component count, wire count, crossing estimate, logical clusters, complexity score |
+| `gh_get_graph_data` | Full adjacency snapshot (nodes + edges) used by layout and migration tools |
+| `gh_refactor_canvas` | Re-layout GH1 canvas to reduce wire crossings and add groups per cluster. `dry_run=true` previews without applying |
+| `gh1_export_migration_data` | Export GH1 canvas to structured JSON with GH2 mapping status per component |
+
+**Requires Rhino 9 + GH2** (return a clear error on Rhino 8 — no crash):
+
+| Command | Description |
+|---|---|
+| `gh_migrate_to_gh2` | Place GH2 equivalents for all mapped GH1 components and wire them. Lists unmapped components |
+| `gh2_move_component` | Move a GH2 component to new canvas coordinates by instance GUID |
+| `gh2_add_group` | Create a named group around specified GH2 components |
+
 ---
 
 ## Thread Safety

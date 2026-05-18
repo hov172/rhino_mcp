@@ -1567,7 +1567,9 @@ Every GH2 tool accepts an optional `rhino_id` parameter (from `get_rhino_instanc
 
 ### Grasshopper — Intelligence (GH1 Analysis, Refactor & Migration)
 
-Tools for analysing, reorganising, and migrating Grasshopper definitions. All read-only tools (`gh_get_canvas_analysis`, `gh_get_graph_data`, `gh1_export_migration_data`) work on the active GH1 canvas. Write tools route through the appropriate GH1 or GH2 handlers.
+Tools for analysing, reorganising, and migrating Grasshopper definitions.
+
+**Works on Rhino 8 (GH1):**
 
 | Tool | Description |
 |---|---|
@@ -1575,7 +1577,12 @@ Tools for analysing, reorganising, and migrating Grasshopper definitions. All re
 | `gh_get_graph_data` | Export the full component graph as nodes + edges. Includes each component's instance GUID, type, canvas position, and all wire connections. Used as input for layout-optimisation reasoning. |
 | `gh_refactor_canvas` | Refactor the active GH1 canvas: re-layout components to reduce wire crossings and add named groups for each detected logical cluster. Optional `dry_run=true` returns the proposed moves without applying them. Returns `{moved: N, groups_added: N}`. |
 | `gh1_export_migration_data` | Export migration metadata from the active GH1 canvas: each component's instance GUID, type GUID, type name, and canvas position. Cross-references `gh1_to_gh2_map.yml` to indicate which components have a known GH2 equivalent and which are `unmapped`. |
-| `gh_migrate_to_gh2` | Migrate the active GH1 canvas to GH2. Reads migration data, opens GH2, places GH2 equivalents for all mapped components, and wires them. Returns `{placed: N, wired: N, unmapped: [...]}`. Components without a GH2 equivalent are listed in `unmapped` but do not block the migration. Requires Rhino 9. |
+
+**Requires Rhino 9 + GH2** (return a clear error on Rhino 8 — no crash):
+
+| Tool | Description |
+|---|---|
+| `gh_migrate_to_gh2` | Migrate the active GH1 canvas to GH2. Reads migration data, opens GH2, places GH2 equivalents for all mapped components, and wires them. Returns `{placed: N, wired: N, unmapped: [...]}`. Components without a GH2 equivalent are listed in `unmapped` but do not block the migration. |
 | `gh2_move_component` | Move a GH2 component to new canvas coordinates. Accepts `instance_guid` and `x`/`y` canvas position. |
 | `gh2_add_group` | Create a named group in the GH2 canvas around a list of component instance GUIDs. Optional `color` as `[r, g, b]`. |
 
