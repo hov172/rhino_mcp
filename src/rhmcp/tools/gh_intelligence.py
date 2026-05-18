@@ -117,12 +117,15 @@ _GH1_TO_GH2_MAP: dict[str, str] = _load_gh1_to_gh2_map()
 
 def _gh_intel(
     command: str,
-    params: dict[str, object],
+    params: dict[str, object] | None = None,
     rhino_id: str | None = None,
 ) -> dict[str, object]:
-    """Plugin-only dispatch with optional rhino_id routing."""
+    """Plugin-only dispatch with optional rhino_id routing. Unwraps the inner result dict."""
     try:
-        return rhino.plugin_result(command, params, rhino_id=rhino_id)
+        r = rhino.plugin_result(command, params or {}, rhino_id=rhino_id)
+        if isinstance(r, dict) and r.get("ok") and isinstance(r.get("result"), dict):
+            return r["result"]
+        return r
     except OSError:
         return {"ok": False, "error": "Grasshopper plugin is not connected. Ensure Rhino is running with the RhinoMCP plugin loaded."}
 
