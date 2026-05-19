@@ -359,6 +359,65 @@ def register(mcp: FastMCP) -> None:
             out["scale"] = scale_info
         return out
 
+    @mcp.tool(annotations=ToolAnnotations(title="Calibrate PDF Scale", readOnlyHint=True))
+    def calibrate_pdf_scale(
+        pixel_point_1: list[float],
+        pixel_point_2: list[float],
+        real_distance: float,
+        real_unit: str = "feet",
+    ) -> dict[str, Any]:
+        """
+        Compute the exact pixel-to-real-world scale from two identified points
+        in a rendered PDF page.
+
+        After calling ``read_pdf``, visually identify two points whose
+        real-world distance is known (e.g. column centrelines 20 ft apart,
+        or the ends of a dimensioned wall) and pass their pixel coordinates
+        here.  The tool calculates the true ``px_per_real_unit`` ratio,
+        correcting for any print-to-fit scaling that makes the printed scale
+        annotation inaccurate.
+
+        The returned values are in the same format as the ``scale`` block
+        returned by ``read_pdf(scale_hint=...)``, so you can substitute them
+        directly for model-space coordinate mapping.
+
+        :param pixel_point_1: ``[x, y]`` pixel coordinate of the first point
+            in the rendered page image (top-left origin).
+        :param pixel_point_2: ``[x, y]`` pixel coordinate of the second point.
+        :param real_distance: Known real-world distance between the two points.
+        :param real_unit: Unit of *real_distance* — ``"feet"``, ``"meters"``,
+            ``"inches"``, or ``"mm"``.
+        """
+        import math
+        if len(pixel_point_1) < 2 or len(pixel_point_2) < 2:
+            return {"ok": False, "error": "pixel_point_1 and pixel_point_2 must each be [x, y]"}
+        if real_distance <= 0:
+            return {"ok": False, "error": "real_distance must be greater than zero"}
+        valid_units = {"feet", "meters", "inches", "mm"}
+        if real_unit not in valid_units:
+            return {"ok": False, "error": f"real_unit must be one of: {', '.join(sorted(valid_units))}"}
+
+        dx = float(pixel_point_2[0]) - float(pixel_point_1[0])
+        dy = float(pixel_point_2[1]) - float(pixel_point_1[1])
+        pixel_distance = math.sqrt(dx * dx + dy * dy)
+        if pixel_distance < 1:
+            return {"ok": False, "error": "The two points are too close together — pixel distance < 1"}
+
+        px_per_unit = pixel_distance / real_distance
+        return {
+            "ok": True,
+            "px_per_real_unit": round(px_per_unit, 4),
+            "real_units_per_px": round(real_distance / pixel_distance, 6),
+            "real_unit": real_unit,
+            "pixel_distance": round(pixel_distance, 2),
+            "real_distance": real_distance,
+            "note": (
+                "Use real_units_per_px to convert any pixel coordinate from the "
+                "rendered image to model-space distance. "
+                "Pass px_per_real_unit as a reference when calling create_rhino_geometry."
+            ),
+        }
+
     # ── IMAGE ────────────────────────────────────────────────────────────────
 
     @mcp.tool(annotations=ToolAnnotations(title="Read Image", readOnlyHint=True))

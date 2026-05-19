@@ -19,12 +19,18 @@ import rhinoscriptsyntax as rs
 import Rhino
 import System
 
+_SNAP_GRID = __mcp_snap_grid  # None or float — set from tool parameter
+
 def _pt(value, default=(0, 0, 0)):
     if value is None:
         value = default
     if len(value) == 2:
-        return (value[0], value[1], 0)
-    return tuple(value)
+        pt = (float(value[0]), float(value[1]), 0.0)
+    else:
+        pt = (float(value[0]), float(value[1]), float(value[2]))
+    if _SNAP_GRID:
+        return tuple(round(v / _SNAP_GRID) * _SNAP_GRID for v in pt)
+    return pt
 
 def _color(value):
     if value is None:
@@ -493,6 +499,7 @@ def register(mcp: FastMCP) -> None:
         name: str | None = None,
         layer: str | None = None,
         color: list[int] | None = None,
+        snap_to_grid: float | None = None,
         rhino_id: str | None = None,
     ) -> dict[str, object]:
         """
@@ -504,6 +511,11 @@ def register(mcp: FastMCP) -> None:
         pointcloud, textdot, light, extrusion, block_insert,
         dimension_linear, dimension_radial, dimension_angular, leader, cage,
         morphcontrol, subd, hatch, clipping_plane.
+
+        **snap_to_grid** — when set (e.g. ``0.5`` for 6-inch grid, ``1.0``
+        for 1-foot grid), all point coordinates are rounded to the nearest
+        multiple before geometry is created.  Eliminates the "almost aligned"
+        problem when tracing from PDF drawings.
 
         **box** — two calling conventions:
           - Corner form: ``corner=[x,y,z]``, ``x_size`` (alias ``width``),
@@ -540,21 +552,29 @@ def register(mcp: FastMCP) -> None:
             "layer": layer,
             "color": color,
         }
-        return _run_scene([item], rhino_id)
+        return _run_scene([item], rhino_id, snap_to_grid=snap_to_grid)
 
     @mcp.tool(annotations=ToolAnnotations(title="Create Rhino Scene", destructiveHint=True))
-    def create_rhino_scene(items: list[dict[str, Any]], rhino_id: str | None = None) -> dict[str, object]:
+    def create_rhino_scene(
+        items: list[dict[str, Any]],
+        snap_to_grid: float | None = None,
+        rhino_id: str | None = None,
+    ) -> dict[str, object]:
         """
         Create multiple Rhino objects from a list of structured item specs.
 
         Each item accepts ``type``, ``params``, and optional ``name``, ``layer``,
         ``layer_color``, and ``color`` keys.
+
+        ``snap_to_grid`` rounds all point coordinates to the nearest multiple
+        before creating geometry — useful when tracing floor plans from PDFs.
+        E.g. ``0.5`` for a 6-inch grid, ``1.0`` for a 1-foot grid.
         """
-        return _run_scene(items, rhino_id)
+        return _run_scene(items, rhino_id, snap_to_grid=snap_to_grid)
 
 
-def _run_scene(items: list[dict[str, Any]], rhino_id: str | None) -> dict[str, object]:
-    code = "__mcp_scene_items = {!r}\n{}".format(items, _GEOMETRY_SCRIPT)
+def _run_scene(items: list[dict[str, Any]], rhino_id: str | None, snap_to_grid: float | None = None) -> dict[str, object]:
+    code = "__mcp_scene_items = {!r}\n__mcp_snap_grid = {!r}\n{}".format(items, snap_to_grid, _GEOMETRY_SCRIPT)
     result = rhino.execute_python(code, rhino_id=rhino_id)
     if result.get("ok"):
         return result
