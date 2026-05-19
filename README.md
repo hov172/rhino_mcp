@@ -327,7 +327,7 @@ Claude Desktop → HTTP → localhost:8000 (Docker container)
 | **UrbanAgent Platform** | Parse urban prompts, generate site layouts and massing, calculate/validate metrics, optimize FAR, render previews, export models, save versions, and orchestrate full schemes. **Studio Pipeline:** generate design language (Claude API), AI-render viewports (fal.ai FLUX.1), export branded PDF reports (DocRaptor + S3), run all steps with a single `urban_run_studio_pipeline` call |
 | **Geometry** | Create boxes, spheres, cylinders, cones, tori, curves, surfaces, meshes, text, arcs, ellipses, planes, and more |
 | **Modeling** | Boolean union/difference/intersection, loft, extrude, sweep, offset, pipe, project/intersect/split curves |
-| **Document Reading** | Read PDF files page-by-page as images; read images (JPG, PNG, TIFF, HEIC, WebP); read CSV/Excel spreadsheets; parse SVG drawings with optional PNG render; extract text and tables from Word (.docx) documents — all without leaving the MCP session |
+| **Document Reading** | Read PDF files page-by-page as images; extract vector paths and dimension annotations from CAD-exported PDFs; calibrate pixel-to-real-world scale; read images (JPG, PNG, TIFF, HEIC, WebP); read CSV/Excel spreadsheets; parse SVG drawings; extract text and tables from Word (.docx) documents — all without leaving the MCP session |
 | **Objects** | Select, move, rotate, scale, rename, change layer/color, delete, undo/redo. Filter by bounding box spatial region. Apply attribute changes to all objects at once with `apply_to_all` |
 | **Layers** | List, create, delete, set current, change color/visibility/lock |
 | **Materials** | Create, assign, and delete standard and PBR materials; set environment maps; configure render settings |
@@ -1751,8 +1751,9 @@ Ladybug handles climate visualisation (weather data, sun, wind, radiation). Hone
 
 | Tool | Description |
 |---|---|
-| `create_rhino_geometry` | Create a single geometric object. Supported types: `box`, `sphere`, `cylinder`, `cone`, `torus`, `line`, `polyline`, `arc`, `circle`, `ellipse`, `curve` (free-form NURBS), `surface` (from points), `plane`, `text`, `point`, `mesh`, `extrusion`, `brep` (from existing), and more. **Box params:** corner form — `corner=[x,y,z]` + `width`/`depth`/`height` (or `x_size`/`y_size`/`z_size`); center form — `center=[x,y,z]` + same dimension params, or `size=[sx,sy,sz]`. |
-| `create_rhino_scene` | Create multiple objects in one call. Accepts a list of the same object descriptors as `create_rhino_geometry`. |
+| `create_rhino_geometry` | Create a single geometric object. Supported types: `box`, `sphere`, `cylinder`, `cone`, `torus`, `line`, `polyline`, `arc`, `circle`, `ellipse`, `curve` (free-form NURBS), `surface` (from points), `plane`, `text`, `point`, `mesh`, `extrusion`, `brep` (from existing), and more. **Box params:** corner form — `corner=[x,y,z]` + `width`/`depth`/`height` (or `x_size`/`y_size`/`z_size`); center form — `center=[x,y,z]` + same dimension params, or `size=[sx,sy,sz]`. **`snap_to_grid`:** pass a grid spacing (e.g. `0.5` for 6-inch, `1.0` for 1-foot) to round all point coordinates before creation. |
+| `create_rhino_scene` | Create multiple objects in one call. Accepts a list of the same object descriptors as `create_rhino_geometry`. Also accepts `snap_to_grid` to align all objects in the batch. |
+| `validate_rhino_geometry` | Check objects for common tracing errors: endpoint gaps, non-orthogonal walls, duplicate segments, zero-length curves. Returns a structured issue report with severity levels. `auto_fix=True` closes gaps and removes duplicates automatically. |
 | `get_rhino_objects` | List objects with optional filters by type, layer, name, or color. **Pagination:** `offset` + `limit` (default 100) — response includes `total_matching` and `has_more` so you can page through large scenes. **Hidden objects:** `include_hidden=true` includes objects that are hidden (default false). **Lightweight mode:** `include_geometry=false` skips bounding-box computation for fast metadata-only queries. **Spatial filter:** `bbox_filter=[[min_x,min_y,min_z],[max_x,max_y,max_z]]` restricts to objects overlapping a region. Supports `logic="or"` for multi-filter unions. |
 | `get_rhino_object_info` | Get detailed info about one object: type, layer, name, bounding box, material, groups, and user text dict. Pass `object_id` (GUID) **or** `name` (exact name match, returns first hit) — no need to know the GUID when you have a name. |
 
@@ -1767,6 +1768,7 @@ Ladybug handles climate visualisation (weather data, sun, wind, radiation). Hone
 | `transform_rhino_objects` | Move, rotate, or scale objects. Specify object GUIDs or operate on the current selection. Supports `copy=true` to duplicate instead of move. |
 | `edit_rhino_object_attributes` | Change name, layer, display color, or visibility on one or more objects. `visible=true` shows hidden objects; `visible=false` hides them. Pass `apply_to_all=true` to target every object in the document. |
 | `delete_rhino_objects` | Delete objects by GUID, the current selection, or pass `delete_all=true` to clear the entire document in one call. |
+| `align_geometry_to_point` | Move all specified objects (or all document objects) so that a source point lands exactly on a target point. Use after PDF tracing to anchor geometry to model-space origin. |
 | `undo_rhino` | Undo the last N operations (`count`, default 1). Via the plugin backend: stops when the undo stack is exhausted and reports `undone_steps` vs `requested_steps`. Via rhinocode: runs `count` individual `_Undo` commands. |
 | `redo_rhino` | Redo the last N undone operations (`count`, default 1). Via the plugin backend: stops when the redo stack is exhausted. Via rhinocode: runs `count` individual `_Redo` commands. |
 
@@ -1886,37 +1888,55 @@ Requires [Enscape](https://enscape3d.com) to be installed and licensed. Each too
 
 Read external design files — floor plans, specifications, spreadsheets, and reference images — directly from the MCP session. The AI receives page images it can visually interpret, extracted text, and structured data, eliminating the need for separate file-reading workarounds.
 
-**Recommended workflow for architectural drawings:**
+**Complete PDF-to-Rhino tracing workflow:**
 ```
-1. get_pdf_info(path)                                   → page count + page dimensions
-2. read_pdf(path, pages="1", scale_hint='1/4" = 1\'')  → renders page as image + px-to-feet mapping
-3. read_image(path)                                     → for site photos or sketch scans
+1. get_pdf_info(path)                                       → page count + sheet dimensions
+2. read_pdf(path, pages="1", dpi=200, scale_hint='1/4"=1\'') → page image + nominal px-to-feet ratio
+3. calibrate_pdf_scale([x1,y1], [x2,y2], real_distance=20)  → corrected ratio (fixes print-to-fit error)
+4. read_pdf_vectors(path, pages="1", real_units_per_px=...)  → exact line coords (CAD-exported PDFs)
+5. extract_pdf_dimensions(path, pages="1")                   → dimension annotations for cross-check
+6. create_rhino_scene(items=[...], snap_to_grid=0.5)         → geometry snapped to 6-inch grid
+7. validate_rhino_geometry(auto_fix=True)                    → close gaps, remove duplicates
+8. align_geometry_to_point([px,py,0], [0,0,0])               → anchor to model origin
 ```
 
-Pass `scale_hint` matching the scale annotation printed on the sheet and the response includes `px_per_real_unit`, `real_units_per_px`, `real_width`, and `real_height` — so pixel coordinates from the rendered image map directly to model-space distances. Supported formats: `"1/4\" = 1'"`, `"1/8\" = 1'-0\""`, `"1\" = 20'"` (imperial, result in feet); `"1:100"`, `"1:50"` (metric, result in meters).
+> **Have the original CAD file?** Use `import_file` instead — Rhino opens DWG/DXF/STEP/IGES natively with exact geometry. The PDF tools are for when you only have a printed/exported PDF.
+
+`scale_hint` formats: `"1/4\" = 1'"`, `"1/8\" = 1'-0\""`, `"1\" = 20'"` (imperial → feet); `"1:100"`, `"1:50"` (metric → meters). Use `calibrate_pdf_scale` to correct for print-to-fit scaling when the sheet was not printed at its intended size.
+
+**PDF reading tools:**
+
+| Tool | Description |
+|---|---|
+| `get_pdf_info` | Return page count, title, author, and width/height (points and inches) of every page. Call first to inspect the document. |
+| `read_pdf` | Render pages as base64-encoded PNG images. `scale_hint` enables pixel→real-world mapping. Parameters: `pages`, `dpi` (default 150; use 200-300 for fine detail), `max_pages` (default 10), `scale_hint`. |
+| `calibrate_pdf_scale` | Compute the true `px_per_real_unit` ratio from two pixel coordinates and a known real-world distance — corrects for print-to-fit scaling. |
+| `read_pdf_vectors` | Extract exact line/rect coordinates from the PDF vector layer (`page.get_drawings()`). Works for CAD-exported PDFs; returns `no_vectors` error for raster-only scans. Pass `real_units_per_px` to get real-world coordinates. |
+| `extract_pdf_dimensions` | Extract dimension annotation strings (`20'-6"`, `3000mm`, etc.) and their bounding box positions from the PDF text layer. Use to cross-check traced geometry against annotated distances. |
+
+**Other document tools:**
 
 | Tool | Formats | Description |
 |---|---|---|
-| `get_pdf_info` | `.pdf` | Return page count, title, author, and the width/height (in points and inches) of every page — no rendering. Call this first to understand the document before fetching pages. |
-| `read_pdf` | `.pdf` | Render one or more PDF pages to base64-encoded PNG images. Each page image is returned alongside any extractable text. Scanned drawings (no text layer) return empty text but full image renders. Parameters: `pages` (e.g. `"1"`, `"1-4"`, `"1,3,5-8"`), `dpi` (default 150; use 200-300 for fine detail), `max_pages` (default 10), `scale_hint` (e.g. `"1/4\" = 1'"` or `"1:100"` — enables pixel-to-real-world coordinate mapping). |
-| `read_image` | `.jpg` `.png` `.tiff` `.bmp` `.webp` `.gif` `.heic` `.heif` | Read an image file and return it as a base64-encoded PNG the AI can see. Auto-resizes to `max_dimension` (default 2048 px) while preserving aspect ratio. Supports HEIC/HEIF via pillow-heif. |
-| `read_spreadsheet` | `.csv` `.xlsx` `.xls` | Read a CSV or Excel file and return rows as structured data. For Excel, pass `sheet` as a name or 1-based index; omit to read the first sheet. Returns all sheet names so you can navigate a workbook. Useful for room schedules, coordinate lists, and material quantities. |
-| `read_svg` | `.svg` `.svgz` | Parse an SVG file and return the raw XML text, width/height/viewBox metadata, and element count. Also renders a PNG preview via cairosvg when available. The AI can interpret SVG geometry directly from the XML for simple drawings. |
-| `read_docx` | `.docx` | Extract text and tables from a Word document. Returns paragraphs with their Word style names (Heading 1, Normal, etc.) and full table content. Use for project briefs, room specifications, and any Word-format documentation. |
+| `read_image` | `.jpg` `.png` `.tiff` `.bmp` `.webp` `.gif` `.heic` `.heif` | Read an image and return it as base64-encoded PNG. Auto-resizes to `max_dimension` (default 2048 px). |
+| `read_spreadsheet` | `.csv` `.xlsx` `.xls` | Read CSV or Excel as structured rows. Returns all sheet names for workbook navigation. |
+| `read_svg` | `.svg` `.svgz` | Parse SVG XML with metadata and optional PNG render via cairosvg. |
+| `read_docx` | `.docx` | Extract paragraphs (with style names) and tables from Word documents. |
 
 **Parameters shared across document tools:**
 
 | Parameter | Tool | Default | Notes |
 |---|---|---|---|
-| `pages` | `read_pdf` | all (up to `max_pages`) | `"3"`, `"1-5"`, `"1,3,5-8"` — 1-based |
-| `dpi` | `read_pdf`, `read_svg` | 150 | 150 = clear overview; 200-300 = fine drawing detail |
-| `max_pages` | `read_pdf` | 10 | Hard cap per call; make multiple calls for large documents |
-| `scale_hint` | `read_pdf` | *(none)* | Drawing scale annotation — enables pixel→real-world mapping. Imperial: `"1/4\" = 1'"`, `"1/8\" = 1'-0\""`, `"1\" = 20'"`. Metric: `"1:100"`, `"1:50"` |
-| `max_dimension` | `read_image` | 2048 | Max pixel dimension after resize; increase for detail work |
-| `sheet` | `read_spreadsheet` | first sheet | Sheet name or 1-based index for Excel files |
+| `pages` | `read_pdf`, `read_pdf_vectors`, `extract_pdf_dimensions` | all (up to `max_pages`) | `"3"`, `"1-5"`, `"1,3,5-8"` — 1-based |
+| `dpi` | `read_pdf`, `read_svg`, `extract_pdf_dimensions` | 150 | 150 = overview; 200-300 = fine drawing detail |
+| `max_pages` | `read_pdf` | 10 | Hard cap per call |
+| `scale_hint` | `read_pdf` | *(none)* | Imperial: `"1/4\" = 1'"`. Metric: `"1:100"` |
+| `real_units_per_px` | `read_pdf_vectors`, `extract_pdf_dimensions` | *(none)* | From `calibrate_pdf_scale` or `read_pdf` — converts coords to real-world units |
+| `max_dimension` | `read_image` | 2048 | Max pixel dimension after resize |
+| `sheet` | `read_spreadsheet` | first sheet | Sheet name or 1-based index |
 | `max_rows` | `read_spreadsheet` | 500 | Row cap; re-call with offset for large sheets |
-| `include_tables` | `read_docx` | `true` | Set `false` to return text only |
-| `render_png` | `read_svg` | `true` | Requires cairosvg; falls back gracefully if unavailable |
+| `include_tables` | `read_docx` | `true` | Set `false` for text only |
+| `render_png` | `read_svg` | `true` | Requires `brew install cairo` on macOS |
 
 **macOS note:** On macOS, `read_svg` PNG rendering requires libcairo (installed via `brew install cairo`). The server sets `DYLD_LIBRARY_PATH` automatically — no manual configuration needed.
 

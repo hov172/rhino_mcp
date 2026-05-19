@@ -5,6 +5,24 @@ Versioning follows [Semantic Versioning](https://semver.org/).
 
 ---
 
+## [Unreleased]
+
+### Added
+
+- **`snap_to_grid` for geometry creation** — new optional parameter on `create_rhino_geometry` and `create_rhino_scene`. When set (e.g. `0.5` for a 6-inch grid, `1.0` for a 1-foot grid), all point coordinates are rounded to the nearest multiple before geometry is created. Eliminates the "almost aligned" problem when tracing floor plans from PDFs.
+
+- **`calibrate_pdf_scale`** — new tool that computes the true pixel-to-real-world scale from two identified points in a rendered PDF page and their known real-world distance. Corrects for print-to-fit scaling that makes the printed scale annotation inaccurate. Returns `px_per_real_unit` / `real_units_per_px` in the same format as `read_pdf(scale_hint=...)`.
+
+- **`read_pdf_vectors`** — new tool that extracts vector paths (lines, rectangles) directly from the PDF drawing layer using pymupdf's `page.get_drawings()`. For PDFs exported from CAD/BIM tools (Revit, AutoCAD, Rhino), returns exact line segment coordinates with zero pixel estimation. Gracefully returns a `no_vectors` error for scanned/raster-only PDFs. When `real_units_per_px` is supplied, coordinates are also returned in real-world units.
+
+- **`extract_pdf_dimensions`** — new tool that extracts dimension annotation strings and their bounding box positions from the PDF text layer. Parses imperial (`20'-6"`, `3'-0"`), metric (`3000mm`, `4.5m`), and bare numeric formats. Each match includes `bbox_px`, `center_px`, and optionally `center_real` for spatial cross-checking of traced geometry.
+
+- **`validate_rhino_geometry`** — new tool that checks a set of objects (or all curves in the document) for common tracing errors: gaps between endpoints, non-orthogonal wall angles, duplicate segments, and zero-length curves. Returns a structured issue report with severity levels. `auto_fix=True` closes gaps by snapping endpoints to midpoint and deletes duplicate segments.
+
+- **`align_geometry_to_point`** — new tool that moves all specified objects (or all document objects) so that a given source point lands exactly on a target point. One call to anchor traced geometry to model-space origin after PDF tracing.
+
+---
+
 ## [0.12.1] — 2026-05-18
 
 ### Added
