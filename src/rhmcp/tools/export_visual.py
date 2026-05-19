@@ -40,10 +40,10 @@ def register(mcp: FastMCP) -> None:
             "{}"
         ).format(
             json.dumps(path),
-            json.dumps(export_materials),
-            json.dumps(export_textures),
+            repr(export_materials),
+            repr(export_textures),
             json.dumps(weld_angle),
-            json.dumps(object_ids),
+            repr(object_ids),
             _OBJ_SCRIPT,
         )
         return rhino.execute_python(code, rhino_id=rhino_id)
@@ -77,9 +77,9 @@ def register(mcp: FastMCP) -> None:
         ).format(
             json.dumps(path),
             json.dumps(fbx_version),
-            json.dumps(embed_textures),
-            json.dumps(save_textures_as_references),
-            json.dumps(object_ids),
+            repr(embed_textures),
+            repr(save_textures_as_references),
+            repr(object_ids),
             _FBX_SCRIPT,
         )
         return rhino.execute_python(code, rhino_id=rhino_id)
@@ -112,10 +112,10 @@ def register(mcp: FastMCP) -> None:
             "{}"
         ).format(
             json.dumps(path),
-            json.dumps(embed_textures),
-            json.dumps(draco_compression),
-            json.dumps(export_materials),
-            json.dumps(object_ids),
+            repr(embed_textures),
+            repr(draco_compression),
+            repr(export_materials),
+            repr(object_ids),
             _GLB_SCRIPT,
         )
         return rhino.execute_python(code, rhino_id=rhino_id)

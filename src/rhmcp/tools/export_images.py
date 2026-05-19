@@ -43,8 +43,8 @@ def register(mcp: FastMCP) -> None:
         ).format(
             source=json.dumps(source_path),
             output=json.dumps(output_path),
-            width=json.dumps(width),
-            height=json.dumps(height),
+            width=repr(width),
+            height=repr(height),
             quality=json.dumps(quality),
             script=_CONVERT_IMAGE_SCRIPT,
         )
@@ -85,7 +85,7 @@ def register(mcp: FastMCP) -> None:
             width=json.dumps(width),
             height=json.dumps(height),
             display_mode=json.dumps(display_mode),
-            transparent=json.dumps(transparent_background),
+            transparent=repr(transparent_background),
             quality=json.dumps(quality),
             script=_EXPORT_VIEWPORT_SCRIPT,
         )

@@ -41,7 +41,7 @@ def register(mcp: FastMCP) -> None:
             json.dumps(path),
             json.dumps(schema),
             json.dumps(tolerance),
-            json.dumps(object_ids),
+            repr(object_ids),
             _STEP_SCRIPT,
         )
         return rhino.execute_python(code, rhino_id=rhino_id)
@@ -74,7 +74,7 @@ def register(mcp: FastMCP) -> None:
             json.dumps(path),
             json.dumps(tolerance),
             json.dumps(trim_type),
-            json.dumps(object_ids),
+            repr(object_ids),
             _IGES_SCRIPT,
         )
         return rhino.execute_python(code, rhino_id=rhino_id)
@@ -107,8 +107,8 @@ def register(mcp: FastMCP) -> None:
         ).format(
             json.dumps(path),
             json.dumps(autocad_version),
-            json.dumps(export_layout),
-            json.dumps(object_ids),
+            repr(export_layout),
+            repr(object_ids),
             _DWG_SCRIPT,
         )
         return rhino.execute_python(code, rhino_id=rhino_id)

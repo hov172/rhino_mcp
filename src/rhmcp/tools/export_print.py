@@ -49,7 +49,7 @@ def register(mcp: FastMCP) -> None:
         ).format(
             path=json.dumps(path),
             binary=repr(binary),
-            ids=json.dumps(object_ids),
+            ids=repr(object_ids),
             tol=repr(tolerance),
             script=_STL_SCRIPT,
         )
@@ -88,7 +88,7 @@ def register(mcp: FastMCP) -> None:
             "{script}"
         ).format(
             path=json.dumps(path),
-            ids=json.dumps(object_ids),
+            ids=repr(object_ids),
             quality=json.dumps(mesh_quality),
             script=_3MF_SCRIPT,
         )
