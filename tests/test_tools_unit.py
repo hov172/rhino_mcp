@@ -11,6 +11,7 @@ These tests do NOT require a running Rhino instance.  They work by:
 
 from __future__ import annotations
 
+import ast
 import unittest
 from unittest.mock import MagicMock, patch
 
@@ -95,7 +96,7 @@ class TestMaterialsValidation(unittest.TestCase):
             import json
             # code starts with: __mcp_material = {...}\n...
             line = code.split("\n", 1)[0]
-            params = json.loads(line.split(" = ", 1)[1])
+            params = ast.literal_eval(line.split(" = ", 1)[1])
             captured.append(params)
             return {"ok": True, "backend": "rhinocode", "result": {}}
 
@@ -113,7 +114,7 @@ class TestMaterialsValidation(unittest.TestCase):
 
         def fake_execute_python(code: str, rhino_id=None, **kw):
             import json
-            params = json.loads(code.split("\n", 1)[0].split(" = ", 1)[1])
+            params = ast.literal_eval(code.split("\n", 1)[0].split(" = ", 1)[1])
             captured.append(params)
             return {"ok": True, "backend": "rhinocode", "result": {}}
 
@@ -130,7 +131,7 @@ class TestMaterialsValidation(unittest.TestCase):
 
         def fake_execute_python(code: str, rhino_id=None, **kw):
             import json
-            params = json.loads(code.split("\n", 1)[0].split(" = ", 1)[1])
+            params = ast.literal_eval(code.split("\n", 1)[0].split(" = ", 1)[1])
             captured.append(params)
             return {"ok": True, "backend": "rhinocode", "result": {}}
 
@@ -147,7 +148,7 @@ class TestMaterialsValidation(unittest.TestCase):
 
         def fake_execute_python(code: str, rhino_id=None, **kw):
             import json
-            params = json.loads(code.split("\n", 1)[0].split(" = ", 1)[1])
+            params = ast.literal_eval(code.split("\n", 1)[0].split(" = ", 1)[1])
             captured.append(params)
             return {"ok": True, "backend": "rhinocode", "result": {}}
 
@@ -164,7 +165,7 @@ class TestMaterialsValidation(unittest.TestCase):
 
         def fake_execute_python(code: str, rhino_id=None, **kw):
             import json
-            params = json.loads(code.split("\n", 1)[0].split(" = ", 1)[1])
+            params = ast.literal_eval(code.split("\n", 1)[0].split(" = ", 1)[1])
             captured.append(params)
             return {"ok": True, "backend": "rhinocode", "result": {}}
 
@@ -183,7 +184,7 @@ class TestMaterialsValidation(unittest.TestCase):
 
         def fake_execute_python(code: str, rhino_id=None, **kw):
             import json
-            params = json.loads(code.split("\n", 1)[0].split(" = ", 1)[1])
+            params = ast.literal_eval(code.split("\n", 1)[0].split(" = ", 1)[1])
             captured.append(params)
             return {"ok": True, "backend": "rhinocode", "result": {}}
 
