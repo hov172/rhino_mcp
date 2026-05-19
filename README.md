@@ -1751,7 +1751,7 @@ Ladybug handles climate visualisation (weather data, sun, wind, radiation). Hone
 
 | Tool | Description |
 |---|---|
-| `create_rhino_geometry` | Create a single geometric object. Supported types: `box`, `sphere`, `cylinder`, `cone`, `torus`, `line`, `polyline`, `arc`, `circle`, `ellipse`, `curve` (free-form NURBS), `surface` (from points), `plane`, `text`, `point`, `mesh`, `extrusion`, `brep` (from existing), and more. |
+| `create_rhino_geometry` | Create a single geometric object. Supported types: `box`, `sphere`, `cylinder`, `cone`, `torus`, `line`, `polyline`, `arc`, `circle`, `ellipse`, `curve` (free-form NURBS), `surface` (from points), `plane`, `text`, `point`, `mesh`, `extrusion`, `brep` (from existing), and more. **Box params:** corner form — `corner=[x,y,z]` + `width`/`depth`/`height` (or `x_size`/`y_size`/`z_size`); center form — `center=[x,y,z]` + same dimension params, or `size=[sx,sy,sz]`. |
 | `create_rhino_scene` | Create multiple objects in one call. Accepts a list of the same object descriptors as `create_rhino_geometry`. |
 | `get_rhino_objects` | List objects with optional filters by type, layer, name, or color. **Pagination:** `offset` + `limit` (default 100) — response includes `total_matching` and `has_more` so you can page through large scenes. **Hidden objects:** `include_hidden=true` includes objects that are hidden (default false). **Lightweight mode:** `include_geometry=false` skips bounding-box computation for fast metadata-only queries. **Spatial filter:** `bbox_filter=[[min_x,min_y,min_z],[max_x,max_y,max_z]]` restricts to objects overlapping a region. Supports `logic="or"` for multi-filter unions. |
 | `get_rhino_object_info` | Get detailed info about one object: type, layer, name, bounding box, material, groups, and user text dict. Pass `object_id` (GUID) **or** `name` (exact name match, returns first hit) — no need to know the GUID when you have a name. |
@@ -1888,15 +1888,17 @@ Read external design files — floor plans, specifications, spreadsheets, and re
 
 **Recommended workflow for architectural drawings:**
 ```
-1. get_pdf_info(path)               → page count + page dimensions
-2. read_pdf(path, pages="3-4")      → renders pages 3-4 as images the AI sees inline
-3. read_image(path)                 → for site photos or sketch scans
+1. get_pdf_info(path)                                   → page count + page dimensions
+2. read_pdf(path, pages="1", scale_hint='1/4" = 1\'')  → renders page as image + px-to-feet mapping
+3. read_image(path)                                     → for site photos or sketch scans
 ```
+
+Pass `scale_hint` matching the scale annotation printed on the sheet and the response includes `px_per_real_unit`, `real_units_per_px`, `real_width`, and `real_height` — so pixel coordinates from the rendered image map directly to model-space distances. Supported formats: `"1/4\" = 1'"`, `"1/8\" = 1'-0\""`, `"1\" = 20'"` (imperial, result in feet); `"1:100"`, `"1:50"` (metric, result in meters).
 
 | Tool | Formats | Description |
 |---|---|---|
 | `get_pdf_info` | `.pdf` | Return page count, title, author, and the width/height (in points and inches) of every page — no rendering. Call this first to understand the document before fetching pages. |
-| `read_pdf` | `.pdf` | Render one or more PDF pages to base64-encoded PNG images. Each page image is returned alongside any extractable text. Scanned drawings (no text layer) return empty text but full image renders. Parameters: `pages` (e.g. `"1"`, `"1-4"`, `"1,3,5-8"`), `dpi` (default 150; use 200-300 for fine detail), `max_pages` (default 10). |
+| `read_pdf` | `.pdf` | Render one or more PDF pages to base64-encoded PNG images. Each page image is returned alongside any extractable text. Scanned drawings (no text layer) return empty text but full image renders. Parameters: `pages` (e.g. `"1"`, `"1-4"`, `"1,3,5-8"`), `dpi` (default 150; use 200-300 for fine detail), `max_pages` (default 10), `scale_hint` (e.g. `"1/4\" = 1'"` or `"1:100"` — enables pixel-to-real-world coordinate mapping). |
 | `read_image` | `.jpg` `.png` `.tiff` `.bmp` `.webp` `.gif` `.heic` `.heif` | Read an image file and return it as a base64-encoded PNG the AI can see. Auto-resizes to `max_dimension` (default 2048 px) while preserving aspect ratio. Supports HEIC/HEIF via pillow-heif. |
 | `read_spreadsheet` | `.csv` `.xlsx` `.xls` | Read a CSV or Excel file and return rows as structured data. For Excel, pass `sheet` as a name or 1-based index; omit to read the first sheet. Returns all sheet names so you can navigate a workbook. Useful for room schedules, coordinate lists, and material quantities. |
 | `read_svg` | `.svg` `.svgz` | Parse an SVG file and return the raw XML text, width/height/viewBox metadata, and element count. Also renders a PNG preview via cairosvg when available. The AI can interpret SVG geometry directly from the XML for simple drawings. |
@@ -1909,6 +1911,7 @@ Read external design files — floor plans, specifications, spreadsheets, and re
 | `pages` | `read_pdf` | all (up to `max_pages`) | `"3"`, `"1-5"`, `"1,3,5-8"` — 1-based |
 | `dpi` | `read_pdf`, `read_svg` | 150 | 150 = clear overview; 200-300 = fine drawing detail |
 | `max_pages` | `read_pdf` | 10 | Hard cap per call; make multiple calls for large documents |
+| `scale_hint` | `read_pdf` | *(none)* | Drawing scale annotation — enables pixel→real-world mapping. Imperial: `"1/4\" = 1'"`, `"1/8\" = 1'-0\""`, `"1\" = 20'"`. Metric: `"1:100"`, `"1:50"` |
 | `max_dimension` | `read_image` | 2048 | Max pixel dimension after resize; increase for detail work |
 | `sheet` | `read_spreadsheet` | first sheet | Sheet name or 1-based index for Excel files |
 | `max_rows` | `read_spreadsheet` | 500 | Row cap; re-call with offset for large sheets |
