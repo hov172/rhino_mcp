@@ -4,7 +4,6 @@ Structured Rhino geometry creation tools.
 
 from __future__ import annotations
 
-import json
 from typing import Any
 
 from mcp.server.fastmcp import FastMCP
@@ -531,7 +530,7 @@ def register(mcp: FastMCP) -> None:
 
 
 def _run_scene(items: list[dict[str, Any]], rhino_id: str | None) -> dict[str, object]:
-    code = "__mcp_scene_items = {!s}\n{}".format(json.dumps(items), _GEOMETRY_SCRIPT)
+    code = "__mcp_scene_items = {!r}\n{}".format(items, _GEOMETRY_SCRIPT)
     result = rhino.execute_python(code, rhino_id=rhino_id)
     if result.get("ok"):
         return result

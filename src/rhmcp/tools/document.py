@@ -25,7 +25,7 @@ def register(mcp: FastMCP) -> None:
         """
         Save the active Rhino document. If ``path`` is given, save as that file.
         """
-        code = "_mcp_path = {!s}\n{}".format(json.dumps(path), _SAVE_SCRIPT)
+        code = "_mcp_path = {!r}\n{}".format(path, _SAVE_SCRIPT)
         return rhino.execute_python(code, rhino_id=rhino_id)
 
     @mcp.tool(annotations=ToolAnnotations(title="Enable Viewport Redraw", destructiveHint=True))

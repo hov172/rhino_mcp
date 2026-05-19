@@ -120,9 +120,7 @@ result = {"plugins": plugins, "count": len(plugins)}
         try:
             return rhino.plugin_result("load_plugin", params)
         except OSError:
-            import json
-
-            code = "__mcp_plugin = {!s}\n{}".format(json.dumps(params), """
+            code = "__mcp_plugin = {!r}\n{}".format(params, """
 from System import Guid
 from Rhino.PlugIns import PlugIn
 if __mcp_plugin.get("path"):

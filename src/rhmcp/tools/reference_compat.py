@@ -235,7 +235,7 @@ def register(mcp: FastMCP) -> None:
             return plugin
         from rhmcp.tools.objects import _SELECT_SCRIPT
 
-        code = "__mcp_select = {!s}\n{}".format(__import__("json").dumps({"filters": filters, "logic": filters_type}), _SELECT_SCRIPT)
+        code = "__mcp_select = {!r}\n{}".format({"filters": filters, "logic": filters_type}, _SELECT_SCRIPT)
         return rhino.execute_python(code, rhino_id=rhino_id)
 
     @mcp.tool(annotations=ToolAnnotations(title="Execute RhinoScript Python Code", destructiveHint=True))
@@ -298,7 +298,7 @@ def register(mcp: FastMCP) -> None:
 
         payload = {"path": path, "width": width, "height": height, "viewport": viewport, "show_grid": show_grid, "show_axes": show_axes, "show_cplane_axes": show_cplane_axes, "zoom_to_fit": zoom_to_fit}
         raw = rhino.execute_python(
-            "__mcp_capture = {!s}\n{}".format(json.dumps(payload), _CAPTURE_SCRIPT),
+            "__mcp_capture = {!r}\n{}".format(payload, _CAPTURE_SCRIPT),
             rhino_id=rhino_id,
         )
         r = raw.get("result") if isinstance(raw, dict) else None
@@ -367,7 +367,7 @@ def _modify(object_ids: list[str], properties: dict[str, Any], rhino_id: str | N
 
     payload = {"ids": object_ids, "selected": False}
     payload.update(properties)
-    code = "__mcp_attrs = {!s}\n{}".format(json.dumps(payload), _ATTR_COMPAT_SCRIPT)
+    code = "__mcp_attrs = {!r}\n{}".format(payload, _ATTR_COMPAT_SCRIPT)
     return rhino.execute_python(code, rhino_id=rhino_id)
 
 

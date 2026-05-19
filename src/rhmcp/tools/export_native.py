@@ -47,10 +47,10 @@ def register(mcp: FastMCP) -> None:
         ).format(
             path=json.dumps(path),
             rhino_version=json.dumps(rhino_version),
-            render_meshes=json.dumps(include_render_meshes),
-            preview_image=json.dumps(include_preview_image),
-            object_ids=json.dumps(object_ids),
-            notes=json.dumps(notes),
+            render_meshes=repr(include_render_meshes),
+            preview_image=repr(include_preview_image),
+            object_ids=repr(object_ids),
+            notes=repr(notes),
             script=_EXPORT_3DM_SCRIPT,
         )
         return rhino.execute_python(code, rhino_id=rhino_id)

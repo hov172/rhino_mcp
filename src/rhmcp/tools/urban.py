@@ -525,7 +525,7 @@ def _capture_view() -> list[object]:
             return [meta, Image(data=base64.b64decode(b64_plugin), format="png")]
 
     payload = {"path": None, "width": 1200, "height": 900}
-    code = "__mcp_capture = {!s}\n{}".format(json.dumps(payload), _CAPTURE_SCRIPT)
+    code = "__mcp_capture = {!r}\n{}".format(payload, _CAPTURE_SCRIPT)
     raw = rhino.execute_python(code)
     r = raw.get("result") if isinstance(raw, dict) else None
     b64 = r.get("b64") if isinstance(r, dict) else None

@@ -4,8 +4,6 @@ Advanced geometry operations for Rhino objects.
 
 from __future__ import annotations
 
-import json
-
 from mcp.server.fastmcp import FastMCP
 from mcp.types import ToolAnnotations
 
@@ -81,7 +79,7 @@ def _run(operation: str, payload: dict[str, object]) -> dict[str, object]:
     payload.pop("err", None)
     plugin_params = {key: value for key, value in payload.items() if value is not None}
     payload["operation"] = operation
-    code = "__mcp_advanced = {!s}\n{}".format(json.dumps(payload), _SCRIPT)
+    code = "__mcp_advanced = {!r}\n{}".format(payload, _SCRIPT)
     return rhino.run_plugin_or_python(
         operation,
         plugin_params,

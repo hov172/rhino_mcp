@@ -4,8 +4,6 @@ Curve projection, intersection, and splitting tools.
 
 from __future__ import annotations
 
-import json
-
 from mcp.server.fastmcp import FastMCP
 from mcp.types import ToolAnnotations
 
@@ -288,7 +286,7 @@ def _run(operation: str, payload: dict[str, object]) -> dict[str, object]:
     payload.pop("err", None)
     plugin_params = {key: value for key, value in payload.items() if value is not None}
     payload["operation"] = operation
-    code = "__mcp_curveop = {!s}\n{}".format(json.dumps(payload), _SCRIPT)
+    code = "__mcp_curveop = {!r}\n{}".format(payload, _SCRIPT)
     return rhino.run_plugin_or_python(
         operation,
         plugin_params,

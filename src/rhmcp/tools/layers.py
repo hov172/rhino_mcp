@@ -4,8 +4,6 @@ Tools for Rhino layer management.
 
 from __future__ import annotations
 
-import json
-
 from mcp.server.fastmcp import FastMCP
 from mcp.types import ToolAnnotations
 
@@ -48,7 +46,7 @@ def register(mcp: FastMCP) -> None:
             "locked": locked,
             "current": current,
         }
-        code = "__mcp_layer = {!s}\n{}".format(json.dumps(payload), _LAYER_SCRIPT)
+        code = "__mcp_layer = {!r}\n{}".format(payload, _LAYER_SCRIPT)
         return rhino.execute_python(code, rhino_id=rhino_id)
 
     @mcp.tool(annotations=ToolAnnotations(title="Create Layer", destructiveHint=True))
@@ -70,7 +68,7 @@ def register(mcp: FastMCP) -> None:
         plugin = _try_plugin("create_layer", {key: value for key, value in params.items() if value is not None})
         if plugin:
             return plugin
-        code = "__mcp_layer = {!s}\n{}".format(json.dumps({"action": "create", **params}), _LAYER_SCRIPT)
+        code = "__mcp_layer = {!r}\n{}".format({"action": "create", **params}, _LAYER_SCRIPT)
         return rhino.execute_python(code, rhino_id=rhino_id)
 
     @mcp.tool(annotations=ToolAnnotations(title="Delete Layer", destructiveHint=True))
@@ -81,7 +79,7 @@ def register(mcp: FastMCP) -> None:
         plugin = _try_plugin("delete_layer", {"name": name})
         if plugin:
             return plugin
-        code = "__mcp_layer = {!s}\n{}".format(json.dumps({"action": "delete", "name": name}), _LAYER_SCRIPT)
+        code = "__mcp_layer = {!r}\n{}".format({"action": "delete", "name": name}, _LAYER_SCRIPT)
         return rhino.execute_python(code, rhino_id=rhino_id)
 
     @mcp.tool(annotations=ToolAnnotations(title="Get Or Set Current Layer", destructiveHint=True))
@@ -92,7 +90,7 @@ def register(mcp: FastMCP) -> None:
         plugin = _try_plugin("get_or_set_current_layer", {"name": name} if name else {})
         if plugin:
             return plugin
-        code = "__mcp_layer = {!s}\n{}".format(json.dumps({"action": "current", "name": name}), _LAYER_SCRIPT)
+        code = "__mcp_layer = {!r}\n{}".format({"action": "current", "name": name}, _LAYER_SCRIPT)
         return rhino.execute_python(code, rhino_id=rhino_id)
 
 

@@ -4,8 +4,6 @@ Tools for Rhino material management.
 
 from __future__ import annotations
 
-import json
-
 from mcp.server.fastmcp import FastMCP
 from mcp.types import ToolAnnotations
 
@@ -75,7 +73,7 @@ def register(mcp: FastMCP) -> None:
         if plugin:
             return plugin
 
-        code = "__mcp_material = {!s}\n{}".format(json.dumps(params), _CREATE_MATERIAL_SCRIPT)
+        code = "__mcp_material = {!r}\n{}".format(params, _CREATE_MATERIAL_SCRIPT)
         return rhino.execute_python(code, rhino_id=rhino_id)
 
     @mcp.tool(annotations=ToolAnnotations(title="Set Object Material", destructiveHint=True))
@@ -107,7 +105,7 @@ def register(mcp: FastMCP) -> None:
         if plugin:
             return plugin
 
-        code = "__mcp_set_mat = {!s}\n{}".format(json.dumps(params), _SET_OBJECT_MATERIAL_SCRIPT)
+        code = "__mcp_set_mat = {!r}\n{}".format(params, _SET_OBJECT_MATERIAL_SCRIPT)
         return rhino.execute_python(code, rhino_id=rhino_id)
 
     @mcp.tool(annotations=ToolAnnotations(title="Delete Rhino Material", destructiveHint=True))
@@ -135,7 +133,7 @@ def register(mcp: FastMCP) -> None:
         if plugin:
             return plugin
 
-        code = "__mcp_del_mat = {!s}\n{}".format(json.dumps(params), _DELETE_MATERIAL_SCRIPT)
+        code = "__mcp_del_mat = {!r}\n{}".format(params, _DELETE_MATERIAL_SCRIPT)
         return rhino.execute_python(code, rhino_id=rhino_id)
 
 

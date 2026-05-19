@@ -4,8 +4,6 @@ Boolean operations for Rhino solid objects.
 
 from __future__ import annotations
 
-import json
-
 from mcp.server.fastmcp import FastMCP
 from mcp.types import ToolAnnotations
 
@@ -54,7 +52,7 @@ def _run(operation: str, payload: dict[str, object]) -> dict[str, object]:
     command_type = "boolean_" + operation
     plugin_params = {key: value for key, value in payload.items() if value is not None}
     payload["operation"] = operation
-    code = "__mcp_boolean = {!s}\n{}".format(json.dumps(payload), _SCRIPT)
+    code = "__mcp_boolean = {!r}\n{}".format(payload, _SCRIPT)
     return rhino.run_plugin_or_python(
         command_type,
         plugin_params,

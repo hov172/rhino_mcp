@@ -5,8 +5,6 @@ Tools for viewport control and captures.
 from __future__ import annotations
 
 import base64
-import json
-
 from mcp.server.fastmcp import FastMCP, Image
 from mcp.types import ToolAnnotations
 
@@ -35,7 +33,7 @@ def register(mcp: FastMCP) -> None:
             err = validate.coordinate(target, "target")
             if err: return err
         payload = {"view": view, "camera": camera, "target": target, "lens": lens}
-        code = "__mcp_view = {!s}\n{}".format(json.dumps(payload), _SET_VIEW_SCRIPT)
+        code = "__mcp_view = {!r}\n{}".format(payload, _SET_VIEW_SCRIPT)
         return rhino.execute_python(code, rhino_id=rhino_id)
 
     @mcp.tool(annotations=ToolAnnotations(title="Capture Rhino View", readOnlyHint=True))
@@ -70,7 +68,7 @@ def register(mcp: FastMCP) -> None:
             "show_axes": show_axes, "show_cplane_axes": show_cplane_axes,
             "zoom_to_fit": zoom_to_fit,
         }
-        code = "__mcp_capture = {!s}\n{}".format(json.dumps(payload), _CAPTURE_SCRIPT)
+        code = "__mcp_capture = {!r}\n{}".format(payload, _CAPTURE_SCRIPT)
         raw = rhino.execute_python(code, rhino_id=rhino_id)
 
         r = raw.get("result") if isinstance(raw, dict) else None
