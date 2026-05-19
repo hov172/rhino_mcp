@@ -18,6 +18,7 @@ import base64
 import csv as _csv
 import io
 import os
+import re
 import sys
 import xml.etree.ElementTree as _ET
 
@@ -80,6 +81,62 @@ def _parse_page_spec(spec: str | None, page_count: int) -> list[int]:
     except (ValueError, TypeError) as exc:
         raise ValueError(f"Invalid pages spec {spec!r}: {exc}") from exc
     return sorted(indices)
+
+
+def _parse_scale_hint(hint: str) -> tuple[float, str]:
+    """
+    Parse a drawing scale string and return (paper_inches_per_real_unit, real_unit).
+
+    Supported formats
+    -----------------
+    Architectural imperial  ``1/4" = 1'``  ``1/8" = 1'-0"``  ``1" = 20'``
+    Metric ratio            ``1:100``  ``1:50``  ``1:200``
+
+    Returns
+    -------
+    paper_in_per_unit : float
+        How many paper inches represent one real-world unit.
+    unit : str
+        ``"feet"`` for imperial formats, ``"meters"`` for ratio formats.
+    """
+    hint = hint.strip()
+
+    # Metric ratio: 1:100, 1:50, 1 : 200
+    m = re.match(r'^(\d+(?:\.\d+)?)\s*:\s*(\d+(?:\.\d+)?)$', hint)
+    if m:
+        paper_val = float(m.group(1))
+        real_val = float(m.group(2))
+        # paper_val mm = real_val mm  →  1 m real = (paper_val/real_val)*1000 mm on paper
+        # convert paper mm → paper inches: * (1/25.4)
+        paper_in_per_real_m = (paper_val / real_val) * 1000.0 / 25.4
+        return paper_in_per_real_m, "meters"
+
+    # Imperial: {frac}" = {feet}['-{inches}"]
+    # Matches: 1/4" = 1'  |  1/4" = 1'-0"  |  1" = 10'  |  3/16" = 1'
+    m = re.match(
+        r'^(\d+(?:[./]\d+)?)\s*(?:in|inch(?:es)?|")?\s*=\s*'
+        r'(\d+(?:\.\d+)?)\s*(?:\'|ft|feet|foot)'
+        r'(?:[^\d]*(\d+(?:\.\d+)?)\s*(?:"|in))?',
+        hint, re.IGNORECASE,
+    )
+    if m:
+        paper_str = m.group(1)
+        if '/' in paper_str:
+            num, den = paper_str.split('/')
+            paper_inches = float(num) / float(den)
+        else:
+            paper_inches = float(paper_str)
+
+        real_feet = float(m.group(2))
+        real_extra_in = float(m.group(3)) if m.group(3) else 0.0
+        real_feet_total = real_feet + real_extra_in / 12.0
+
+        return paper_inches / real_feet_total, "feet"
+
+    raise ValueError(
+        f"Unrecognised scale format: {hint!r}. "
+        "Use '1/4\" = 1\\'', '1/8\" = 1\\'-0\"', '1:100', etc."
+    )
 
 
 # ---------------------------------------------------------------------------
@@ -190,6 +247,7 @@ def register(mcp: FastMCP) -> None:
         dpi: int = 150,
         extract_text: bool = True,
         max_pages: int = 10,
+        scale_hint: str | None = None,
     ) -> dict[str, Any]:
         """
         Render PDF pages to images and optionally extract text.
@@ -206,6 +264,15 @@ def register(mcp: FastMCP) -> None:
         :param extract_text: Also return the text layer. Scanned PDFs return
             empty strings; text-layer PDFs return parseable content.
         :param max_pages: Hard cap on pages returned per call (default 10).
+        :param scale_hint: Drawing scale annotation so pixel coordinates can
+            be converted to real-world distances.  Supported formats:
+            ``"1/4\\" = 1'"`` (architectural imperial, result in feet),
+            ``"1/8\\" = 1'"``, ``"1\\" = 20'"`` etc.; or metric ratio
+            ``"1:100"``, ``"1:50"`` (result in meters).
+            When provided, each page entry and the top-level response include
+            ``px_per_real_unit``, ``real_units_per_px``, ``real_unit``,
+            ``real_width``, and ``real_height`` so coordinates can be mapped
+            directly to model space.
         """
         from rhmcp.tools_helpers.security import clamp
         dpi = clamp(dpi, 50, 600)
@@ -214,6 +281,21 @@ def register(mcp: FastMCP) -> None:
             path = _validate_read_path(path)
         except ValueError as exc:
             return {"ok": False, "error": str(exc)}
+
+        # Parse scale hint up-front so a bad string fails fast
+        scale_info: dict[str, Any] | None = None
+        if scale_hint:
+            try:
+                paper_in_per_unit, real_unit = _parse_scale_hint(scale_hint)
+            except ValueError as exc:
+                return {"ok": False, "error": str(exc)}
+            px_per_unit = paper_in_per_unit * dpi
+            scale_info = {
+                "scale_hint": scale_hint,
+                "real_unit": real_unit,
+                "px_per_real_unit": round(px_per_unit, 4),
+                "real_units_per_px": round(1.0 / px_per_unit, 6),
+            }
 
         try:
             import fitz
@@ -254,10 +336,17 @@ def register(mcp: FastMCP) -> None:
             }
             if extract_text:
                 entry["text"] = pg.get_text("text").strip()
+            if scale_info:
+                rpu = scale_info["real_units_per_px"]
+                entry["real_width"] = round(pix.width * rpu, 4)
+                entry["real_height"] = round(pix.height * rpu, 4)
+                entry["real_unit"] = scale_info["real_unit"]
+                entry["px_per_real_unit"] = scale_info["px_per_real_unit"]
+                entry["real_units_per_px"] = rpu
             result_pages.append(entry)
 
         doc.close()
-        return {
+        out: dict[str, Any] = {
             "ok": True,
             "path": str(p),
             "page_count": page_count,
@@ -266,6 +355,9 @@ def register(mcp: FastMCP) -> None:
             "dpi": dpi,
             "pages": result_pages,
         }
+        if scale_info:
+            out["scale"] = scale_info
+        return out
 
     # ── IMAGE ────────────────────────────────────────────────────────────────
 
