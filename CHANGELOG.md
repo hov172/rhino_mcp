@@ -7,11 +7,15 @@ Versioning follows [Semantic Versioning](https://semver.org/).
 
 ## [0.12.1] — 2026-05-18
 
+### Added
+
+- **`read_pdf` scale hint** — new `scale_hint` parameter accepts a drawing scale annotation string (`"1/4\" = 1'"`, `"1/8\" = 1'-0\""`, `"1:100"`, `"1:50"`, etc.) and computes the pixel-to-real-world mapping for each rendered page. The response now includes `px_per_real_unit`, `real_units_per_px`, `real_width`, `real_height`, and `real_unit` (`"feet"` for imperial, `"meters"` for metric ratio formats), enabling accurate coordinate mapping from PDF pixel space to model space.
+
 ### Fixed
 
 - **JSON-to-Python boolean/null injection bug (server-only)** — `json.dumps()` was used to embed Python values directly into source code strings sent to Rhino's IronPython runtime. JSON tokens `true`, `false`, and `null` are not valid Python identifiers, causing `NameError` on any tool call that passed a boolean or `None` parameter through the rhinocode fallback path. Fixed across 16 tool modules and 4 export modules (`export_visual`, `export_cad`, `export_print`, `export_images`) — 40+ injection sites total. All replaced with `repr()` / `{!r}`, which produces valid Python literals (`True`, `False`, `None`). Plugin-socket users were unaffected; the bug consistently broke the rhinocode fallback path.
 - **`set_unit_system` crash on any call** — `Rhino.UnitSystem.None_` was evaluated eagerly inside a dict literal, throwing `AttributeError: 'type' object has no attribute 'None_'` even when setting valid units like `Millimeters`. Fixed with `getattr` fallback and changed guard from `if us is None` to `if name not in _MAP`.
-- **`create_rhino_geometry` box ignores `corner` and `x_size`/`y_size`/`z_size`** — the script only read `center` + `size`; passing `corner` + individual dimension params silently fell back to a unit cube at the origin. Added full support for the corner + dimensions calling convention.
+- **`create_rhino_geometry` box ignores `corner` and dimension params** — the box handler only read `center` + `size`; passing `corner` + `x_size`/`y_size`/`z_size` (or their aliases `width`/`depth`/`height`) silently fell back to a unit cube at the origin. Added full support for the corner + dimensions calling convention and `width`/`depth`/`height` as accepted aliases for `x_size`/`y_size`/`z_size`.
 - **Plugin autostart** — set `PlugInLoadTime.AtStartup` on the plugin class. Without this, Rhino defaulted to `WhenNeeded`, meaning the TCP socket server only started after the user manually ran `MCPStart` for the first time. Now the server is ready immediately when Rhino opens, before any user interaction.
 
 ---
