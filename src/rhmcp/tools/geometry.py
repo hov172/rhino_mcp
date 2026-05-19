@@ -131,11 +131,15 @@ def _create(spec):
     elif kind == "ellipsoid":
         object_id = rs.AddEllipsoid(_pt(params.get("center")), params.get("radius_x", 1), params.get("radius_y", 1), params.get("radius_z", 1))
     elif kind == "box":
+        # Accept width/depth/height as aliases for x_size/y_size/z_size
+        def _bv(primary, alias, default=1):
+            v = params.get(primary) if params.get(primary) is not None else params.get(alias)
+            return float(v) if v is not None else float(default)
         if params.get("corner") is not None:
             x0, y0, z0 = _pt(params["corner"])
-            sx = float(params.get("x_size", 1))
-            sy = float(params.get("y_size", 1))
-            sz = float(params.get("z_size", 1))
+            sx = _bv("x_size", "width")
+            sy = _bv("y_size", "depth")
+            sz = _bv("z_size", "height")
             corners = [
                 (x0, y0, z0), (x0+sx, y0, z0), (x0+sx, y0+sy, z0), (x0, y0+sy, z0),
                 (x0, y0, z0+sz), (x0+sx, y0, z0+sz), (x0+sx, y0+sy, z0+sz), (x0, y0+sy, z0+sz),
@@ -143,7 +147,7 @@ def _create(spec):
             object_id = rs.AddBox(corners)
         else:
             size = params.get("size") or [
-                params.get("x_size", 1), params.get("y_size", 1), params.get("z_size", 1),
+                _bv("x_size", "width"), _bv("y_size", "depth"), _bv("z_size", "height"),
             ]
             object_id = rs.AddBox(_box_corners(params.get("center"), size))
     elif kind == "cylinder":
@@ -500,6 +504,12 @@ def register(mcp: FastMCP) -> None:
         pointcloud, textdot, light, extrusion, block_insert,
         dimension_linear, dimension_radial, dimension_angular, leader, cage,
         morphcontrol, subd, hatch, clipping_plane.
+
+        **box** — two calling conventions:
+          - Corner form: ``corner=[x,y,z]``, ``x_size`` (alias ``width``),
+            ``y_size`` (alias ``depth``), ``z_size`` (alias ``height``)
+          - Center form: ``center=[x,y,z]``, ``x_size``/``y_size``/``z_size``
+            (aliases ``width``/``depth``/``height``); or ``size=[sx,sy,sz]``
 
         **arc** — two calling conventions:
           - 3-point form: ``start=[x,y,z]``, ``end=[x,y,z]``,
