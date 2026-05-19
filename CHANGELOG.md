@@ -5,6 +5,14 @@ Versioning follows [Semantic Versioning](https://semver.org/).
 
 ---
 
+## [Unreleased]
+
+### Fixed
+
+- **JSON-to-Python boolean bug in rhinocode fallback** — 23 sites across 12 tool modules were injecting `json.dumps()` output directly into Python source code strings using `{!s}`. This produced JSON tokens (`true`, `false`, `null`) which are invalid Python identifiers, causing `NameError` in Rhino's IronPython runtime whenever a payload contained booleans or `None` values. All sites replaced with `{!r}` on the raw Python value, which uses `repr()` to emit valid Python literals (`True`, `False`, `None`). Affected tools include boolean operations, curve operations, layer management, viewport capture, material management, geometry creation, and export. The bug was latent for plugin-socket users (plugin handles these calls natively) but consistently broke the rhinocode fallback path.
+
+---
+
 ## [0.12.1] — 2026-05-17
 
 ### Fixed
