@@ -278,7 +278,6 @@ def register(mcp: FastMCP) -> None:
         path is optional; omit for in-memory capture only.
         """
         import base64
-        import json
         from mcp.server.fastmcp import Image
         from rhmcp.tools.view import _CAPTURE_SCRIPT
 
@@ -363,8 +362,6 @@ result = {"commands": names, "count": len(names)}
 
 
 def _modify(object_ids: list[str], properties: dict[str, Any], rhino_id: str | None) -> dict[str, object]:
-    import json
-
     payload = {"ids": object_ids, "selected": False}
     payload.update(properties)
     code = "__mcp_attrs = {!r}\n{}".format(payload, _ATTR_COMPAT_SCRIPT)
