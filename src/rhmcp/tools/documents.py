@@ -418,6 +418,312 @@ def register(mcp: FastMCP) -> None:
             ),
         }
 
+    @mcp.tool(annotations=ToolAnnotations(title="Read PDF Vectors", readOnlyHint=True))
+    def read_pdf_vectors(
+        path: str,
+        pages: str | None = None,
+        real_units_per_px: float | None = None,
+        real_unit: str = "feet",
+        min_length_px: float = 2.0,
+    ) -> dict[str, Any]:
+        """
+        Extract vector paths (lines, rectangles, curves) from a PDF page as
+        structured coordinate data.
+
+        Works best for PDFs exported from CAD/BIM tools (Revit, AutoCAD,
+        Rhino).  Returns exact line and rectangle coordinates from the PDF
+        vector layer — no pixel estimation.  Returns
+        ``{"ok": False, "error": "no_vectors", ...}`` gracefully for
+        scanned / raster-only PDFs.
+
+        When *real_units_per_px* is provided (from ``calibrate_pdf_scale``
+        or the ``real_units_per_px`` value in a ``read_pdf`` response), each
+        segment also includes ``start_real``, ``end_real``, ``length_real``,
+        and ``real_unit`` so coordinates map directly to model space.
+
+        :param path: Absolute path to the PDF.
+        :param pages: Which pages to extract (1-based).  Accepts single
+            numbers, ranges, and comma-separated combinations: ``"1"``,
+            ``"1-4"``, ``"1,3,5-8"``.  Omit for all pages up to 10.
+        :param real_units_per_px: Scale factor from ``calibrate_pdf_scale``
+            or ``read_pdf``.  When provided, real-world coordinates are
+            included for every segment.
+        :param real_unit: Label for real-world coordinates (e.g. ``"feet"``,
+            ``"meters"``).  Informational only — does not affect calculation.
+        :param min_length_px: Minimum segment length in PDF points to include.
+            Filters out hairlines and degenerate paths (default 2.0).
+        """
+        import math
+
+        try:
+            path = _validate_read_path(path)
+        except ValueError as exc:
+            return {"ok": False, "error": str(exc)}
+
+        try:
+            import fitz
+        except ImportError:
+            return {"ok": False, "error": "pymupdf not installed — run: uv pip install pymupdf"}
+
+        p = Path(path)
+        if not p.exists():
+            return {"ok": False, "error": f"File not found: {path}"}
+        if p.suffix.lower() not in _PDF_EXTS:
+            return {"ok": False, "error": f"Not a PDF: {path}"}
+
+        try:
+            doc = fitz.open(str(p))
+        except Exception as exc:
+            return {"ok": False, "error": str(exc)}
+
+        page_count = doc.page_count
+        try:
+            indices = _parse_page_spec(pages, page_count)
+        except ValueError as exc:
+            doc.close()
+            return {"ok": False, "error": str(exc)}
+
+        # Hard cap at 10 pages
+        indices = indices[:10]
+
+        result_pages: list[dict[str, Any]] = []
+        total_segments = 0
+
+        for idx in indices:
+            pg = doc[idx]
+            drawings = pg.get_drawings()
+            segments: list[dict[str, Any]] = []
+
+            for path_dict in drawings:
+                for item in path_dict.get("items", []):
+                    op = item[0] if item else None
+
+                    if op == "l":
+                        # Line: ("l", p1, p2)
+                        p1, p2 = item[1], item[2]
+                        dx = p2.x - p1.x
+                        dy = p2.y - p1.y
+                        length = math.sqrt(dx * dx + dy * dy)
+                        if length < min_length_px:
+                            continue
+                        seg: dict[str, Any] = {
+                            "type": "line",
+                            "start": [round(p1.x, 3), round(p1.y, 3)],
+                            "end": [round(p2.x, 3), round(p2.y, 3)],
+                        }
+                        if real_units_per_px is not None:
+                            rpu = real_units_per_px
+                            seg["start_real"] = [round(p1.x * rpu, 6), round(p1.y * rpu, 6)]
+                            seg["end_real"] = [round(p2.x * rpu, 6), round(p2.y * rpu, 6)]
+                            seg["length_real"] = round(length * rpu, 6)
+                            seg["real_unit"] = real_unit
+                        segments.append(seg)
+
+                    elif op == "re":
+                        # Rectangle: ("re", rect)
+                        r = item[1]
+                        corners = [
+                            (r.x0, r.y0),
+                            (r.x1, r.y0),
+                            (r.x1, r.y1),
+                            (r.x0, r.y1),
+                        ]
+                        edges = [
+                            (corners[0], corners[1]),
+                            (corners[1], corners[2]),
+                            (corners[2], corners[3]),
+                            (corners[3], corners[0]),
+                        ]
+                        for (x0, y0), (x1, y1) in edges:
+                            dx = x1 - x0
+                            dy = y1 - y0
+                            length = math.sqrt(dx * dx + dy * dy)
+                            if length < min_length_px:
+                                continue
+                            seg = {
+                                "type": "rect",
+                                "start": [round(x0, 3), round(y0, 3)],
+                                "end": [round(x1, 3), round(y1, 3)],
+                            }
+                            if real_units_per_px is not None:
+                                rpu = real_units_per_px
+                                seg["start_real"] = [round(x0 * rpu, 6), round(y0 * rpu, 6)]
+                                seg["end_real"] = [round(x1 * rpu, 6), round(y1 * rpu, 6)]
+                                seg["length_real"] = round(length * rpu, 6)
+                                seg["real_unit"] = real_unit
+                            segments.append(seg)
+
+            total_segments += len(segments)
+            result_pages.append({
+                "page": idx + 1,
+                "segment_count": len(segments),
+                "segments": segments,
+                "has_vectors": len(segments) > 0,
+            })
+
+        doc.close()
+
+        vector_pdf = any(pg["has_vectors"] for pg in result_pages)
+        if not vector_pdf and result_pages:
+            return {
+                "ok": False,
+                "error": "no_vectors",
+                "message": (
+                    "No vector paths found on the requested pages. "
+                    "This PDF may be raster-only (scanned). "
+                    "Use read_pdf to inspect it as an image instead."
+                ),
+                "pages_checked": [pg["page"] for pg in result_pages],
+            }
+
+        return {
+            "ok": True,
+            "path": str(p),
+            "page_count": page_count,
+            "pages_returned": len(result_pages),
+            "total_segments": total_segments,
+            "vector_pdf": vector_pdf,
+            "real_units_per_px": real_units_per_px,
+            "real_unit": real_unit if real_units_per_px is not None else None,
+            "pages": result_pages,
+        }
+
+    @mcp.tool(annotations=ToolAnnotations(title="Extract PDF Dimensions", readOnlyHint=True))
+    def extract_pdf_dimensions(
+        path: str,
+        pages: str | None = None,
+        real_units_per_px: float | None = None,
+        real_unit: str = "feet",
+        dpi: int = 150,
+    ) -> dict[str, Any]:
+        """
+        Extract dimension annotation strings and their positions from a PDF's
+        text layer.
+
+        Parses strings matching common architectural/engineering dimension
+        formats (``20'-6"``, ``3000mm``, ``4.5m``, bare integers >= 100) and
+        returns each with its bounding box in pixel space.  When
+        *real_units_per_px* is provided, also returns the centre coordinate
+        in real-world space.
+
+        Useful for cross-checking AI-traced geometry against annotated
+        distances, or for building a dimension map before calling
+        ``create_rhino_geometry``.
+
+        :param path: Absolute path to the PDF.
+        :param pages: Which pages to extract (1-based).  Accepts single
+            numbers, ranges, and comma-separated combinations: ``"1"``,
+            ``"1-4"``, ``"1,3,5-8"``.  Omit for all pages up to 10.
+        :param real_units_per_px: Scale factor from ``calibrate_pdf_scale``
+            or ``read_pdf``.  When provided, ``center_real`` is included for
+            every dimension.
+        :param real_unit: Label for real-world coordinates.  Informational
+            only — does not affect calculation.
+        :param dpi: Reference render DPI used to convert PDF point coordinates
+            to pixel coordinates (default 150; must match the DPI used when
+            ``read_pdf`` rendered the page).
+        """
+        _DIM_PATTERNS = [
+            re.compile(r"\d+\s*['’]\s*-?\s*\d*\s*['’\"]?"),  # 20'-6", 3'-0"
+            re.compile(r"\d+(?:\.\d+)?\s*(?:ft|feet|')\b"),             # 20 ft, 20'
+            re.compile(r"\d+(?:\.\d+)?\s*(?:mm|cm|m)\b"),               # 3000mm, 4.5m
+            re.compile(r"\b\d{3,5}\b"),                                  # bare numbers >= 100
+        ]
+
+        try:
+            path = _validate_read_path(path)
+        except ValueError as exc:
+            return {"ok": False, "error": str(exc)}
+
+        try:
+            import fitz
+        except ImportError:
+            return {"ok": False, "error": "pymupdf not installed — run: uv pip install pymupdf"}
+
+        p = Path(path)
+        if not p.exists():
+            return {"ok": False, "error": f"File not found: {path}"}
+        if p.suffix.lower() not in _PDF_EXTS:
+            return {"ok": False, "error": f"Not a PDF: {path}"}
+
+        try:
+            doc = fitz.open(str(p))
+        except Exception as exc:
+            return {"ok": False, "error": str(exc)}
+
+        page_count = doc.page_count
+        try:
+            indices = _parse_page_spec(pages, page_count)
+        except ValueError as exc:
+            doc.close()
+            return {"ok": False, "error": str(exc)}
+
+        # Hard cap at 10 pages
+        indices = indices[:10]
+
+        px_scale = dpi / 72.0
+        result_pages: list[dict[str, Any]] = []
+        total_dims = 0
+
+        for idx in indices:
+            pg = doc[idx]
+            text_dict = pg.get_text("dict")
+            dimensions: list[dict[str, Any]] = []
+
+            for block in text_dict.get("blocks", []):
+                if block.get("type") != 0:  # 0 = text block
+                    continue
+                for line in block.get("lines", []):
+                    for span in line.get("spans", []):
+                        text = span.get("text", "").strip()
+                        if not text:
+                            continue
+                        matched = any(pat.search(text) for pat in _DIM_PATTERNS)
+                        if not matched:
+                            continue
+
+                        bbox = span.get("bbox", [0, 0, 0, 0])
+                        # Convert PDF points → pixels
+                        x0 = bbox[0] * px_scale
+                        y0 = bbox[1] * px_scale
+                        x1 = bbox[2] * px_scale
+                        y1 = bbox[3] * px_scale
+                        cx = (x0 + x1) / 2.0
+                        cy = (y0 + y1) / 2.0
+
+                        dim: dict[str, Any] = {
+                            "text": text,
+                            "bbox_px": [round(x0, 2), round(y0, 2),
+                                        round(x1, 2), round(y1, 2)],
+                            "center_px": [round(cx, 2), round(cy, 2)],
+                        }
+                        if real_units_per_px is not None:
+                            rpu = real_units_per_px
+                            dim["center_real"] = [round(cx * rpu, 6), round(cy * rpu, 6)]
+                            dim["real_unit"] = real_unit
+
+                        dimensions.append(dim)
+
+            total_dims += len(dimensions)
+            result_pages.append({
+                "page": idx + 1,
+                "dimensions": dimensions,
+            })
+
+        doc.close()
+
+        return {
+            "ok": True,
+            "path": str(p),
+            "page_count": page_count,
+            "pages_returned": len(result_pages),
+            "total_dimensions": total_dims,
+            "dpi": dpi,
+            "real_units_per_px": real_units_per_px,
+            "real_unit": real_unit if real_units_per_px is not None else None,
+            "pages": result_pages,
+        }
+
     # ── IMAGE ────────────────────────────────────────────────────────────────
 
     @mcp.tool(annotations=ToolAnnotations(title="Read Image", readOnlyHint=True))
