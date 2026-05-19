@@ -131,7 +131,21 @@ def _create(spec):
     elif kind == "ellipsoid":
         object_id = rs.AddEllipsoid(_pt(params.get("center")), params.get("radius_x", 1), params.get("radius_y", 1), params.get("radius_z", 1))
     elif kind == "box":
-        object_id = rs.AddBox(_box_corners(params.get("center"), params.get("size", (1, 1, 1))))
+        if params.get("corner") is not None:
+            x0, y0, z0 = _pt(params["corner"])
+            sx = float(params.get("x_size", 1))
+            sy = float(params.get("y_size", 1))
+            sz = float(params.get("z_size", 1))
+            corners = [
+                (x0, y0, z0), (x0+sx, y0, z0), (x0+sx, y0+sy, z0), (x0, y0+sy, z0),
+                (x0, y0, z0+sz), (x0+sx, y0, z0+sz), (x0+sx, y0+sy, z0+sz), (x0, y0+sy, z0+sz),
+            ]
+            object_id = rs.AddBox(corners)
+        else:
+            size = params.get("size") or [
+                params.get("x_size", 1), params.get("y_size", 1), params.get("z_size", 1),
+            ]
+            object_id = rs.AddBox(_box_corners(params.get("center"), size))
     elif kind == "cylinder":
         object_id = rs.AddCylinder(_pt(params.get("base")), float(params.get("height", 1)), float(params.get("radius", 1)), cap=bool(params.get("cap", True)))
     elif kind == "cone":

@@ -225,7 +225,7 @@ import Rhino
 doc = Rhino.RhinoDoc.ActiveDoc
 name = __mcp_units.strip().lower()
 _MAP = {
-    "none": Rhino.UnitSystem.None_,
+    "none": getattr(Rhino.UnitSystem, 'None_', getattr(Rhino.UnitSystem, 'NoUnits', None)),
     "microns": Rhino.UnitSystem.Microns,
     "millimeters": Rhino.UnitSystem.Millimeters,
     "centimeters": Rhino.UnitSystem.Centimeters,
@@ -237,11 +237,10 @@ _MAP = {
     "feet": Rhino.UnitSystem.Feet,
     "miles": Rhino.UnitSystem.Miles,
 }
-us = _MAP.get(name)
-if us is None:
+if name not in _MAP:
     result = {"ok": False, "error": "Unknown unit system: {}".format(__mcp_units)}
 else:
-    doc.ModelUnitSystem = us
+    doc.ModelUnitSystem = _MAP[name]
     result = {"ok": True, "unit_system": doc.ModelUnitSystem.ToString()}
 '''
 
