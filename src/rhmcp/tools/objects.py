@@ -289,6 +289,56 @@ def register(mcp: FastMCP) -> None:
         code = "__mcp_selop = 'last_created'\n" + _SEL_OPS_SCRIPT
         return rhino.execute_python(code, rhino_id=rhino_id)
 
+    @mcp.tool(annotations=ToolAnnotations(title="Align Geometry to Point", destructiveHint=True))
+    def align_geometry_to_point(
+        source_point: list[float],
+        target_point: list[float],
+        object_ids: list[str] | None = None,
+        rhino_id: str | None = None,
+    ) -> dict[str, object]:
+        """
+        Move objects so that source_point lands exactly on target_point.
+
+        Useful after tracing a floor plan from a PDF: pick a known reference
+        point on the traced geometry (e.g. a column centre or building corner)
+        and specify where it should sit in model space. All specified objects
+        (or all document objects if object_ids is None) are translated by the
+        same vector so relative positions are preserved.
+        """
+        # Validate source_point
+        if not isinstance(source_point, (list, tuple)) or len(source_point) not in (2, 3):
+            return {"ok": False, "error": "source_point must be a list of 2 or 3 numbers"}
+        try:
+            source_point = [float(v) for v in source_point]
+        except (TypeError, ValueError):
+            return {"ok": False, "error": "source_point must contain numeric values"}
+        if len(source_point) == 2:
+            source_point = source_point + [0.0]
+
+        # Validate target_point
+        if not isinstance(target_point, (list, tuple)) or len(target_point) not in (2, 3):
+            return {"ok": False, "error": "target_point must be a list of 2 or 3 numbers"}
+        try:
+            target_point = [float(v) for v in target_point]
+        except (TypeError, ValueError):
+            return {"ok": False, "error": "target_point must contain numeric values"}
+        if len(target_point) == 2:
+            target_point = target_point + [0.0]
+
+        # Validate object_ids
+        if object_ids is not None:
+            err = validate.guid_list(object_ids, "object_ids")
+            if err:
+                return err
+
+        code = (
+            "_mcp_source_point = {!r}\n"
+            "_mcp_target_point = {!r}\n"
+            "_mcp_object_ids = {!r}\n"
+            "{}"
+        ).format(source_point, target_point, object_ids, _ALIGN_TO_POINT_SCRIPT)
+        return rhino.execute_python(code, rhino_id=rhino_id)
+
 
 _SEL_OPS_SCRIPT = r'''
 import rhinoscriptsyntax as rs
@@ -660,4 +710,39 @@ else:
 deleted = rs.DeleteObjects(objects) if objects else 0
 rs.Redraw()
 result = {"deleted": int(deleted or 0)}
+'''
+
+_ALIGN_TO_POINT_SCRIPT = r'''
+import rhinoscriptsyntax as rs
+import Rhino
+
+doc = Rhino.RhinoDoc.ActiveDoc
+
+src = _mcp_source_point
+tgt = _mcp_target_point
+dx = tgt[0] - src[0]
+dy = tgt[1] - src[1]
+dz = tgt[2] - src[2]
+translation = (dx, dy, dz)
+
+if _mcp_object_ids is not None:
+    ids = _mcp_object_ids
+else:
+    ids = [str(obj.Id) for obj in doc.Objects if not obj.IsDeleted]
+
+moved = 0
+for oid in ids:
+    try:
+        rs.MoveObject(oid, translation)
+        moved += 1
+    except Exception:
+        pass
+
+result = {
+    "ok": True,
+    "moved_count": moved,
+    "translation": list(translation),
+    "source_point": list(src),
+    "target_point": list(tgt),
+}
 '''
