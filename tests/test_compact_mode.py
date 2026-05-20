@@ -108,4 +108,11 @@ class TestCompactArgparse:
 
     def test_compact_env_var_sets_default(self, monkeypatch):
         monkeypatch.setenv("RHMCP_COMPACT", "1")
-        assert bool(os.environ.get("RHMCP_COMPACT")) is True
+        import argparse
+        parser = argparse.ArgumentParser()
+        parser.add_argument(
+            "--compact", action="store_true",
+            default=bool(os.environ.get("RHMCP_COMPACT")),
+        )
+        args = parser.parse_args([])  # no --compact flag, but env var is set
+        assert args.compact is True

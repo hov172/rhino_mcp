@@ -39,9 +39,11 @@ class CompactRegistry:
             if hasattr(mod, "register"):
                 mod.register(shadow)
 
+        # list_tools() is the public sync accessor on ToolManager; no need for
+        # the private _tools dict.
         self._tools = {
-            name: _ToolProxy(tool)
-            for name, tool in shadow._tool_manager._tools.items()
+            tool.name: _ToolProxy(tool)
+            for tool in shadow._tool_manager.list_tools()
         }
 
     def list_tools(self, category: str = "") -> list[dict]:
