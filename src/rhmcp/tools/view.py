@@ -323,6 +323,7 @@ result = {"view": viewport.Name}
 
 _CAPTURE_SCRIPT = r'''
 import Rhino
+import rhinoscriptsyntax as rs
 import System.Drawing
 import System.Drawing.Imaging
 import System.IO
@@ -359,7 +360,7 @@ try:
     if show_cplane_axes is not None:
         vp.ConstructionAxesVisible = bool(show_cplane_axes)
     if zoom_to_fit:
-        vp.ZoomExtents()
+        rs.ZoomExtents()
     view.Redraw()
     bitmap = view.CaptureToBitmap(System.Drawing.Size(w, h))
 finally:
