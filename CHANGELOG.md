@@ -12,6 +12,13 @@ Versioning follows [Semantic Versioning](https://semver.org/).
 
 ---
 
+## [0.15.1] — 2026-05-20
+
+### Fixed
+- `capture_rhino_view` with `zoom_to_fit=True` — initial fix attempt (see [0.15.2] for the correct fix).
+
+---
+
 ## [0.15.0] — 2026-05-20
 
 ### Added
