@@ -5,6 +5,15 @@ Versioning follows [Semantic Versioning](https://semver.org/).
 
 ---
 
+## [Unreleased]
+
+### Added
+- `--compact` flag and `RHMCP_COMPACT` env var: compact mode registers 3 meta-tools
+  (`list_rhino_tools`, `describe_rhino_tool`, `call_rhino_tool`) instead of all full
+  schemas. Cuts per-request token cost from ~52k to ~1.5k. Works alongside `--profile`.
+
+---
+
 ## [0.13.0] — 2026-05-19
 
 ### Added
