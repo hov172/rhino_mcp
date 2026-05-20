@@ -5,7 +5,7 @@ Versioning follows [Semantic Versioning](https://semver.org/).
 
 ---
 
-## [Unreleased]
+## [0.14.0] — 2026-05-20
 
 ### Added
 - `--compact` flag and `RHMCP_COMPACT` env var: compact mode registers 3 meta-tools
