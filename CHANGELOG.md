@@ -5,7 +5,7 @@ Versioning follows [Semantic Versioning](https://semver.org/).
 
 ---
 
-## [Unreleased]
+## [0.15.0] — 2026-05-20
 
 ### Added
 - **Execution safety gates** — three env vars let operators disable arbitrary-code
@@ -22,16 +22,40 @@ Versioning follows [Semantic Versioning](https://semver.org/).
   Rhino plugin host unless `RHINO_MCP_ALLOW_REMOTE=1` is set. Prevents
   accidental connections to production Rhino instances or LAN hosts. Docker
   deployments have this set automatically via the Dockerfile.
-- **Keep-alive TCP connection**: the Python client now reuses a single persistent
+- **Keep-alive TCP connection** — the Python client reuses a single persistent
   TCP connection to the Rhino plugin instead of opening a new connection per
   tool call. Eliminates per-call TCP handshake overhead; transparent reconnect
   on stale connections (e.g. after Rhino restart). Disable with
   `RHINO_MCP_KEEPALIVE=0` if needed.
-- **C# plugin keep-alive**: `RhinoMcpServer` now handles multiple requests on
+- **C# plugin keep-alive** — `RhinoMcpServer` now handles multiple requests on
   the same connection and accepts new connections concurrently (fire-and-forget
   per client task), so a long-lived Python connection never blocks new connects.
 - Retry delay reduced from 500 ms to 50 ms — faster recovery from transient
   connection failures on localhost.
+
+### Fixed
+- **Viewport capture fits Claude Desktop 1 MB limit** — captures at 1200×900
+  Rendered mode produced ~500 KB base64 payloads that exceeded Claude Desktop's
+  tool-result size limit, forcing a sidecar-file workaround. Two changes fix
+  this permanently:
+  - Default capture dimensions lowered from 1200×900 to **800×600** across all
+    capture entry points (`capture_rhino_view`, `capture_viewport`,
+    `render_urban_preview`).
+  - New `shrink_png()` safety net: if a returned PNG still exceeds 280 KB (e.g.
+    complex Rendered scene or explicit large-dimension request), it is
+    automatically downscaled using Pillow until it fits the budget. Applies to
+    all `Image()` return sites; `urban_renders.py` captures sent to fal.ai are
+    intentionally excluded.
+
+### Documentation
+- README deep-dive: removed duplicate TOC entries, replaced hardcoded v0.12.1
+  download links with `/releases/latest`, fixed duplicate `--help` example,
+  added five missing env vars (`RHINO_MCP_KEEPALIVE`, `RHINO_MCP_ENABLE_*`,
+  `RHINO_MCP_ALLOW_REMOTE`), expanded Remote Host Support section with
+  two-setting table, added execution gates table to Scripting section, updated
+  test count to 467, added `test_security_gates` and `test_plugin_client`
+  to Running Tests examples.
+- `.env.example` — added `RHMCP_PROFILE`, `RHMCP_COMPACT`, `RHINO_MCP_KEEPALIVE`.
 
 ---
 
