@@ -1138,7 +1138,7 @@ Use `get_rhino_backend_status` from any AI client to check which backends are cu
 
 ## Tool Profiles
 
-Loading all 360 tools costs ~52k tokens of context on every request. If you only need a subset of tools, use a **profile** to load only the modules you need.
+Profiles let you control which tool modules are loaded at startup. Use a narrower profile to reduce context size when you don't need the full tool set.
 
 | Profile | Tools | ~Tokens | Includes |
 |---------|-------|---------|---------|
@@ -1177,7 +1177,7 @@ RHMCP_PROFILE=core
 }
 ```
 
-The `core` profile covers standard Rhino modeling — geometry creation, boolean ops, curves, surfaces, meshes, layers, materials, transforms, export, and document tools. Switch to `grasshopper`, `rendering`, `urban`, or `bim` when you need those specific plugin tools.
+The `core` profile covers standard Rhino modeling — geometry creation, boolean ops, curves, surfaces, meshes, layers, materials, transforms, export, and document tools. The other profiles extend `core` with their respective plugin tools.
 
 ---
 
