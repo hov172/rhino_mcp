@@ -5,6 +5,22 @@ Versioning follows [Semantic Versioning](https://semver.org/).
 
 ---
 
+## [Unreleased]
+
+### Added
+- **Keep-alive TCP connection**: the Python client now reuses a single persistent
+  TCP connection to the Rhino plugin instead of opening a new connection per
+  tool call. Eliminates per-call TCP handshake overhead; transparent reconnect
+  on stale connections (e.g. after Rhino restart). Disable with
+  `RHINO_MCP_KEEPALIVE=0` if needed.
+- **C# plugin keep-alive**: `RhinoMcpServer` now handles multiple requests on
+  the same connection and accepts new connections concurrently (fire-and-forget
+  per client task), so a long-lived Python connection never blocks new connects.
+- Retry delay reduced from 500 ms to 50 ms — faster recovery from transient
+  connection failures on localhost.
+
+---
+
 ## [0.14.0] — 2026-05-20
 
 ### Added

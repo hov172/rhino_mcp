@@ -1431,6 +1431,14 @@ class TestValidateGuidList(unittest.TestCase):
 # ---------------------------------------------------------------------------
 
 class TestPluginClientRetry(unittest.TestCase):
+    def setUp(self) -> None:
+        # Force one-shot mode so these tests can patch _attempt directly.
+        self._ka_patcher = patch.dict("os.environ", {"RHINO_MCP_KEEPALIVE": "0"})
+        self._ka_patcher.start()
+
+    def tearDown(self) -> None:
+        self._ka_patcher.stop()
+
     def test_succeeds_on_first_attempt(self) -> None:
         from rhmcp.tools_helpers import plugin_client
         good = {"status": "ok", "result": {}}

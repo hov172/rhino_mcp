@@ -1,5 +1,11 @@
 """
 Client for RhinoMCP-style plug-in socket servers.
+
+Keep-alive mode (default) reuses a single persistent TCP connection across
+calls, eliminating per-call TCP handshake overhead.  If the connection drops
+(Rhino restart, MCPStop), the client reconnects transparently on the next call.
+
+Set RHINO_MCP_KEEPALIVE=0 to fall back to a new connection per call.
 """
 
 from __future__ import annotations
@@ -7,6 +13,7 @@ from __future__ import annotations
 import json
 import os
 import socket
+import threading
 import time
 from typing import Any
 
@@ -14,7 +21,7 @@ DEFAULT_HOST = "127.0.0.1"
 DEFAULT_PORT = 1999
 DEFAULT_TIMEOUT = 15.0
 DEFAULT_RETRIES = 2        # extra attempts after the first (total = retries + 1)
-DEFAULT_RETRY_DELAY = 0.5  # seconds before first retry; doubles each attempt
+DEFAULT_RETRY_DELAY = 0.05  # seconds before first retry; doubles each attempt
 
 
 def connection_settings(
@@ -45,6 +52,38 @@ def _decode_chunks(chunks: list[bytes]) -> str:
         ) from ex
 
 
+def _recv_one(sock: socket.socket) -> dict[str, Any]:
+    """Read exactly one JSON object from *sock* and return it as a dict."""
+    chunks: list[bytes] = []
+    decoder = json.JSONDecoder()
+    while True:
+        chunk = sock.recv(8192)
+        if not chunk:
+            raise OSError("Connection closed by plugin before response was received")
+        chunks.append(chunk)
+        text = _decode_chunks(chunks)
+        try:
+            parsed, _end = decoder.raw_decode(text)
+        except json.JSONDecodeError:
+            continue
+        if isinstance(parsed, dict):
+            return parsed
+        snippet = repr(parsed)[:_MAX_RAW_DISPLAY]
+        return {
+            "status": "error",
+            "message": f"Plug-in returned non-object JSON (got {type(parsed).__name__}): {snippet}",
+            "raw": parsed,
+        }
+
+
+def _build_payload(command_type: str, params: dict[str, Any]) -> bytes:
+    payload: dict = {"type": command_type, "params": params}
+    _secret = os.environ.get("RHINO_MCP_PLUGIN_SECRET")
+    if _secret:
+        payload["secret"] = _secret
+    return json.dumps(payload).encode("utf-8")
+
+
 def _attempt(
     command_type: str,
     params: dict[str, Any],
@@ -52,52 +91,82 @@ def _attempt(
     target_port: int,
     target_timeout: float,
 ) -> dict[str, Any]:
-    payload: dict = {"type": command_type, "params": params}
-    _secret = os.environ.get("RHINO_MCP_PLUGIN_SECRET")
-    if _secret:
-        payload["secret"] = _secret
-    request = json.dumps(payload).encode("utf-8")
+    """One-shot: open connection, send, receive, close."""
+    request = _build_payload(command_type, params)
     with socket.create_connection((target_host, target_port), timeout=target_timeout) as sock:
         sock.settimeout(target_timeout)
         sock.sendall(request)
-        chunks: list[bytes] = []
-        decoder = json.JSONDecoder()
-        while True:
-            chunk = sock.recv(8192)
-            if not chunk:
-                break
-            chunks.append(chunk)
-            text = _decode_chunks(chunks)  # raises ValueError on binary data
-            try:
-                parsed, _end = decoder.raw_decode(text)
-            except json.JSONDecodeError:
-                continue
-            if isinstance(parsed, dict):
-                return parsed
-            snippet = repr(parsed)[:_MAX_RAW_DISPLAY]
-            return {
-                "status": "error",
-                "message": f"Plug-in returned non-object JSON (got {type(parsed).__name__}): {snippet}",
-                "raw": parsed,
-            }
-    # Connection closed without a complete JSON object
-    try:
-        raw_text = _decode_chunks(chunks)
-    except ValueError as ex:
-        return {"status": "error", "message": str(ex), "error_code": "BINARY_RESPONSE"}
-    snippet = raw_text[:_MAX_RAW_DISPLAY]
-    total = len(raw_text)
-    return {
-        "status": "error",
-        "message": (
-            f"Connection to {target_host}:{target_port} closed before a complete JSON response was received "
-            f"({total} bytes received). "
-            + (f"Response preview: {snippet!r}" if raw_text else "No data received — the plugin may have crashed or timed out.")
-        ),
-        "error_code": "INCOMPLETE_RESPONSE",
-        "raw": raw_text,
-    }
+        return _recv_one(sock)
 
+
+# ---------------------------------------------------------------------------
+# Keep-alive connection
+# ---------------------------------------------------------------------------
+
+class _KeepAliveConnection:
+    """
+    Persistent TCP connection to the Rhino plugin.
+
+    A single connection is reused across calls.  If the connection is found to
+    be stale (Rhino restarted, MCPStop ran), it is closed and a fresh one is
+    opened for that call — transparently to the caller.
+
+    Thread-safe: a lock serialises all send/recv cycles, which also matches
+    the Rhino plugin's behaviour of processing one command at a time on the
+    UI thread.
+    """
+
+    def __init__(self) -> None:
+        self._sock: socket.socket | None = None
+        self._lock = threading.Lock()
+
+    def send(
+        self,
+        command_type: str,
+        params: dict[str, Any],
+        host: str,
+        port: int,
+        timeout: float,
+    ) -> dict[str, Any]:
+        request = _build_payload(command_type, params)
+        with self._lock:
+            # Attempt once on the existing connection, then once on a fresh one.
+            for attempt in range(2):
+                try:
+                    if self._sock is None:
+                        self._sock = socket.create_connection((host, port), timeout=timeout)
+                        self._sock.settimeout(timeout)
+                    self._sock.sendall(request)
+                    return _recv_one(self._sock)
+                except OSError:
+                    self._close()
+                    if attempt == 1:
+                        raise
+            raise OSError("unreachable")  # pragma: no cover
+
+    def _close(self) -> None:
+        if self._sock is not None:
+            try:
+                self._sock.close()
+            except OSError:
+                pass
+            self._sock = None
+
+    def close(self) -> None:
+        with self._lock:
+            self._close()
+
+
+_keepalive = _KeepAliveConnection()
+
+
+def _keepalive_enabled() -> bool:
+    return os.environ.get("RHINO_MCP_KEEPALIVE", "1") not in ("0", "false", "no")
+
+
+# ---------------------------------------------------------------------------
+# Public API
+# ---------------------------------------------------------------------------
 
 def send_command(
     command_type: str,
@@ -109,6 +178,9 @@ def send_command(
 ) -> dict[str, Any]:
     """
     Send one command to a RhinoMCP-compatible plug-in socket server.
+
+    In keep-alive mode (default) the TCP connection is reused across calls.
+    Set RHINO_MCP_KEEPALIVE=0 to open a new connection for every call.
 
     Retries on ``OSError`` (connection refused, reset) with exponential backoff.
     ``retries`` defaults to ``RHINO_MCP_SOCKET_RETRIES`` env var (default 2).
@@ -124,6 +196,8 @@ def send_command(
 
     for attempt in range(max_retries + 1):
         try:
+            if _keepalive_enabled():
+                return _keepalive.send(command_type, payload, target_host, target_port, target_timeout)
             return _attempt(command_type, payload, target_host, target_port, target_timeout)
         except OSError as exc:
             last_exc = exc

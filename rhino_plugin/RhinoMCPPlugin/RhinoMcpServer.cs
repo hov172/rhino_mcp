@@ -74,8 +74,10 @@ public sealed class RhinoMcpServer
                 var listener = _listener;
                 if (listener is null)
                     return;
-                using var client = await listener.AcceptTcpClientAsync(token).ConfigureAwait(false);
-                await HandleClient(client, token).ConfigureAwait(false);
+                var client = await listener.AcceptTcpClientAsync(token).ConfigureAwait(false);
+                // Fire-and-forget: handle each connection independently so new
+                // connections are accepted without waiting for the current one to close.
+                _ = Task.Run(() => HandleClient(client, token), token);
             }
             catch (OperationCanceledException)
             {
@@ -90,69 +92,93 @@ public sealed class RhinoMcpServer
 
     private static async Task HandleClient(TcpClient client, CancellationToken token)
     {
-        client.ReceiveTimeout = 30_000;
-        using var stream = client.GetStream();
-        var accumulated = new StringBuilder();
-        var buffer = new byte[8192];
-        const int maxBytes = 10 * 1024 * 1024;
-
-        while (true)
+        using (client)
         {
-            var read = await stream.ReadAsync(buffer.AsMemory(0, buffer.Length), token).ConfigureAwait(false);
-            if (read <= 0) break;
-            accumulated.Append(Encoding.UTF8.GetString(buffer, 0, read));
-            if (accumulated.Length > maxBytes)
-                throw new InvalidOperationException("MCP request exceeded 10 MB limit.");
-            // Check if we have a complete JSON object
-            var text = accumulated.ToString().Trim();
-            if (text.Length == 0) continue;
-            try
-            {
-                using var _ = JsonDocument.Parse(text);
-                break; // valid JSON, done reading
-            }
-            catch (JsonException)
-            {
-                // incomplete, keep reading
-            }
-        }
+            using var stream = client.GetStream();
+            var buffer = new byte[8192];
+            const int maxBytes = 10 * 1024 * 1024;
 
-        McpResponse response;
-        try
-        {
-            var text = accumulated.ToString().Trim();
-            var request = JsonSerializer.Deserialize<McpRequest>(text, JsonHelpers.Options);
-            if (request is null || string.IsNullOrWhiteSpace(request.Type))
+            // Keep-alive: process multiple requests on the same connection until
+            // the client closes it or the server is cancelled.
+            while (!token.IsCancellationRequested)
             {
-                response = McpResponse.Error("Invalid MCP request.");
-            }
-            else
-            {
-                // PSK check — only enforced when RHINO_MCP_PLUGIN_SECRET is configured.
-                var configuredSecret = Environment.GetEnvironmentVariable("RHINO_MCP_PLUGIN_SECRET");
-                if (configuredSecret is not null)
+                var accumulated = new StringBuilder();
+
+                // Read one complete JSON object.
+                while (true)
                 {
-                    var provided = request.Secret ?? "";
-                    if (!SecretEquals(configuredSecret, provided))
+                    int read;
+                    try
                     {
-                        response = McpResponse.Error("Unauthorized: invalid or missing plugin secret.");
-                        var errJson = JsonSerializer.Serialize(response, JsonHelpers.Options);
-                        var errBytes = Encoding.UTF8.GetBytes(errJson);
-                        await stream.WriteAsync(errBytes.AsMemory(0, errBytes.Length), token).ConfigureAwait(false);
-                        return;  // close connection immediately
+                        read = await stream.ReadAsync(buffer.AsMemory(0, buffer.Length), token).ConfigureAwait(false);
+                    }
+                    catch (OperationCanceledException) { return; }
+                    catch (Exception) { return; } // connection reset / closed
+
+                    if (read <= 0) return; // client closed connection cleanly
+
+                    accumulated.Append(Encoding.UTF8.GetString(buffer, 0, read));
+                    if (accumulated.Length > maxBytes)
+                    {
+                        RhinoApp.WriteLine("Rhino MCP: request exceeded 10 MB limit — closing connection.");
+                        return;
+                    }
+
+                    var text = accumulated.ToString().Trim();
+                    if (text.Length == 0) continue;
+                    try
+                    {
+                        using var _ = JsonDocument.Parse(text);
+                        break; // valid complete JSON object
+                    }
+                    catch (JsonException)
+                    {
+                        // incomplete, keep reading
                     }
                 }
-                response = InvokeOnRhinoThread(() => CommandDispatcher.Dispatch(request));
+
+                McpResponse response;
+                try
+                {
+                    var text = accumulated.ToString().Trim();
+                    var request = JsonSerializer.Deserialize<McpRequest>(text, JsonHelpers.Options);
+                    if (request is null || string.IsNullOrWhiteSpace(request.Type))
+                    {
+                        response = McpResponse.Error("Invalid MCP request.");
+                    }
+                    else
+                    {
+                        // PSK check — only enforced when RHINO_MCP_PLUGIN_SECRET is configured.
+                        var configuredSecret = Environment.GetEnvironmentVariable("RHINO_MCP_PLUGIN_SECRET");
+                        if (configuredSecret is not null)
+                        {
+                            var provided = request.Secret ?? "";
+                            if (!SecretEquals(configuredSecret, provided))
+                            {
+                                response = McpResponse.Error("Unauthorized: invalid or missing plugin secret.");
+                                var errJson = JsonSerializer.Serialize(response, JsonHelpers.Options);
+                                var errBytes = Encoding.UTF8.GetBytes(errJson);
+                                await stream.WriteAsync(errBytes.AsMemory(0, errBytes.Length), token).ConfigureAwait(false);
+                                return; // close connection on auth failure
+                            }
+                        }
+                        response = InvokeOnRhinoThread(() => CommandDispatcher.Dispatch(request));
+                    }
+                }
+                catch (Exception ex)
+                {
+                    response = McpResponse.Error(ex.Message);
+                }
+
+                try
+                {
+                    var json = JsonSerializer.Serialize(response, JsonHelpers.Options);
+                    var bytes = Encoding.UTF8.GetBytes(json);
+                    await stream.WriteAsync(bytes.AsMemory(0, bytes.Length), token).ConfigureAwait(false);
+                }
+                catch (Exception) { return; } // client disconnected before response was written
             }
         }
-        catch (Exception ex)
-        {
-            response = McpResponse.Error(ex.Message);
-        }
-
-        var json = JsonSerializer.Serialize(response, JsonHelpers.Options);
-        var bytes = Encoding.UTF8.GetBytes(json);
-        await stream.WriteAsync(bytes.AsMemory(0, bytes.Length), token).ConfigureAwait(false);
     }
 
     /// <summary>

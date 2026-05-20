@@ -13,10 +13,12 @@ SRC_DIR = os.path.join(REPO_DIR, "src")
 
 
 class ServerMetadataTest(unittest.TestCase):
-    def test_tool_listing(self) -> None:
+    def _list_tools(self, extra_env: dict | None = None) -> list[str]:
         async def run() -> list[str]:
             env = os.environ.copy()
             env["PYTHONPATH"] = SRC_DIR
+            if extra_env:
+                env.update(extra_env)
             params = StdioServerParameters(
                 command=sys.executable,
                 args=["-m", "rhmcp"],
@@ -28,7 +30,11 @@ class ServerMetadataTest(unittest.TestCase):
                     tools = await session.list_tools()
                     return sorted(tool.name for tool in tools.tools)
 
-        names = asyncio.run(run())
+        return asyncio.run(run())
+
+    def test_tool_listing_no_compact(self) -> None:
+        """Non-compact mode exposes all tools directly."""
+        names = self._list_tools({"RHMCP_COMPACT": "0"})
         expected = {
             "capture_rhino_view",
             "create_rhino_geometry",
@@ -48,6 +54,14 @@ class ServerMetadataTest(unittest.TestCase):
             "transform_rhino_objects",
         }
         self.assertTrue(expected.issubset(set(names)), sorted(expected.difference(set(names))))
+
+    def test_tool_listing_compact(self) -> None:
+        """Compact mode (default) exposes exactly the 3 meta-tools."""
+        names = self._list_tools({"RHMCP_COMPACT": "1"})
+        self.assertEqual(
+            set(names),
+            {"list_rhino_tools", "describe_rhino_tool", "call_rhino_tool"},
+        )
 
 
 if __name__ == "__main__":
