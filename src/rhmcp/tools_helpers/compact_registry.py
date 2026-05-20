@@ -51,7 +51,9 @@ class CompactRegistry:
         for name, proxy in self._tools.items():
             if category and category.lower() not in name.lower():
                 continue
-            first_line = (proxy.description or "").split("\n")[0].strip()
+            first_line = next(
+                (l.strip() for l in (proxy.description or "").split("\n") if l.strip()), ""
+            )
             results.append({"name": name, "description": first_line})
         results.sort(key=lambda t: t["name"])
         return results
