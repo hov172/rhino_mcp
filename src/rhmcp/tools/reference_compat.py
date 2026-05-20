@@ -247,8 +247,8 @@ def register(mcp: FastMCP) -> None:
     def capture_viewport(
         path: str | None = None,
         viewport: str | None = None,
-        width: int = 1200,
-        height: int = 900,
+        width: int = 800,
+        height: int = 600,
         show_grid: bool | None = None,
         show_axes: bool | None = None,
         show_cplane_axes: bool | None = None,
@@ -263,6 +263,7 @@ def register(mcp: FastMCP) -> None:
         import base64
         from mcp.server.fastmcp import Image
         from rhmcp.tools.view import _CAPTURE_SCRIPT
+        from rhmcp.tools_helpers.images import shrink_png
 
         params = {
             "path": path,
@@ -288,7 +289,7 @@ def register(mcp: FastMCP) -> None:
         if not b64:
             return [raw]
         meta = {"path": r.get("path"), "saved": r.get("saved", False), "width": width, "height": height}
-        return [meta, Image(data=base64.b64decode(b64), format="png")]
+        return [meta, Image(data=shrink_png(base64.b64decode(b64)), format="png")]
 
     @mcp.tool(annotations=ToolAnnotations(title="Get Commands", readOnlyHint=True))
     def get_commands(filter: str | None = None, loaded_only: bool = True, rhino_id: str | None = None) -> dict[str, object]:

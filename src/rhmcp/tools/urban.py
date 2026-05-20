@@ -20,6 +20,7 @@ from mcp.server.fastmcp import FastMCP, Image
 
 from rhmcp.tools_helpers import backend as rhino
 from rhmcp.tools_helpers.security import sanitise_rhino_path
+from rhmcp.tools_helpers.images import shrink_png
 from rhmcp.tools.view import _CAPTURE_SCRIPT
 
 
@@ -505,7 +506,7 @@ def _capture_view() -> list[object]:
     Returns [meta_dict, Image] on success, or [error_dict] on failure.
     Reuses the same capture script as capture_rhino_view in view.py.
     """
-    plugin_capture = _gh("capture_viewport", {"path": None, "width": 1200, "height": 900})
+    plugin_capture = _gh("capture_viewport", {"path": None, "width": 800, "height": 600})
     if plugin_capture.get("ok"):
         plugin_result = plugin_capture.get("result", {})
         b64_plugin = plugin_result.get("image_data") if isinstance(plugin_result, dict) else None
@@ -513,13 +514,13 @@ def _capture_view() -> list[object]:
             meta = {
                 "path": plugin_result.get("saved_path"),
                 "saved": bool(plugin_result.get("saved_path")),
-                "width": plugin_result.get("width", 1200),
-                "height": plugin_result.get("height", 900),
+                "width": plugin_result.get("width", 800),
+                "height": plugin_result.get("height", 600),
                 "viewport_name": plugin_result.get("viewport_name"),
             }
-            return [meta, Image(data=base64.b64decode(b64_plugin), format="png")]
+            return [meta, Image(data=shrink_png(base64.b64decode(b64_plugin)), format="png")]
 
-    payload = {"path": None, "width": 1200, "height": 900}
+    payload = {"path": None, "width": 800, "height": 600}
     code = "__mcp_capture = {!r}\n{}".format(payload, _CAPTURE_SCRIPT)
     raw = rhino.execute_python(code)
     r = raw.get("result") if isinstance(raw, dict) else None
@@ -529,10 +530,10 @@ def _capture_view() -> list[object]:
     meta = {
         "path": r.get("path"),
         "saved": r.get("saved", False),
-        "width": r.get("width", 1200),
-        "height": r.get("height", 900),
+        "width": r.get("width", 800),
+        "height": r.get("height", 600),
     }
-    return [meta, Image(data=base64.b64decode(b64), format="png")]
+    return [meta, Image(data=shrink_png(base64.b64decode(b64)), format="png")]
 
 
 def _urban_get_metrics() -> dict[str, object]:

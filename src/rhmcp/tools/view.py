@@ -10,6 +10,7 @@ from mcp.types import ToolAnnotations
 
 from rhmcp.tools_helpers import backend as rhino
 from rhmcp.tools_helpers import validate
+from rhmcp.tools_helpers.images import shrink_png
 
 
 def register(mcp: FastMCP) -> None:
@@ -39,8 +40,8 @@ def register(mcp: FastMCP) -> None:
     @mcp.tool(annotations=ToolAnnotations(title="Capture Rhino View", readOnlyHint=True))
     def capture_rhino_view(
         path: str | None = None,
-        width: int = 1200,
-        height: int = 900,
+        width: int = 800,
+        height: int = 600,
         viewport: str | None = None,
         show_grid: bool | None = None,
         show_axes: bool | None = None,
@@ -69,14 +70,13 @@ def register(mcp: FastMCP) -> None:
             # caller can see what went wrong.
             return [raw]
 
-        img_bytes = base64.b64decode(b64)
+        img_bytes = shrink_png(base64.b64decode(b64))
         meta = {
             "path": r.get("path"),
             "saved": r.get("saved", False),
             "width": r.get("width", width),
             "height": r.get("height", height),
         }
-        # Return metadata first, then the visual image so the AI can see the scene.
         return [meta, Image(data=img_bytes, format="png")]
 
     @mcp.tool(annotations=ToolAnnotations(title="Zoom Extents", destructiveHint=True))
