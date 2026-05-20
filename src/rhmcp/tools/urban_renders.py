@@ -135,11 +135,9 @@ def register(mcp: FastMCP) -> None:
         style_override: str | None = None,
         seed: int | None = None,
     ) -> list[dict[str, object]]:
-        """
-        Capture Rhino viewports and render them with AI (fal.ai FLUX.1 ControlNet).
+        """Capture Rhino viewports and render them with AI (fal.ai FLUX.1 ControlNet).
         Returns a list of RenderResult dicts — one per view.
-        Falls back to raw Rhino captures if fal.ai is unavailable.
-        """
+        Falls back to raw Rhino captures if fal.ai is..."""
         # R6-4: Cap style_override length
         if style_override and len(style_override) > 2000:
             return [{"ok": False, "error": "style_override exceeds maximum length of 2000 characters."}]

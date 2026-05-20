@@ -85,11 +85,9 @@ def register(mcp: FastMCP) -> None:
         solver_instance_guid: str,
         goal_instance_guid: str,
     ) -> dict[str, object]:
-        """
-        Wire a goal component's output into the Kangaroo Solver's Goals input.
+        """Wire a goal component's output into the Kangaroo Solver's Goals input.
         solver_instance_guid: instance GUID of the K2 Solver component.
-        goal_instance_guid: instance GUID of the goal component.
-        """
+        goal_instance_guid: instance GUID of the goal..."""
         result = rhino.plugin_result("gh_connect_wire", {
             "source_instance_guid": goal_instance_guid,
             "source_param_name": "G",

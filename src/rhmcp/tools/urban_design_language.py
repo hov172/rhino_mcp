@@ -128,14 +128,10 @@ def register(mcp: FastMCP) -> None:
         climate_zone: str,
         style_hints: str | None = None,
     ) -> dict[str, object]:
-        """
-        Generate an AI-driven design language (style, materials, colour palette,
+        """Generate an AI-driven design language (style, materials, colour palette,
         diffusion prompt) from the site brief using Claude.
 
-        Returns a DesignLanguage dict with style_name, facade_vocabulary,
-        material_palette, colour_story, landscape_character, diffusion_prompt,
-        negative_prompt, executive_summary.
-        """
+        Returns a DesignLanguage dict with style_name,..."""
         global _current_design_language
         api_key = os.environ.get("ANTHROPIC_API_KEY")
         if not api_key:
@@ -171,13 +167,10 @@ def register(mcp: FastMCP) -> None:
         field: str,
         value: str | list | dict,
     ) -> dict[str, object]:
-        """
-        Patch a single field of the current design language.
+        """Patch a single field of the current design language.
         Re-derives diffusion_prompt if style_name, facade_vocabulary,
         material_palette, or colour_story changes.
-        For structured fields (facade_vocabulary, material_palette, colour_story), pass a list or dict directly.
-        Returns error dict if field is not a valid DesignLanguage key.
-        """
+        For structured..."""
         global _current_design_language
         if _current_design_language is None:
             return {"ok": False, "error": "No design language set. Call urban_generate_design_language first."}

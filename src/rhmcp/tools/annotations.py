@@ -24,13 +24,10 @@ def register(mcp: FastMCP) -> None:
         layer: str | None = None,
         rhino_id: str | None = None,
     ) -> dict[str, object]:
-        """
-        Add a text annotation object at ``point`` [x, y, z].
+        """Add a text annotation object at ``point`` [x, y, z].
 
         ``height`` controls the text height in model units.
-        ``font`` selects a font family (e.g. ``"Arial"``); leave blank for the
-        document default.
-        """
+        ``font`` selects a font family (e.g. ``"Arial"``); leave blank for..."""
         err = validate.coordinate(point, "point")
         if err: return err
         payload = {

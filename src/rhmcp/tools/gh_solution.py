@@ -30,15 +30,10 @@ def register(mcp: FastMCP) -> None:
         wait_ms: int | None = None,
         rhino_id: str | None = None,
     ) -> dict[str, object]:
-        """
-        Trigger the Grasshopper solver and wait for it to complete.
+        """Trigger the Grasshopper solver and wait for it to complete.
 
         instance_guids: If provided, expire only these components before solving.
-                        If omitted, expires and recomputes the full definition.
-        wait_ms: Milliseconds to wait for solution completion (default 10000).
-                 Returns timed_out=True if exceeded.
-        Returns state, duration_ms, error_count, and timed_out flag.
-        """
+                        If omitted, expires and..."""
         params: dict[str, object] = {}
         if instance_guids is not None:
             params["instance_guids"] = instance_guids
@@ -52,15 +47,10 @@ def register(mcp: FastMCP) -> None:
         layer: str | None = None,
         rhino_id: str | None = None,
     ) -> dict[str, object]:
-        """
-        Bake geometry output from a single Grasshopper component into the Rhino document.
+        """Bake geometry output from a single Grasshopper component into the Rhino document.
 
         instance_guid: Instance GUID of the component to bake.
-        layer: Optional Rhino layer name for baked objects (created if it doesn't exist).
-               Defaults to the current active layer.
-        Returns objects[] — list of new Rhino object GUIDs, and count.
-        If the solution has errors, a warning is included but baking proceeds.
-        """
+        layer: Optional Rhino layer name for baked..."""
         params: dict[str, object] = {"instance_guid": instance_guid}
         if layer is not None:
             params["layer"] = layer
@@ -71,13 +61,10 @@ def register(mcp: FastMCP) -> None:
         layer: str | None = None,
         rhino_id: str | None = None,
     ) -> dict[str, object]:
-        """
-        Bake all geometry outputs from the entire Grasshopper definition into Rhino.
+        """Bake all geometry outputs from the entire Grasshopper definition into Rhino.
 
         layer: Optional Rhino layer name for all baked objects (created if it doesn't exist).
-               Defaults to the current active layer.
-        Returns objects[] — list of all new Rhino object GUIDs, and count.
-        """
+               Defaults to..."""
         params: dict[str, object] = {}
         if layer is not None:
             params["layer"] = layer
@@ -89,13 +76,10 @@ def register(mcp: FastMCP) -> None:
         enabled: bool,
         rhino_id: str | None = None,
     ) -> dict[str, object]:
-        """
-        Enable or disable a Grasshopper component on the canvas.
+        """Enable or disable a Grasshopper component on the canvas.
 
         instance_guid: Instance GUID of the component.
-        enabled: True to enable, False to disable (lock) the component.
-        Disabled components are skipped during solution computation.
-        """
+        enabled: True to enable, False to disable (lock) the component...."""
         return _gh("gh_enable_component", {"instance_guid": instance_guid, "enabled": enabled})
 
 

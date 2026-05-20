@@ -79,33 +79,7 @@ def register(mcp: FastMCP) -> None:  # noqa: C901 – register is intentionally 
         api_key: str | None = None,
         tier: str = "Regular",
     ) -> dict[str, object]:
-        """
-        Submit a text-to-3D generation job to Hyper3D Rodin or Hunyuan3D-2.
-
-        Parameters
-        ----------
-        prompt:
-            Natural-language description of the object to generate.
-        service:
-            Which backend to use: ``"rodin"`` (Hyper3D, requires API key) or
-            ``"hunyuan3d"`` (Tencent public Gradio demo — no key required).
-        output_format:
-            Desired mesh format: ``"glb"`` (default), ``"obj"``, ``"fbx"``,
-            ``"stl"``, or ``"usdz"``.  Not all formats are supported by every
-            service; unsupported formats fall back to ``"glb"``.
-        api_key:
-            Override API key.  Falls back to the ``HYPER3D_API_KEY`` environment
-            variable (Rodin) or ``HUNYUAN3D_API_KEY`` (Hunyuan3D).
-        tier:
-            Rodin quality tier: ``"Regular"`` (default) or ``"Sketch"``
-            (faster, lower quality).  Ignored by Hunyuan3D.
-
-        Returns
-        -------
-        dict with keys ``job_id``, ``status`` (``"pending"``), ``service``, and
-        ``message``.  Pass ``job_id`` to ``poll_generation_job`` to check
-        progress, and to ``import_generated_model`` when done.
-        """
+        """Submit a text-to-3D generation job to Hyper3D Rodin or Hunyuan3D-2."""
         # R6-4: Cap prompt length
         if prompt and len(prompt) > 8000:
             return {"ok": False, "error": "prompt exceeds maximum length of 8000 characters."}
@@ -135,31 +109,10 @@ def register(mcp: FastMCP) -> None:  # noqa: C901 – register is intentionally 
         api_key: str | None = None,
         prompt: str | None = None,
     ) -> dict[str, object]:
-        """
-        Submit an image-to-3D generation job using one or more reference images.
+        """Submit an image-to-3D generation job using one or more reference images.
 
         The images are uploaded as multi-view conditioning inputs.  Each image
-        should be a different view of the same object for best results.
-
-        Parameters
-        ----------
-        image_paths:
-            List of absolute paths to local image files (JPEG, PNG, WebP).
-            Maximum 5 images.
-        service:
-            Backend: ``"rodin"`` or ``"hunyuan3d"``.
-        output_format:
-            Desired mesh format (``"glb"``, ``"obj"``, ``"fbx"``, ``"stl"``).
-        api_key:
-            Override API key; falls back to env vars ``HYPER3D_API_KEY`` /
-            ``HUNYUAN3D_API_KEY``.
-        prompt:
-            Optional text prompt to condition generation alongside the images.
-
-        Returns
-        -------
-        dict with keys ``job_id``, ``status`` (``"pending"``), ``service``.
-        """
+        should be a different view of the..."""
         service = service.lower()
         if service not in _VALID_SERVICES:
             return {"ok": False, "error": f"Unknown service '{service}'. Choose 'rodin' or 'hunyuan3d'."}
@@ -199,32 +152,10 @@ def register(mcp: FastMCP) -> None:  # noqa: C901 – register is intentionally 
         service: str,
         api_key: str | None = None,
     ) -> dict[str, object]:
-        """
-        Check the current status of a previously submitted generation job.
+        """Check the current status of a previously submitted generation job.
 
         Poll this tool repeatedly (every ~5–15 seconds) until ``status`` is
-        ``"done"`` or ``"failed"``.  When done, ``download_url`` will contain
-        a direct link to the generated file (where available).
-
-        Parameters
-        ----------
-        job_id:
-            The ``job_id`` returned by ``generate_3d_from_text`` or
-            ``generate_3d_from_images``.
-        service:
-            The service that owns the job: ``"rodin"`` or ``"hunyuan3d"``.
-        api_key:
-            Override API key; falls back to env vars.
-
-        Returns
-        -------
-        dict with keys:
-          - ``job_id`` (str)
-          - ``status``: ``"pending"``, ``"processing"``, ``"done"``, or ``"failed"``
-          - ``progress``: float 0.0–1.0
-          - ``download_url``: direct download URL when status is ``"done"``, else ``None``
-          - ``message``: human-readable status description
-        """
+        ``"done"`` or ``"failed"``.  When done,..."""
         service = service.lower()
         if service not in _VALID_SERVICES:
             return {"ok": False, "error": f"Unknown service '{service}'."}
@@ -248,37 +179,10 @@ def register(mcp: FastMCP) -> None:  # noqa: C901 – register is intentionally 
         scale: float = 1.0,
         position: list[float] | None = None,
     ) -> dict[str, object]:
-        """
-        Download a completed generation job and import it into the active Rhino document.
+        """Download a completed generation job and import it into the active Rhino document.
 
         You must supply either ``job_id`` + ``service`` (to look up the download
-        URL automatically) or a direct ``download_url``.
-
-        Parameters
-        ----------
-        job_id:
-            Job ID returned by a generate_* tool.  Used together with
-            ``service`` to resolve the download URL.
-        service:
-            ``"rodin"`` or ``"hunyuan3d"``.  Required when ``job_id`` is given.
-        download_url:
-            Direct URL to the generated file.  If supplied, ``job_id`` and
-            ``service`` are not needed for the download (but ``api_key`` may
-            still be required for authenticated endpoints).
-        api_key:
-            Override API key; falls back to env vars.
-        output_dir:
-            Local directory where the downloaded file will be saved.  Defaults
-            to a system temporary directory.
-        scale:
-            Uniform scale factor applied to the imported geometry (default 1.0).
-        position:
-            Optional [x, y, z] translation applied after import.
-
-        Returns
-        -------
-        dict with keys ``ok``, ``filepath``, ``object_count``, ``message``.
-        """
+        URL automatically) or a..."""
         # ---- Resolve download URL ----------------------------------------
         url: str | None = download_url
         resolved_service = (service or "").lower()
@@ -319,22 +223,11 @@ def register(mcp: FastMCP) -> None:  # noqa: C901 – register is intentionally 
 
     @mcp.tool(annotations=ToolAnnotations(title="Get 3D Generation Services Status", readOnlyHint=True))
     def get_generation_services_status() -> dict[str, object]:
-        """
-        Return availability and configuration status for all supported 3D
+        """Return availability and configuration status for all supported 3D
         generation services.
 
         Checks for the presence of API keys in environment variables and
-        tests basic network reachability of each service endpoint.  This tool
-        does not create any jobs or consume API credits.
-
-        Returns
-        -------
-        dict with a ``services`` key containing per-service status dicts, each
-        with:
-          - ``available``: whether the service can be used right now
-          - ``api_key_set``: whether an API key was found (env or hard-coded)
-          - ``note``: human-readable status/hint
-        """
+        tests basic network..."""
         rodin_key = bool(os.environ.get("HYPER3D_API_KEY"))
         hunyuan_key = bool(os.environ.get("HUNYUAN3D_API_KEY"))
 
@@ -1041,12 +934,10 @@ def _import_file_into_rhino(
     scale: float = 1.0,
     position: list[float] | None = None,
 ) -> dict[str, object]:
-    """
-    Import a mesh file into the active Rhino document via the plugin socket.
+    """Import a mesh file into the active Rhino document via the plugin socket.
 
     Uses ``execute_rhinocommon_csharp_code`` to call
-    ``RhinoDoc.ActiveDoc.Import()`` and optionally scale / translate the result.
-    """
+    ``RhinoDoc.ActiveDoc.Import()`` and optionally scale / translate..."""
     # Normalise path separators for the C# verbatim string literal.
     # C# verbatim strings use "" to represent a literal quote
     safe_path = filepath.replace("\\", "/").replace('"', '""')

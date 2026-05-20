@@ -20,14 +20,10 @@ def register(mcp: FastMCP) -> None:
         limit: int | None = None,
         rhino_id: str | None = None,
     ) -> dict[str, object]:
-        """
-        Search available Grasshopper components by name, category, or description.
+        """Search available Grasshopper components by name, category, or description.
 
         query: Search string (e.g. 'circle', 'offset', 'Math').
-        limit: Maximum results to return (default 20).
-        Returns list of {name, category, subcategory, guid, description}.
-        The guid can be passed to gh_add_component to place the component.
-        """
+        limit: Maximum results to return (default..."""
         params: dict[str, object] = {"query": query}
         if limit is not None:
             params["limit"] = limit
@@ -48,12 +44,10 @@ def register(mcp: FastMCP) -> None:
         include_wires: bool | None = None,
         rhino_id: str | None = None,
     ) -> dict[str, object]:
-        """
-        Return the full state of the active Grasshopper canvas.
+        """Return the full state of the active Grasshopper canvas.
 
         include_wires: If True (default), include wire connections between params.
-        Returns {components[], wires[], groups[]} with full detail per object.
-        """
+        Returns {components[], wires[], groups[]} with..."""
         params: dict[str, object] = {}
         if include_wires is not None:
             params["include_wires"] = include_wires
@@ -64,12 +58,10 @@ def register(mcp: FastMCP) -> None:
         instance_guid: str,
         rhino_id: str | None = None,
     ) -> dict[str, object]:
-        """
-        Return detailed information about a single Grasshopper component.
+        """Return detailed information about a single Grasshopper component.
 
         instance_guid: The instance GUID of the component (from gh_list_components).
-        Returns name, nick_name, type, position (x, y), locked state, inputs[], outputs[].
-        """
+        Returns name, nick_name, type,..."""
         return _gh("gh_get_component_info", {"instance_guid": instance_guid})
 
     @mcp.tool(annotations=ToolAnnotations(title="Add Component to Canvas", destructiveHint=True))
@@ -79,13 +71,10 @@ def register(mcp: FastMCP) -> None:
         y: float,
         rhino_id: str | None = None,
     ) -> dict[str, object]:
-        """
-        Place a Grasshopper component on the canvas by its type GUID.
+        """Place a Grasshopper component on the canvas by its type GUID.
 
         component_guid: The component type GUID from gh_search_components.
-        x, y: Canvas coordinates for placement.
-        Returns instance_guid (unique to this placement), inputs[], outputs[].
-        """
+        x, y: Canvas coordinates for placement...."""
         return _gh("gh_add_component", {"component_guid": component_guid, "x": x, "y": y})
 
     @mcp.tool(annotations=ToolAnnotations(title="Remove Component from Canvas", destructiveHint=True))
@@ -151,15 +140,10 @@ def register(mcp: FastMCP) -> None:
         to_input: str,
         rhino_id: str | None = None,
     ) -> dict[str, object]:
-        """
-        Draw a wire connecting an output parameter to an input parameter.
+        """Draw a wire connecting an output parameter to an input parameter.
 
         from_guid: Instance GUID of the source component.
-        from_output: NickName of the output parameter on the source (e.g. 'C' for Circle output).
-        to_guid: Instance GUID of the target component.
-        to_input: NickName of the input parameter on the target (e.g. 'C' for Curve input).
-        Use gh_get_component_info to discover parameter names.
-        """
+        from_output: NickName of the output parameter on the source (e.g...."""
         return _gh("gh_connect_wire", {
             "from_guid": from_guid,
             "from_output": from_output,
@@ -175,14 +159,10 @@ def register(mcp: FastMCP) -> None:
         to_input: str,
         rhino_id: str | None = None,
     ) -> dict[str, object]:
-        """
-        Remove a wire between an output parameter and an input parameter.
+        """Remove a wire between an output parameter and an input parameter.
 
         from_guid: Instance GUID of the source component.
-        from_output: NickName of the output parameter on the source.
-        to_guid: Instance GUID of the target component.
-        to_input: NickName of the input parameter on the target.
-        """
+        from_output: NickName of the output parameter on the..."""
         return _gh("gh_disconnect_wire", {
             "from_guid": from_guid,
             "from_output": from_output,
@@ -197,14 +177,10 @@ def register(mcp: FastMCP) -> None:
         color: list[int] | None = None,
         rhino_id: str | None = None,
     ) -> dict[str, object]:
-        """
-        Group multiple Grasshopper components with an optional label and color.
+        """Group multiple Grasshopper components with an optional label and color.
 
         instance_guids: List of component instance GUIDs to include in the group.
-        label: Optional display label for the group.
-        color: Optional RGB color as [r, g, b] with values 0-255.
-        Returns group_id (GUID string).
-        """
+        label: Optional display label for..."""
         params: dict[str, object] = {"instance_guids": instance_guids}
         if label is not None:
             params["label"] = label

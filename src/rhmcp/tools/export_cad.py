@@ -21,16 +21,10 @@ def register(mcp: FastMCP) -> None:
         object_ids: list[str] | None = None,
         rhino_id: str | None = None,
     ) -> dict[str, object]:
-        """
-        Export selected objects (or all objects) to a STEP file.
+        """Export selected objects (or all objects) to a STEP file.
 
         ``path`` must end in ``.step`` or ``.stp``.
-        ``schema`` controls the STEP application protocol: ``"AP203"``,
-        ``"AP214"`` (default), or ``"AP242"``.
-        ``tolerance`` is the export tolerance in document units.
-        ``object_ids`` restricts the export to those object GUIDs; when
-        ``None`` all visible objects are exported.
-        """
+        ``schema`` controls the STEP application protocol: ``"AP203"``,..."""
         code = (
             "_mcp_path = {}\n"
             "_mcp_schema = {}\n"
@@ -54,16 +48,11 @@ def register(mcp: FastMCP) -> None:
         object_ids: list[str] | None = None,
         rhino_id: str | None = None,
     ) -> dict[str, object]:
-        """
-        Export selected objects (or all objects) to an IGES file.
+        """Export selected objects (or all objects) to an IGES file.
 
         ``path`` must end in ``.igs`` or ``.iges``.
         ``tolerance`` is the export tolerance in document units.
-        ``trim_type`` controls how trimmed surfaces are written: ``"parametric"``
-        (default, more compact) or ``"3d"`` (explicit 3-D trim curves).
-        ``object_ids`` restricts the export to those object GUIDs; when
-        ``None`` all visible objects are exported.
-        """
+        ``trim_type``..."""
         code = (
             "_mcp_path = {}\n"
             "_mcp_tolerance = {}\n"
@@ -87,17 +76,10 @@ def register(mcp: FastMCP) -> None:
         object_ids: list[str] | None = None,
         rhino_id: str | None = None,
     ) -> dict[str, object]:
-        """
-        Export selected objects (or all objects) to a DWG or DXF file.
+        """Export selected objects (or all objects) to a DWG or DXF file.
 
         ``path`` must end in ``.dwg`` or ``.dxf``.
-        ``autocad_version`` selects the AutoCAD file format version: ``"2004"``,
-        ``"2007"``, ``"2010"``, ``"2013"``, or ``"2018"`` (default).
-        ``export_layout`` — when ``False`` (default) objects are written to
-        model space; when ``True`` the active layout / paper space is exported.
-        ``object_ids`` restricts the export to those object GUIDs; when
-        ``None`` all visible objects are exported.
-        """
+        ``autocad_version`` selects the AutoCAD file format version:..."""
         code = (
             "_mcp_path = {}\n"
             "_mcp_autocad_version = {}\n"

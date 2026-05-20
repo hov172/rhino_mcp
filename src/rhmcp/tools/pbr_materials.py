@@ -40,56 +40,10 @@ def register(mcp: FastMCP) -> None:
         ao_texture: str | None = None,
         opacity_texture: str | None = None,
     ) -> dict[str, object]:
-        """
-        Create a Physically-Based Rendering (PBR) material in the active Rhino document.
+        """Create a Physically-Based Rendering (PBR) material in the active Rhino document.
 
         PBR materials produce photorealistic results when rendered with Rhino's
-        Cycles engine. All color channels use normalised float values (0.0–1.0).
-
-        Parameters
-        ----------
-        name:
-            Unique name for the new material.
-        base_color:
-            Albedo/base colour as [r, g, b] with values in the range 0.0–1.0.
-            Defaults to a neutral grey ``[0.5, 0.5, 0.5]`` when omitted.
-        metallic:
-            Metalness factor (0 = dielectric, 1 = fully metallic).
-        roughness:
-            Surface roughness (0 = mirror-smooth, 1 = fully diffuse).
-        opacity:
-            Surface opacity (0 = fully transparent, 1 = fully opaque).
-        ior:
-            Index of refraction used for transparent/refractive surfaces.
-        emission:
-            Emission colour as [r, g, b] with values in the range 0.0–1.0.
-        emission_multiplier:
-            Multiplier applied to the emission colour.  Set > 0 to make the
-            surface self-luminous.
-        base_color_texture:
-            Absolute file path to a bitmap texture used as the albedo channel.
-        roughness_texture:
-            Absolute file path to a greyscale roughness texture.
-        metallic_texture:
-            Absolute file path to a greyscale metalness texture.
-        normal_texture:
-            Absolute file path to a tangent-space normal map.
-        bump_scale:
-            Bump/normal map intensity multiplier.
-        displacement_texture:
-            Absolute file path to a greyscale displacement/height map.
-        displacement_scale:
-            Displacement height scale in model units.
-        ao_texture:
-            Absolute file path to an ambient-occlusion texture.
-        opacity_texture:
-            Absolute file path to a greyscale opacity/alpha mask texture.
-
-        Returns
-        -------
-        dict with keys:
-            ok (bool), material_index (int), material_name (str)
-        """
+        Cycles engine. All color..."""
         # Validate numeric ranges
         metallic = max(0.0, min(1.0, float(metallic)))
         roughness = max(0.0, min(1.0, float(roughness)))
@@ -157,35 +111,10 @@ def register(mcp: FastMCP) -> None:
         use_for_lighting: bool = True,
         use_for_reflections: bool = True,
     ) -> dict[str, object]:
-        """
-        Load an HDRI or EXR image file as the document's render environment.
+        """Load an HDRI or EXR image file as the document's render environment.
 
         The environment is used for image-based lighting (IBL), background
-        display, and reflection sampling according to the flags provided.
-
-        Parameters
-        ----------
-        filepath:
-            Absolute path to the environment image.  Supported formats are
-            ``.hdr`` (Radiance RGBE) and ``.exr`` (OpenEXR).
-        rotation:
-            Rotation of the environment around the world Y-axis in degrees
-            (0–360).  Useful for aligning the dominant light direction.
-        intensity:
-            Brightness multiplier for the environment (default 1.0).
-        use_for_background:
-            If True, the environment image is displayed as the viewport/render
-            background.
-        use_for_lighting:
-            If True, the environment contributes to image-based lighting.
-        use_for_reflections:
-            If True, the environment is sampled for reflections.
-
-        Returns
-        -------
-        dict with keys:
-            ok (bool), filepath (str), message (str)
-        """
+        display, and reflection sampling according to..."""
         rotation = float(rotation) % 360.0
         intensity = max(0.0, float(intensity))
 
@@ -224,35 +153,10 @@ def register(mcp: FastMCP) -> None:
         view_name: str | None = None,
         return_base64: bool = True,
     ) -> dict[str, object]:
-        """
-        Trigger a Rhino render and return the resulting image.
+        """Trigger a Rhino render and return the resulting image.
 
         The active render engine (e.g. Rhino Cycles) is used. Rhino must
-        not already be rendering when this command is issued.
-
-        Parameters
-        ----------
-        output_path:
-            Absolute file path where the render image will be saved.  If
-            omitted, a temporary ``.png`` file is created automatically.
-        width:
-            Render output width in pixels (default 1920).
-        height:
-            Render output height in pixels (default 1080).
-        view_name:
-            Name of a named view or viewport to render.  When ``None`` the
-            currently active viewport is rendered.
-        return_base64:
-            If True, the raw PNG bytes are returned as a base-64 encoded
-            string in the ``base64`` field.  Set to False for large renders
-            where you only need the file path.
-
-        Returns
-        -------
-        dict with keys:
-            ok (bool), filepath (str), base64 (str | None),
-            width (int), height (int), format (str)
-        """
+        not already be rendering when this command is issued."""
         width = max(1, min(8192, int(width)))
         height = max(1, min(8192, int(height)))
 
@@ -295,28 +199,9 @@ def register(mcp: FastMCP) -> None:
         object_ids: list[str] | None = None,
         all_objects: bool = False,
     ) -> dict[str, object]:
-        """
-        Assign an existing PBR material to one or more Rhino objects.
+        """Assign an existing PBR material to one or more Rhino objects.
 
-        Either ``object_ids`` or ``all_objects=True`` must be provided.
-
-        Parameters
-        ----------
-        material_name:
-            Name of the PBR material (as previously created with
-            ``create_pbr_material``) to assign.
-        object_ids:
-            List of object GUIDs to assign the material to.  Each string
-            must be a valid UUID as returned by Rhino's object table.
-        all_objects:
-            If True, the material is applied to every object in the
-            document, ignoring ``object_ids``.
-
-        Returns
-        -------
-        dict with keys:
-            ok (bool), assigned_count (int), material_name (str)
-        """
+        Either ``object_ids`` or ``all_objects=True`` must be provided."""
         if not all_objects and not object_ids:
             return {"ok": False, "error": "Provide either 'object_ids' or set 'all_objects=True'."}
 
@@ -350,26 +235,10 @@ def register(mcp: FastMCP) -> None:
         material_name: str | None = None,
         material_index: int | None = None,
     ) -> dict[str, object]:
-        """
-        Return the full PBR property set for a material in the document.
+        """Return the full PBR property set for a material in the document.
 
         The returned dictionary mirrors the parameters accepted by
-        ``create_pbr_material``, making it straightforward to inspect and
-        re-create or duplicate materials.
-
-        Parameters
-        ----------
-        material_name:
-            Name of the material to look up.
-        material_index:
-            Integer index of the material in the document material table.
-            Takes precedence over ``material_name`` when both are supplied.
-
-        Returns
-        -------
-        dict with keys:
-            ok (bool), material (dict of PBR properties)
-        """
+        ``create_pbr_material``, making it straightforward to..."""
         if material_name is None and material_index is None:
             return {"ok": False, "error": "Provide either 'material_name' or 'material_index'."}
 
@@ -398,18 +267,10 @@ def register(mcp: FastMCP) -> None:
 
     @mcp.tool(annotations=ToolAnnotations(title="List PBR Materials", readOnlyHint=True))
     def list_pbr_materials() -> dict[str, object]:
-        """
-        Return all Physically-Based materials present in the active document.
+        """Return all Physically-Based materials present in the active document.
 
         Each entry in the ``materials`` list includes the material index,
-        name, and all PBR channel values (metallic, roughness, opacity, IOR,
-        emission, and texture file paths where configured).
-
-        Returns
-        -------
-        dict with keys:
-            ok (bool), materials (list[dict]), count (int)
-        """
+        name, and all PBR channel values (metallic,..."""
         try:
             result = _plugin("list_pbr_materials", {})
             if result is None:
@@ -440,42 +301,10 @@ def register(mcp: FastMCP) -> None:
         enable_ground_plane: bool | None = None,
         ground_plane_altitude: float | None = None,
     ) -> dict[str, object]:
-        """
-        Update document-level render settings.
+        """Update document-level render settings.
 
         Only the parameters explicitly passed are modified; all others retain
-        their current values.
-
-        Parameters
-        ----------
-        engine:
-            Render engine identifier.  Supported values: ``"rhino"``
-            (Rhino's built-in Cycles-based engine) and ``"cycles"``
-            (explicit Cycles selection).  Rhino 8 uses Cycles internally
-            for its default PBR renderer.
-        samples:
-            Number of render samples (path-tracing passes).  Higher values
-            reduce noise at the cost of longer render time.
-        background_color:
-            Solid background colour as [r, g, b] with values 0–255.  Only
-            applied when the background style is set to solid colour mode.
-        use_transparent_background:
-            If True, the render background is written as a transparent
-            alpha channel (useful for compositing).
-        enable_shadows:
-            Enable or disable shadow casting in the render.
-        ambient_occlusion:
-            Enable or disable ambient-occlusion post-processing.
-        enable_ground_plane:
-            Enable or disable the infinite reflective ground plane.
-        ground_plane_altitude:
-            Altitude (Z-height) of the ground plane in document units.
-
-        Returns
-        -------
-        dict with keys:
-            ok (bool), settings (dict of applied settings)
-        """
+        their current values."""
         if background_color is not None and len(background_color) < 3:
             return {"ok": False, "error": "background_color must have at least 3 elements [r, g, b]."}
 

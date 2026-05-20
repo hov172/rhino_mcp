@@ -34,14 +34,10 @@ def register(mcp: FastMCP) -> None:
         wires: list | None = None,
         rhino_id: str | None = None,
     ) -> dict[str, object]:
-        """
-        Atomically place components and wire them in one call.
+        """Atomically place components and wire them in one call.
 
         components: list of {key, type_name, x, y} or {key, type="slider", min, max, value, x, y}
-        wires: list of {from_key, from_output, to_key, to_input}
-
-        Returns {ok, placed: {key: instanceGuid}, wired: N, errors: [...]}
-        """
+        wires: list of {from_key,..."""
         params: dict[str, object] = {"components": components}
         if wires:
             params["wires"] = wires
@@ -55,13 +51,9 @@ def register(mcp: FastMCP) -> None:
         y: float = 0,
         rhino_id: str | None = None,
     ) -> dict[str, object]:
-        """
-        Place a Grasshopper 2 component on the canvas.
+        """Place a Grasshopper 2 component on the canvas.
         type_name: component name (e.g. "Point", "Circle"). Either type_name or component_guid required.
-        component_guid: component type GUID (preferred to avoid ambiguity).
-        x, y: canvas position.
-        Returns instance_guid of the placed component.
-        """
+        component_guid: component type GUID..."""
         if not type_name and not component_guid:
             return {"ok": False, "error": "Either type_name or component_guid is required."}
         params: dict[str, object] = {"x": x, "y": y}
@@ -95,13 +87,10 @@ def register(mcp: FastMCP) -> None:
         to_input: int | str = 0,
         rhino_id: str | None = None,
     ) -> dict[str, object]:
-        """
-        Wire a single output to an input in Grasshopper 2.
+        """Wire a single output to an input in Grasshopper 2.
         from_instance: source component instance GUID.
         from_output: output index (int) or param name (str).
-        to_instance: target component instance GUID.
-        to_input: input index (int) or param name (str).
-        """
+        to_instance: target..."""
         return _gh2("gh2_connect", {
             "from_instance": from_instance,
             "from_output": from_output,
@@ -124,10 +113,8 @@ def register(mcp: FastMCP) -> None:
         name: str | None = None,
         rhino_id: str | None = None,
     ) -> dict[str, object]:
-        """
-        Get metadata for a Grasshopper 2 component: category, description, input/output param names and types.
-        instance_guid: instance GUID of a placed component. Either instance_guid or name required.
-        """
+        """Get metadata for a Grasshopper 2 component: category, description, input/output param names and types.
+        instance_guid: instance GUID of a placed component. Either instance_guid or name..."""
         if not instance_guid and not name:
             return {"ok": False, "error": "Either instance_guid or name is required."}
         params: dict[str, object] = {}

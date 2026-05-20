@@ -122,20 +122,10 @@ def register(mcp: FastMCP) -> None:
         plugin_name: str,
         file_path: str | None = None,
     ) -> dict[str, object]:
-        """
-        Install a Rhino or Grasshopper plugin.
+        """Install a Rhino or Grasshopper plugin.
 
         If file_path is provided (a locally downloaded .gha, .rhp, or .rhi file),
-        the plugin is installed from that file — no internet required.
-        - .gha  → copied to the Grasshopper Libraries folder (restart Grasshopper)
-        - .rhp  → loaded immediately via Rhino's _LoadPlugin command
-        - .rhi  → opened with the Rhino Installer (Mac/Windows native handler)
-
-        If file_path is omitted, the tool attempts to install automatically:
-        1. Rhino Package Manager — for most open-source plugins
-        2. GitHub auto-download — fetches the latest release asset and installs it
-        3. food4rhino / vendor — returns the download page URL (login required there)
-        """
+        the plugin is installed from that file — no internet..."""
         key = plugin_name.lower().strip()
 
         # --- File-based install ---

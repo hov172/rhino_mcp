@@ -116,13 +116,10 @@ def register(mcp: FastMCP) -> None:
         copy: bool = False,
         rhino_id: str | None = None,
     ) -> dict[str, object]:
-        """
-        Orient objects by aligning a reference vector to a target vector.
+        """Orient objects by aligning a reference vector to a target vector.
 
         The transformation rotates objects so that the vector from
-        ``reference_point1`` → ``reference_point2`` aligns with
-        ``target_point1`` → ``target_point2``.
-        """
+        ``reference_point1`` → ``reference_point2`` aligns..."""
         if ids is not None:
             err = validate.guid_list(ids, "ids")
             if err: return err

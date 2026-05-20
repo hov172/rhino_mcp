@@ -21,25 +21,7 @@ def register(mcp: FastMCP) -> None:
         tolerance: float | None = None,
         rhino_id: str | None = None,
     ) -> dict[str, object]:
-        """
-        Export geometry to an STL file for 3D printing.
-
-        Parameters
-        ----------
-        path:
-            Output file path; must end in ``.stl``.
-        binary:
-            ``True`` (default) writes compact binary STL.
-            ``False`` writes human-readable ASCII STL.
-        object_ids:
-            List of object GUIDs to export.  ``None`` exports everything in
-            the document.
-        tolerance:
-            Mesh tolerance override (document units).  ``None`` uses the
-            document's current absolute tolerance.
-        rhino_id:
-            Target Rhino instance ID when multiple instances are running.
-        """
+        """Export geometry to an STL file for 3D printing."""
         code = (
             "_mcp_path = {path}\n"
             "_mcp_binary = {binary}\n"
@@ -62,25 +44,7 @@ def register(mcp: FastMCP) -> None:
         mesh_quality: str = "normal",
         rhino_id: str | None = None,
     ) -> dict[str, object]:
-        """
-        Export geometry to a 3MF file (Rhino 8 natively supports this format).
-
-        Parameters
-        ----------
-        path:
-            Output file path; must end in ``.3mf``.
-        object_ids:
-            List of object GUIDs to export.  ``None`` exports everything in
-            the document.
-        mesh_quality:
-            Controls mesh density used when tessellating NURBS geometry.
-            Accepted values: ``"coarse"``, ``"normal"`` (default), ``"fine"``,
-            ``"custom"``.  Passed as a hint only; the exporter may ignore it
-            if the 3MF plugin does not expose a quality option via command
-            line.
-        rhino_id:
-            Target Rhino instance ID when multiple instances are running.
-        """
+        """Export geometry to a 3MF file (Rhino 8 natively supports this format)."""
         code = (
             "_mcp_path = {path}\n"
             "_mcp_object_ids = {ids}\n"

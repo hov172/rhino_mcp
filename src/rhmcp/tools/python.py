@@ -60,22 +60,10 @@ def register(mcp: FastMCP) -> None:
         verified_functions: list[str] | None = None,
         clear_objects: list[str] | None = None,
     ) -> dict[str, object]:
-        """
-        Execute Python code inside Rhino.
+        """Execute Python code inside Rhino.
 
         The code runs with access to Rhino's Python environment, including
-        ``rhinoscriptsyntax`` and RhinoCommon. Assign a JSON-serialisable value
-        to ``result`` to return data.
-
-        :param verified_functions: List of RhinoScript/RhinoCommon function names
-            that the caller has looked up (e.g. via ``search_rhinoscript_functions``)
-            before writing this code. Providing this list documents that API calls
-            have been verified and suppresses the api_warning in the response.
-        :param clear_objects: Layer names whose objects should be deleted before the
-            script runs. Use this for animation or repeated-execution scripts so stale
-            geometry from previous runs does not accumulate in the document.
-            Example: ``["BB_Ball", "BB_Ground"]``
-        """
+        ``rhinoscriptsyntax`` and RhinoCommon. Assign a JSON-serialisable value..."""
         # R6-3: Enforce maximum code length
         if len(code) > _MAX_CODE_LEN:
             return {"ok": False, "error": f"Code exceeds maximum length of {_MAX_CODE_LEN} characters."}
@@ -90,12 +78,10 @@ def register(mcp: FastMCP) -> None:
 
     @mcp.tool(annotations=ToolAnnotations(title="Execute RhinoCommon CSharp", destructiveHint=True))
     def execute_rhino_csharp(code: str, rhino_id: str | None = None) -> dict[str, object]:
-        """
-        Execute C# code inside Rhino through ``rhinocode script``.
+        """Execute C# code inside Rhino through ``rhinocode script``.
 
         This requires RhinoCode C# script support in the target Rhino version.
-        Return information through stdout or by changing the active document.
-        """
+        Return information through stdout or by changing..."""
         # R6-3: Enforce maximum code length
         if len(code) > _MAX_CODE_LEN:
             return {"ok": False, "error": f"Code exceeds maximum length of {_MAX_CODE_LEN} characters."}

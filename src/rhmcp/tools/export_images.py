@@ -22,17 +22,10 @@ def register(mcp: FastMCP) -> None:
         quality: int = 90,
         rhino_id: str | None = None,
     ) -> dict[str, object]:
-        """
-        Convert an existing image file from one format to another.
+        """Convert an existing image file from one format to another.
 
         Supports PNG, JPG, BMP, TIFF, and GIF as input and output formats.
-        EXR and WebP are not natively supported by System.Drawing and will
-        return a descriptive error if requested.
-
-        ``width`` and ``height`` resize the image when provided; omitting
-        either keeps the original dimension for that axis.  ``quality``
-        controls JPEG compression (1-100) and is ignored for lossless formats.
-        """
+        EXR and WebP are not natively supported by..."""
         code = (
             "_mcp_source = {source}\n"
             "_mcp_output = {output}\n"
@@ -60,14 +53,10 @@ def register(mcp: FastMCP) -> None:
         quality: int = 95,
         rhino_id: str | None = None,
     ) -> dict[str, object]:
-        """
-        Capture the active Rhino viewport and save it to an image file.
+        """Capture the active Rhino viewport and save it to an image file.
 
         ``path`` extension controls the output format (.png, .jpg, .bmp,
-        .tiff).  ``display_mode`` may be one of: Wireframe, Shaded, Rendered,
-        Arctic, Raytraced.  ``transparent_background`` is only effective for
-        PNG output.  ``quality`` controls JPEG compression (1-100).
-        """
+        .tiff).  ``display_mode`` may be one of: Wireframe,..."""
         from rhmcp.tools_helpers.security import clamp
         width = clamp(width, 1, 8192)
         height = clamp(height, 1, 8192)

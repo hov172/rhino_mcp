@@ -22,15 +22,10 @@ def register(mcp: FastMCP) -> None:
         object_ids: list[str] | None = None,
         rhino_id: str | None = None,
     ) -> dict[str, object]:
-        """
-        Export geometry to a Wavefront OBJ file.
+        """Export geometry to a Wavefront OBJ file.
 
         When ``export_materials`` is True an accompanying ``.mtl`` file is
-        written beside the OBJ.  ``export_textures`` controls whether texture
-        paths are written into the MTL.  ``weld_angle`` sets the smoothing-group
-        crease threshold in degrees.  Pass ``object_ids`` to restrict export to
-        specific objects; otherwise all visible objects are exported.
-        """
+        written beside the OBJ.  ``export_textures`` controls whether..."""
         code = (
             "_mcp_path = {}\n"
             "_mcp_export_materials = {}\n"
@@ -57,16 +52,10 @@ def register(mcp: FastMCP) -> None:
         object_ids: list[str] | None = None,
         rhino_id: str | None = None,
     ) -> dict[str, object]:
-        """
-        Export geometry to an FBX file for game engines and DCC tools.
+        """Export geometry to an FBX file for game engines and DCC tools.
 
         ``fbx_version`` must be one of ``FBX201400``, ``FBX201600``,
-        ``FBX201800``, or ``FBX202000``.  When ``embed_textures`` is True,
-        texture data is stored inside the FBX; set
-        ``save_textures_as_references`` to True to keep textures as external
-        file references instead.  Pass ``object_ids`` to restrict export to
-        specific objects.
-        """
+        ``FBX201800``, or ``FBX202000``.  When ``embed_textures``..."""
         code = (
             "_mcp_path = {}\n"
             "_mcp_fbx_version = {}\n"
@@ -93,16 +82,10 @@ def register(mcp: FastMCP) -> None:
         object_ids: list[str] | None = None,
         rhino_id: str | None = None,
     ) -> dict[str, object]:
-        """
-        Export geometry to a GLB or glTF file.
+        """Export geometry to a GLB or glTF file.
 
         Use a ``.glb`` extension for a single self-contained binary file or
-        ``.gltf`` for a JSON-based file with external resources.
-        ``embed_textures`` stores texture data inside the file.
-        ``draco_compression`` enables Draco mesh compression to reduce file
-        size (requires the Draco encoder to be available in Rhino).
-        Pass ``object_ids`` to restrict export to specific objects.
-        """
+        ``.gltf`` for a JSON-based file with external resources...."""
         code = (
             "_mcp_path = {}\n"
             "_mcp_embed_textures = {}\n"

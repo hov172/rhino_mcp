@@ -47,13 +47,10 @@ def register(mcp: FastMCP) -> None:
         unit_system: str,
         rhino_id: str | None = None,
     ) -> dict[str, object]:
-        """
-        Set the document unit system.
+        """Set the document unit system.
 
         ``unit_system`` accepts a name string: ``Millimeters``, ``Centimeters``,
-        ``Meters``, ``Kilometers``, ``Inches``, ``Feet``, ``Miles``,
-        ``Microns``, or ``None``.
-        """
+        ``Meters``, ``Kilometers``, ``Inches``, ``Feet``, ``Miles``,..."""
         code = "__mcp_units = {!r}\n{}".format(unit_system, _UNITS_SCRIPT)
         return rhino.execute_python(code, rhino_id=rhino_id)
 
@@ -65,54 +62,9 @@ def register(mcp: FastMCP) -> None:
         post_import_display: str = "auto",
         rhino_id: str | None = None,
     ) -> dict[str, object]:
-        """
-        Import a file into the active Rhino document and immediately fix any
+        """Import a file into the active Rhino document and immediately fix any
         import-baked material overrides so colors and textures work correctly.
-        Viewport display mode, background, and grid are configured automatically
-        based on the file type so the result looks correct on the first import.
-
-        Supports any format Rhino can open: ``.3ds``, ``.obj``, ``.fbx``,
-        ``.stl``, ``.iges``, ``.step``, ``.dxf``, ``.dwg``, ``.3dm``, etc.
-
-        **Why normalize_materials matters:** 3DS, FBX, and OBJ importers stamp
-        every mesh with ``MaterialFromObject`` from the source file.  Any
-        subsequent attempt to set ``ObjectColor`` or assign a new material via
-        ``ModifyAttributes`` will be silently ignored because Rhino's display
-        cache retains the import-time material color.  With ``normalize_materials``
-        enabled (the default) this tool detects newly added objects with baked
-        materials and re-adds them with clean ``ObjectAttributes`` automatically,
-        so ``set_object_display_color`` and all other color APIs work immediately
-        after import.
-
-        **Texture handling:** When texture image files exist alongside the source
-        file (or in ``textures/``, ``maps/``, ``tex/``, ``images/`` subdirs),
-        they are automatically resolved and applied to the new clean materials.
-        Diffuse color, specular, shine, transparency, bump maps, and bitmap
-        textures are all preserved from the original materials.  Textures only
-        display in ``Rendered`` viewport mode — set ``show_textures_in_viewport``
-        to ``True`` to switch automatically.
-
-        **Automatic display presets (post_import_display="auto"):**
-
-        - ``dwg`` / ``dxf`` / ``svg`` / ``ai`` / ``pdf`` → Wireframe mode,
-          black background, grid and axes hidden, black/near-black objects and
-          layers flipped to white so AutoCAD layer colours are visible.
-        - ``fbx`` / ``obj`` / ``3ds`` / ``stl`` / ``3mf`` / ``ply`` → Shaded mode.
-        - ``iges`` / ``igs`` / ``step`` / ``stp`` / ``3dm`` / ``skp`` → Shaded mode.
-        - All presets zoom to extents automatically.
-
-        :param path: Absolute path to the file to import.
-        :param normalize_materials: When ``True`` (default), automatically
-            normalize import-baked materials on newly imported objects.
-            Set to ``False`` only if you want to keep raw importer state.
-        :param show_textures_in_viewport: Switch the active viewport to
-            ``Rendered`` mode after import so texture maps are visible.
-            Only meaningful when texture files are present alongside the source.
-        :param post_import_display: Display preset applied after import.
-            ``"auto"`` (default) picks the preset from the file extension.
-            Pass ``"wireframe_dark"``, ``"shaded"``, ``"rendered"``, or
-            ``"none"`` to override.
-        """
+        Viewport display mode, background, and..."""
         code = (
             "_mcp_import_path = {}\n"
             "_mcp_normalize = {!r}\n"
@@ -135,30 +87,10 @@ def register(mcp: FastMCP) -> None:
         layer_names: list[str] | None = None,
         rhino_id: str | None = None,
     ) -> dict[str, object]:
-        """
-        Set the display color of objects so it shows correctly in **both**
+        """Set the display color of objects so it shows correctly in **both**
         Shaded and Rendered viewport modes.
 
-        **Why a dedicated tool is needed:** Rhino's color pipeline has three
-        priority levels.  ``ObjectColor`` alone only controls wireframe edges;
-        face fill in Shaded mode uses the assigned material's diffuse color
-        instead.  Rendered mode always uses the material and ignores
-        ``ObjectColor`` entirely.  This tool sets both the object color and a
-        matching render material in one call, so the result is consistent
-        across all display modes.
-
-        If any targeted object still has an import-baked material
-        (``MaterialFromObject`` from a 3DS/FBX/OBJ import), this tool
-        normalizes it automatically before applying the color — no need to
-        call ``normalize_imported_objects`` first.
-
-        :param color: RGB values as ``[R, G, B]`` integers 0–255.
-        :param object_ids: GUIDs of specific objects to recolor.  Pass
-            ``null`` to target by layer instead.
-        :param layer_names: Layer names whose objects should be recolored.
-            Ignored when ``object_ids`` is provided.  Pass ``null`` for both
-            parameters to recolor every object in the document.
-        """
+        **Why a dedicated tool is needed:** Rhino's color pipeline has three..."""
         code = (
             "_mcp_color = {}\n"
             "_mcp_object_ids = {}\n"
@@ -177,27 +109,10 @@ def register(mcp: FastMCP) -> None:
         layer_names: list[str] | None = None,
         rhino_id: str | None = None,
     ) -> dict[str, object]:
-        """
-        Fix display colors on objects imported from 3DS, FBX, OBJ, and similar
+        """Fix display colors on objects imported from 3DS, FBX, OBJ, and similar
         formats whose materials are baked at import time.
 
-        **Why this is needed:** Rhino's 3DS/FBX/OBJ importers stamp every mesh
-        with ``MaterialFromObject`` pointing at a source-file material.  Calling
-        ``ModifyAttributes`` afterward updates the data structure but does *not*
-        invalidate Rhino's display cache for those objects, so the viewport keeps
-        showing the original import color regardless of what attributes you set.
-        The only reliable fix is to delete each object and re-add its geometry as
-        a fresh document object with clean ``ObjectAttributes``
-        (``MaterialFromParent``, ``ColorFromLayer``).
-
-        This tool performs that delete-and-readd pass in bulk.  After it runs,
-        you can freely set object colors, materials, and layers through the normal
-        attribute APIs and they will display correctly.
-
-        :param layer_names: Layer names to normalize.  Pass ``null`` / omit to
-            normalize every object in the document.  Use layer full-paths for
-            nested layers, e.g. ``"Buildings::Residential"``.
-        """
+        **Why this is needed:** Rhino's 3DS/FBX/OBJ importers stamp..."""
         code = "_mcp_layer_names = {}\n{}".format(
             "None" if layer_names is None else json.dumps(layer_names), _NORMALIZE_SCRIPT
         )
@@ -205,12 +120,10 @@ def register(mcp: FastMCP) -> None:
 
     @mcp.tool(annotations=ToolAnnotations(title="Export Rhino Document", destructiveHint=True))
     def export_rhino_document(path: str, select_all: bool = True, rhino_id: str | None = None) -> dict[str, object]:
-        """
-        Export the active Rhino document or current selection to ``path``.
+        """Export the active Rhino document or current selection to ``path``.
 
         The file extension controls Rhino's exporter, for example ``.3dm``,
-        ``.obj``, ``.stl``, ``.fbx``, ``.step``, ``.iges``, or ``.dwg``.
-        """
+        ``.obj``, ``.stl``, ``.fbx``, ``.step``,..."""
         command = "_-Export"
         if select_all:
             command = "_SelAll " + command

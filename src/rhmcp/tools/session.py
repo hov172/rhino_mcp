@@ -13,14 +13,10 @@ from rhmcp.tools_helpers import backend as rhino
 def register(mcp: FastMCP) -> None:
     @mcp.tool(annotations=ToolAnnotations(title="List Rhinocode Instances", readOnlyHint=True))
     def get_rhinocode_instances() -> dict[str, object]:
-        """
-        List running Rhino instances known to the rhinocode CLI backend.
+        """List running Rhino instances known to the rhinocode CLI backend.
 
         Rhino must be running and ``StartScriptServer`` must have been executed
-        inside Rhino for instances to appear. Use ``get_rhino_instances`` instead
-        when the RhinoMCP plugin (MCPStart) is running — it uses the slot registry
-        and supports multi-instance routing via rhino_id.
-        """
+        inside Rhino for instances to appear. Use..."""
         return rhino.list_instances()
 
     @mcp.tool(annotations=ToolAnnotations(title="Get Rhino Commands", readOnlyHint=True))
@@ -29,14 +25,10 @@ def register(mcp: FastMCP) -> None:
         loaded_only: bool = True,
         rhino_id: str | None = None,
     ) -> dict[str, object]:
-        """
-        List all available Rhino command names, optionally filtered by substring.
+        """List all available Rhino command names, optionally filtered by substring.
 
         ``loaded_only=True`` (default) returns only commands from currently loaded
-        plugins. Set ``False`` to include commands from unloaded plugins as well.
-        Use this before ``run_rhino_command`` to discover exact command names
-        rather than guessing.
-        """
+        plugins. Set ``False`` to..."""
         code = "__mcp_filter = {!r}\n__mcp_loaded_only = {!r}\n".format(filter, loaded_only) + r"""
 import Rhino
 names = []
@@ -60,15 +52,10 @@ result = {"commands": names, "count": len(names)}
         echo: bool = False,
         rhino_id: str | None = None,
     ) -> dict[str, object]:
-        """
-        Run a Rhino command macro such as ``_Circle 0,0,0 20``.
+        """Run a Rhino command macro such as ``_Circle 0,0,0 20``.
 
         ``echo=True`` echoes the command string to Rhino's command history so users
-        can follow along in the Rhino window. Only supported when routing through
-        the plugin backend (has no effect via rhinocode).
-        Use ``rhino_id`` from ``get_rhino_instances`` when more than one Rhino
-        process is running.
-        """
+        can follow along in the Rhino window. Only..."""
         return rhino.run_command(command, echo=echo, rhino_id=rhino_id)
 
     @mcp.tool(annotations=ToolAnnotations(title="Get Rhino Backend Status", readOnlyHint=True))
@@ -80,13 +67,10 @@ result = {"commands": names, "count": len(names)}
 
     @mcp.tool(annotations=ToolAnnotations(title="Health Check", readOnlyHint=True))
     def health_check(timeout: float = 3.0) -> dict[str, object]:
-        """
-        Ping the RhinoMCP plugin socket and return connection latency and Rhino version.
+        """Ping the RhinoMCP plugin socket and return connection latency and Rhino version.
 
         Returns ``ok: true`` with ``latency_ms`` and ``rhino`` version string when
-        the plugin is reachable. Returns ``ok: false`` with ``error_code`` when the
-        socket is unavailable or Rhino does not respond.
-        """
+        the plugin is reachable...."""
         from rhmcp.tools_helpers.plugin_client import health_check as _hc
         return _hc(timeout=timeout)
 

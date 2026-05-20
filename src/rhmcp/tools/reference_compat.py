@@ -28,28 +28,10 @@ def register(mcp: FastMCP) -> None:
         scale: float | list[float] | None = None,
         rhino_id: str | None = None,
     ) -> dict[str, object]:
-        """
-        Reference-compatible alias for creating one object.
+        """Reference-compatible alias for creating one object.
 
         ``rotation`` is a flat ``[rx, ry, rz]`` list of Euler angles in **degrees**
-        (X-rotation, Y-rotation, Z-rotation applied in that order around the object
-        centre). This matches the C# plugin's ``ApplyEulerRotation`` convention, which
-        converts each value with ``RhinoMath.ToRadians()`` internally.  Always pass
-        degrees here — passing radians would over-rotate by a factor of ~57x.
-
-        **arc** params — two calling conventions:
-          - Center/radius form (C# plugin native): ``center=[x,y,z]``,
-            ``radius=<float>``, ``start_angle=<deg, default 0>``,
-            ``end_angle=<deg, default 90>``
-          - 3-point form: ``start=[x,y,z]``, ``end=[x,y,z]``,
-            ``point_on_arc=[x,y,z]``
-
-        **surface** / **surface_from_points** params (C# handler convention):
-          ``points=[[x,y,z], ...]`` (flat list, row-major u×v order),
-          ``count=[u_count, v_count]``, ``u_degree=<int, default 3>``,
-          ``v_degree=<int, default 3>``, ``u_closed=<bool>``,
-          ``v_closed=<bool>``
-        """
+        (X-rotation, Y-rotation, Z-rotation applied in that..."""
         from rhmcp.tools.geometry import _run_scene
 
         payload = {
@@ -102,16 +84,10 @@ def register(mcp: FastMCP) -> None:
         visible: bool | None = None,
         rhino_id: str | None = None,
     ) -> dict[str, object]:
-        """
-        Reference-compatible object attribute/transform edit.
+        """Reference-compatible object attribute/transform edit.
 
         ``rotation`` is a flat ``[rx, ry, rz]`` list of Euler angles in **degrees**
-        (X-rotation, Y-rotation, Z-rotation applied in that order around the object
-        centre). The C# plugin's ``ApplyTransform`` converts each value internally
-        with ``RhinoMath.ToRadians()``.  Always pass degrees here — passing radians
-        would over-rotate by a factor of ~57x.
-        ``translation`` is a ``[dx, dy, dz]`` offset in model units.
-        """
+        (X-rotation, Y-rotation, Z-rotation applied in that..."""
         props = dict(properties or {})
         props.update({key: value for key, value in {
             "id": id or object_id,

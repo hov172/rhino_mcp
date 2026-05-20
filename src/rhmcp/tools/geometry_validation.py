@@ -19,35 +19,11 @@ def register(mcp: FastMCP) -> None:
         auto_fix: bool = False,
         rhino_id: str | None = None,
     ) -> dict[str, object]:
-        """
-        Validate curve/line geometry in the Rhino document for common quality issues.
+        """Validate curve/line geometry in the Rhino document for common quality issues.
 
         Checks performed:
         - **zero_length**: curves shorter than 0.001 document units (error).
-        - **gap**: endpoint pairs from different curves that are closer than
-          `gap_tolerance` but not coincident (warning).
-        - **non_orthogonal**: line segments whose angle deviates more than
-          `angle_tolerance` degrees from the nearest 45° multiple (warning).
-        - **duplicate**: two lines that share both endpoints within `gap_tolerance`
-          (error).
-
-        When `auto_fix` is True the tool attempts to repair gaps (moves both
-        endpoints to their midpoint) and remove duplicate lines.
-
-        Args:
-            object_ids: GUIDs to check. None = check all curve/line objects in
-                the document.
-            gap_tolerance: Maximum endpoint distance (document units) that is
-                flagged as a gap. Default 0.01.
-            angle_tolerance: Maximum deviation in degrees from a 45° multiple
-                before a line is flagged as non-orthogonal. Default 1.0.
-            auto_fix: Attempt to fix detected gaps and duplicates. Default False.
-            rhino_id: Target Rhino instance ID (optional).
-
-        Returns:
-            A structured report dict with keys: ok, object_count, issue_count,
-            issues, fixed_count, summary.
-        """
+        -..."""
         code = (
             "_mcp_object_ids = {!r}\n"
             "_mcp_gap_tolerance = {!r}\n"

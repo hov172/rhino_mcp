@@ -25,19 +25,10 @@ def register(mcp: FastMCP) -> None:
         bbox_filter: list[list[float]] | None = None,
         rhino_id: str | None = None,
     ) -> dict[str, object]:
-        """
-        Return object summaries filtered by id, name, layer, type, or color.
+        """Return object summaries filtered by id, name, layer, type, or color.
 
         ``offset`` + ``limit`` enable pagination — check ``has_more`` in the
-        response and increment ``offset`` by ``limit`` to fetch the next page.
-        ``total_matching`` is the count of all objects that pass the filters.
-
-        ``include_geometry`` (default True) includes the bounding-box in each
-        summary. Set to False for lightweight metadata-only queries on large scenes.
-
-        ``bbox_filter`` is a spatial filter ``[[min_x,min_y,min_z],[max_x,max_y,max_z]]``
-        that restricts results to objects whose bounding box overlaps the region.
-        """
+        response and increment ``offset`` by..."""
         err = validate.positive(limit, "limit") or validate.non_negative(offset, "offset")
         if err: return err
         payload = {
@@ -54,12 +45,10 @@ def register(mcp: FastMCP) -> None:
         name: str | None = None,
         rhino_id: str | None = None,
     ) -> dict[str, object]:
-        """
-        Return detailed information for one object, including user text and groups.
+        """Return detailed information for one object, including user text and groups.
 
         Pass ``object_id`` to look up by GUID, or ``name`` to look up by exact
-        object name (returns the first match when names are not unique).
-        """
+        object name (returns the first..."""
         if object_id is not None:
             err = validate.guid(object_id, "object_id")
             if err:
@@ -74,13 +63,10 @@ def register(mcp: FastMCP) -> None:
         include_attributes: bool = False,
         rhino_id: str | None = None,
     ) -> dict[str, object]:
-        """
-        Return summaries for the current Rhino selection.
+        """Return summaries for the current Rhino selection.
 
         Set ``include_attributes=True`` to include each object's user text
-        key-value pairs in the response (equivalent to calling
-        ``get_rhino_object_info`` per object but in one round-trip).
-        """
+        key-value pairs in the response (equivalent to calling..."""
         payload = {"limit": limit, "include_attributes": include_attributes}
         code = "__mcp_selected = {!r}\n{}".format(payload, _SELECTED_SCRIPT)
         return rhino.execute_python(code, rhino_id=rhino_id)
@@ -94,19 +80,10 @@ def register(mcp: FastMCP) -> None:
         color_tolerance: int = 0,
         rhino_id: str | None = None,
     ) -> dict[str, object]:
-        """
-        Select or deselect objects using filters.
+        """Select or deselect objects using filters.
 
         Supported filter keys: ``ids``, ``name_contains``, ``exact_name``,
-        ``layer``, ``type``, ``color`` (RGB list), ``user_text`` (``{"key": "value"}``
-        dict to match objects tagged with a specific user attribute).
-        ``logic`` can be ``"and"`` or ``"or"``.
-
-        ``color_tolerance``: per-channel tolerance (0–255) for fuzzy color matching
-        when a ``color`` filter is present. Default 0 = exact match.
-        ``deselect=True`` removes matching objects from the selection instead of
-        adding them. ``limit`` caps the number of objects acted on.
-        """
+        ``layer``, ``type``, ``color`` (RGB list), ``user_text`` (``{"key":..."""
         payload = {"filters": filters, "logic": logic, "deselect": deselect, "limit": limit, "color_tolerance": color_tolerance}
         code = "__mcp_select = {!r}\n{}".format(payload, _SELECT_SCRIPT)
         return rhino.execute_python(code, rhino_id=rhino_id)
@@ -172,13 +149,10 @@ def register(mcp: FastMCP) -> None:
         visible: bool | None = None,
         rhino_id: str | None = None,
     ) -> dict[str, object]:
-        """
-        Set object name, layer, display color, or visibility for ids or selected objects.
+        """Set object name, layer, display color, or visibility for ids or selected objects.
 
         ``visible=True`` shows hidden objects; ``visible=False`` hides visible ones.
-        When ``apply_to_all`` is ``True``, the tool targets ALL objects in the
-        document regardless of ``ids`` or ``selected``.
-        """
+        When ``apply_to_all``..."""
         if ids is not None:
             err = validate.guid_list(ids, "ids")
             if err:
@@ -296,15 +270,10 @@ def register(mcp: FastMCP) -> None:
         object_ids: list[str] | None = None,
         rhino_id: str | None = None,
     ) -> dict[str, object]:
-        """
-        Move objects so that source_point lands exactly on target_point.
+        """Move objects so that source_point lands exactly on target_point.
 
         Useful after tracing a floor plan from a PDF: pick a known reference
-        point on the traced geometry (e.g. a column centre or building corner)
-        and specify where it should sit in model space. All specified objects
-        (or all document objects if object_ids is None) are translated by the
-        same vector so relative positions are preserved.
-        """
+        point on the traced geometry (e.g. a column..."""
         # Validate source_point
         if not isinstance(source_point, (list, tuple)) or len(source_point) not in (2, 3):
             return {"ok": False, "error": "source_point must be a list of 2 or 3 numbers"}

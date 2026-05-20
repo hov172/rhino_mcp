@@ -21,10 +21,8 @@ def register(mcp: FastMCP) -> None:
         port: int | None = None,
         timeout: float | None = None,
     ) -> dict[str, object]:
-        """
-        Send a raw JSON command to the reference RhinoMCP plug-in socket server.
+        """Send a raw JSON command to the reference RhinoMCP plug-in socket server.
 
         Use this when Rhino 7 or an existing `rhinomcp` plug-in workflow is
-        required instead of the Rhino 8.11+ `rhinocode` backend.
-        """
+        required instead of the Rhino 8.11+..."""
         return plugin_client.send_command(command_type, params, host=host, port=port, timeout=timeout)

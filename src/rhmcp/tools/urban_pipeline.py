@@ -158,12 +158,9 @@ def register(mcp: FastMCP) -> None:
         style_hints: str | None = None,
         skip_steps: list[str] | None = None,
     ) -> dict[str, object]:
-        """
-        Single-call studio pipeline: brief → design language → AI renders → solar → PDF report.
+        """Single-call studio pipeline: brief → design language → AI renders → solar → PDF report.
         Returns PipelineResult with report_url, renders, metrics, step_log.
-        Individual step failures do not abort the pipeline (except design_language failure).
-        Use skip_steps=["renders"] or skip_steps=["solar"] to re-run from a checkpoint.
-        """
+        Individual step failures..."""
         global _current_run
         skip = set(skip_steps or [])
         views = render_views or ["Perspective", "Top", "Front", "Right"]

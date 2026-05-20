@@ -48,20 +48,10 @@ def register(mcp: FastMCP) -> None:
         zoom_to_fit: bool = False,
         rhino_id: str | None = None,
     ) -> list[object]:
-        """
-        Capture a Rhino viewport and return the image so the AI can see the scene.
+        """Capture a Rhino viewport and return the image so the AI can see the scene.
 
         viewport: named viewport to capture (e.g. 'Top', 'Perspective'). Omit to
-                  use the active viewport.
-        path: optional file path to save the PNG on disk.
-        width/height: output resolution in pixels (default 1200×900).
-        show_grid: temporarily show (True) or hide (False) the construction grid.
-        show_axes: temporarily show/hide the world axis widget.
-        show_cplane_axes: temporarily show/hide the construction-plane axis lines.
-        zoom_to_fit: zoom to extents of all objects before capture.
-
-        Display overrides are restored after capture. Returns metadata + the image.
-        """
+                  use the active..."""
         payload = {
             "path": path, "width": width, "height": height,
             "viewport": viewport, "show_grid": show_grid,
@@ -160,13 +150,11 @@ def register(mcp: FastMCP) -> None:
         viewport: str | None = None,
         rhino_id: str | None = None,
     ) -> dict[str, object]:
-        """
-        Set the display mode of a viewport.
+        """Set the display mode of a viewport.
 
         Common modes: ``Wireframe``, ``Shaded``, ``Rendered``, ``Ghosted``,
         ``XRay``, ``Technical``, ``Artistic``, ``Pen``.
-        Omit ``viewport`` to apply to the active viewport.
-        """
+        Omit ``viewport`` to..."""
         payload = {"op": "set_display_mode", "mode": mode, "viewport": viewport}
         code = "__mcp_view_op = {!r}\n{}".format(payload, _VIEW_OPS_SCRIPT)
         return rhino.execute_python(code, rhino_id=rhino_id)

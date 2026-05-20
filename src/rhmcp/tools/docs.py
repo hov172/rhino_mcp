@@ -95,13 +95,10 @@ def _count_mcp_tools(module_name: str, tools_dir: str) -> list[str]:
 def register(mcp: FastMCP) -> None:
     @mcp.tool(annotations=ToolAnnotations(title="Search Rhino MCP Docs", readOnlyHint=True))
     def search_rhino_docs(query: str, limit: int = 8) -> dict[str, object]:
-        """
-        Search bundled Rhino scripting guidance and API notes.
+        """Search bundled Rhino scripting guidance and API notes.
 
         This is a compact local reference for common modeling operations. For
-        exhaustive docs, use McNeel's RhinoCommon and RhinoScriptSyntax API
-        references.
-        """
+        exhaustive docs, use McNeel's RhinoCommon and..."""
         data_path = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "data", "rhino_notes.md")
         with open(data_path, encoding="utf-8") as fh:
             text = fh.read()
@@ -180,16 +177,10 @@ def register(mcp: FastMCP) -> None:
 
     @mcp.tool(annotations=ToolAnnotations(title="List Tool Categories", readOnlyHint=True))
     def list_tool_categories(include_tool_names: bool = False) -> dict[str, object]:
-        """
-        Return all tool categories with their tool counts.
+        """Return all tool categories with their tool counts.
 
         Use this before a complex task to discover which categories are
-        available and how many tools each contains, without loading every
-        tool description into context.
-
-        ``include_tool_names=True`` adds the individual tool names to each
-        category entry — useful when you need to find a specific tool.
-        """
+        available and how many tools each contains, without loading..."""
         import rhmcp.tools as _pkg
 
         tools_dir = _pkg.__path__[0]

@@ -20,12 +20,10 @@ def register(mcp: FastMCP) -> None:
         delete_input: bool = True,
         rhino_id: str | None = None,
     ) -> dict[str, object]:
-        """
-        Create a block definition from ``object_ids`` with ``base_point`` [x, y, z].
+        """Create a block definition from ``object_ids`` with ``base_point`` [x, y, z].
 
         ``delete_input=True`` (default) removes the source objects after creating
-        the block. Returns the block name.
-        """
+        the block. Returns the block..."""
         err = validate.guid_list(object_ids, "object_ids") or validate.coordinate(base_point, "base_point")
         if err: return err
         payload = {"object_ids": object_ids, "base_point": base_point, "name": name, "delete_input": delete_input}

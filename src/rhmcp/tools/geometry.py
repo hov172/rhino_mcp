@@ -502,45 +502,10 @@ def register(mcp: FastMCP) -> None:
         snap_to_grid: float | None = None,
         rhino_id: str | None = None,
     ) -> dict[str, object]:
-        """
-        Create one Rhino object from structured parameters.
+        """Create one Rhino object from structured parameters.
 
         Supported types: point, line, polyline, curve, nurbs_curve, circle,
-        ellipse, arc, sphere, ellipsoid, box, cylinder, cone, torus,
-        plane_surface, plane, surface, surface_from_points, mesh, text,
-        pointcloud, textdot, light, extrusion, block_insert,
-        dimension_linear, dimension_radial, dimension_angular, leader, cage,
-        morphcontrol, subd, hatch, clipping_plane.
-
-        **snap_to_grid** — when set (e.g. ``0.5`` for 6-inch grid, ``1.0``
-        for 1-foot grid), all point coordinates are rounded to the nearest
-        multiple before geometry is created.  Eliminates the "almost aligned"
-        problem when tracing from PDF drawings.
-
-        **box** — two calling conventions:
-          - Corner form: ``corner=[x,y,z]``, ``x_size`` (alias ``width``),
-            ``y_size`` (alias ``depth``), ``z_size`` (alias ``height``)
-          - Center form: ``center=[x,y,z]``, ``x_size``/``y_size``/``z_size``
-            (aliases ``width``/``depth``/``height``); or ``size=[sx,sy,sz]``
-
-        **arc** — two calling conventions:
-          - 3-point form: ``start=[x,y,z]``, ``end=[x,y,z]``,
-            ``point_on_arc=[x,y,z]``
-          - Center/radius form (matches C# plugin): ``center=[x,y,z]``,
-            ``radius=<float>``, ``start_angle=<deg, default 0>``,
-            ``end_angle=<deg, default 90>``
-
-        **plane** (alias: ``plane_surface_oriented``) — flat oriented surface:
-          ``center=[x,y,z]``, ``width=<float>``, ``height=<float>``,
-          ``normal=[nx,ny,nz]`` (default ``[0,0,1]``)
-
-        **surface** / **surface_from_points** — grid-based NurbsSurface when
-        ``count=[u,v]`` is supplied (matches C# handler); falls back to
-        ``AddSrfPt`` for 3–4 corner points without a count:
-          ``points=[[x,y,z], ...]``, ``count=[u_count, v_count]``,
-          ``u_degree=<int, default 3>``, ``v_degree=<int, default 3>``,
-          ``u_closed=<bool>``, ``v_closed=<bool>``
-        """
+        ellipse, arc, sphere, ellipsoid, box, cylinder, cone,..."""
         if color is not None:
             err = validate.color(color, "color")
             if err:
@@ -560,16 +525,10 @@ def register(mcp: FastMCP) -> None:
         snap_to_grid: float | None = None,
         rhino_id: str | None = None,
     ) -> dict[str, object]:
-        """
-        Create multiple Rhino objects from a list of structured item specs.
+        """Create multiple Rhino objects from a list of structured item specs.
 
         Each item accepts ``type``, ``params``, and optional ``name``, ``layer``,
-        ``layer_color``, and ``color`` keys.
-
-        ``snap_to_grid`` rounds all point coordinates to the nearest multiple
-        before creating geometry — useful when tracing floor plans from PDFs.
-        E.g. ``0.5`` for a 6-inch grid, ``1.0`` for a 1-foot grid.
-        """
+        ``layer_color``, and ``color``..."""
         return _run_scene(items, rhino_id, snap_to_grid=snap_to_grid)
 
 

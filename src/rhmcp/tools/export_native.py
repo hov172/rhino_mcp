@@ -23,19 +23,11 @@ def register(mcp: FastMCP) -> None:
         notes: str | None = None,
         rhino_id: str | None = None,
     ) -> dict[str, object]:
-        """
-        Export the active Rhino document (or a subset of objects) to a native
+        """Export the active Rhino document (or a subset of objects) to a native
         3DM file.
 
         ``path`` must end in ``.3dm``.  ``rhino_version`` controls the on-disk
-        format version (4, 5, 6, 7, or 8).  When ``object_ids`` is ``None``
-        the full document is written; otherwise only the listed objects are
-        included in a new 3DM archive.
-
-        ``notes`` is embedded as document notes text.
-        ``include_render_meshes`` and ``include_preview_image`` are forwarded
-        to ``File3dmWriteOptions`` when that API is available.
-        """
+        format version (4, 5,..."""
         code = (
             "_mcp_path = {path}\n"
             "_mcp_rhino_version = {rhino_version}\n"

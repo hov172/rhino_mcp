@@ -71,20 +71,10 @@ def register(mcp: FastMCP) -> None:  # noqa: PLR0915 – many tools, acceptable 
     def get_polyhaven_categories(
         asset_type: str = "all",
     ) -> dict[str, Any]:
-        """
-        Return the available categories from Poly Haven for a given asset type.
+        """Return the available categories from Poly Haven for a given asset type.
 
         ``asset_type`` must be one of ``"hdris"``, ``"textures"``, ``"models"``,
-        or ``"all"`` (default).  The response is a dict mapping each category
-        slug to metadata returned by the Poly Haven API.
-
-        Example return value::
-
-            {
-                "categories": {"abstract": 12, "nature": 45, ...},
-                "asset_type": "hdris"
-            }
-        """
+        or ``"all"`` (default).  The..."""
         valid = {"hdris", "textures", "models", "all"}
         if asset_type not in valid:
             return {"ok": False, "error": f"asset_type must be one of {sorted(valid)}, got {asset_type!r}"}
@@ -109,24 +99,10 @@ def register(mcp: FastMCP) -> None:  # noqa: PLR0915 – many tools, acceptable 
         categories: list[str] | None = None,
         limit: int = 20,
     ) -> dict[str, Any]:
-        """
-        Search Poly Haven for free CC0 assets by type and optional categories.
+        """Search Poly Haven for free CC0 assets by type and optional categories.
 
         ``asset_type`` — one of ``"hdris"``, ``"textures"``, or ``"models"``.
-        ``categories`` — optional list of category slugs to filter by (e.g.
-            ``["nature", "outdoor"]``).  Only assets that belong to ALL listed
-            categories are returned.
-        ``limit`` — maximum number of results (default 20).
-
-        Each returned asset includes:
-
-        * ``id`` — the asset slug used for downloads
-        * ``name`` — human-readable name
-        * ``categories`` — list of category slugs
-        * ``download_count`` — popularity indicator
-        * ``evs_cap`` — EV range (HDRIs only)
-        * ``dimensions`` — pixel size tuple (textures only)
-        """
+        ``categories`` — optional list of..."""
         valid = {"hdris", "textures", "models"}
         if asset_type not in valid:
             return {"ok": False, "error": f"asset_type must be one of {sorted(valid)}, got {asset_type!r}"}
@@ -180,32 +156,10 @@ def register(mcp: FastMCP) -> None:  # noqa: PLR0915 – many tools, acceptable 
         format: str | None = None,  # noqa: A002 – intentional public parameter name
         output_dir: str | None = None,
     ) -> dict[str, Any]:
-        """
-        Download a Poly Haven asset to disk.
+        """Download a Poly Haven asset to disk.
 
         ``asset_id`` — the asset slug (e.g. ``"autumn_park"``).
-        ``asset_type`` — one of ``"hdris"``, ``"textures"``, ``"models"``.
-        ``resolution`` — ``"1k"``, ``"2k"`` (default), ``"4k"``, or ``"8k"``.
-        ``format`` — file format.  Defaults: ``"hdr"`` for HDRIs, ``"jpg"`` for
-            textures, ``"gltf"`` for models.  Accepted values:
-
-            * HDRIs: ``"hdr"`` or ``"exr"``
-            * Textures: ``"jpg"``, ``"png"``, ``"exr"``
-            * Models: ``"blend"`` or ``"gltf"``
-
-        ``output_dir`` — destination directory; uses the system temp directory
-            when omitted.
-
-        Returns::
-
-            {
-                "ok": True,
-                "filepath": "/tmp/autumn_park_2k.hdr",
-                "asset_id": "autumn_park",
-                "asset_type": "hdris",
-                "resolution": "2k"
-            }
-        """
+        ``asset_type`` — one of ``"hdris"``, ``"textures"``, ``"models"``...."""
         valid_types = {"hdris", "textures", "models"}
         if asset_type not in valid_types:
             return {"ok": False, "error": f"asset_type must be one of {sorted(valid_types)}"}
@@ -310,23 +264,10 @@ def register(mcp: FastMCP) -> None:  # noqa: PLR0915 – many tools, acceptable 
         rotation: float = 0.0,
         intensity: float = 1.0,
     ) -> dict[str, Any]:
-        """
-        Download (if needed) and apply a Poly Haven HDRI to Rhino's render environment.
+        """Download (if needed) and apply a Poly Haven HDRI to Rhino's render environment.
 
         Provide either ``asset_id`` (to download from Poly Haven) or ``filepath``
-        (to use a previously downloaded ``.hdr`` / ``.exr`` file).
-
-        ``resolution`` — ``"1k"``, ``"2k"`` (default), ``"4k"``, ``"8k"``.
-        ``rotation`` — horizontal rotation in degrees (default 0.0).
-        ``intensity`` — environment brightness multiplier (default 1.0).
-
-        The tool sets Rhino's background style to the loaded environment and
-        triggers a viewport redraw.
-
-        Returns::
-
-            {"ok": True, "filepath": "/tmp/autumn_park_2k.hdr", "message": "HDRI applied"}
-        """
+        (to use a previously..."""
         if not asset_id and not filepath:
             return {"ok": False, "error": "Provide either 'asset_id' or 'filepath'."}
 
@@ -413,30 +354,10 @@ catch (Exception ex)
         channel: str = "all",
         material_name: str | None = None,
     ) -> dict[str, Any]:
-        """
-        Download a Poly Haven texture set and apply it as a PBR material to a Rhino object.
+        """Download a Poly Haven texture set and apply it as a PBR material to a Rhino object.
 
         ``asset_id`` — Poly Haven texture slug (e.g. ``"rock_moss_001"``).
-        ``object_id`` — GUID of the target Rhino object.
-        ``resolution`` — ``"1k"``, ``"2k"`` (default), ``"4k"``, ``"8k"``.
-        ``channel`` — which map(s) to apply: ``"diffuse"``, ``"roughness"``,
-            ``"normal"``, ``"displacement"``, ``"ao"``, or ``"all"`` (default).
-        ``material_name`` — optional name for the new PBR material; defaults to
-            ``"{asset_id}_{resolution}"``.
-
-        All available maps are downloaded and assembled into a Physically Based
-        Rendering (PBR) material in Rhino with separate texture slots for
-        albedo, roughness, normal, displacement, and ambient occlusion.
-
-        Returns::
-
-            {
-                "ok": True,
-                "material_name": "rock_moss_001_2k",
-                "textures_applied": ["diffuse", "normal", "roughness"],
-                "object_id": "..."
-            }
-        """
+        ``object_id`` — GUID of the..."""
         valid_channels = {"diffuse", "roughness", "normal", "displacement", "ao", "all"}
         if channel not in valid_channels:
             return {"ok": False, "error": f"channel must be one of {sorted(valid_channels)}"}
@@ -640,27 +561,11 @@ catch (Exception ex)
         count: int = 10,
         api_key: str | None = None,
     ) -> dict[str, Any]:
-        """
-        Search the Sketchfab model library.
+        """Search the Sketchfab model library.
 
         ``query`` — free-text search term.
         ``categories`` — optional list of Sketchfab category slugs.
-        ``license`` — filter by Creative Commons license type.  Accepted values:
-            ``"by"``, ``"by-sa"``, ``"by-nd"``, ``"by-nc"``, ``"by-nc-sa"``,
-            ``"by-nc-nd"``, ``"cc0"``.
-        ``downloadable`` — only return models with a download option (default
-            ``True``).
-        ``animated`` — ``True`` to require animation; ``False`` to exclude; omit
-            to accept any.
-        ``staffpicked`` — filter by Sketchfab staff pick status.
-        ``count`` — number of results (default 10, maximum 24).
-        ``api_key`` — Sketchfab API key.  Falls back to the ``SKETCHFAB_API_KEY``
-            environment variable.  Required for download operations but optional
-            for public searches.
-
-        Returns a list of models with: uid, name, description snippet,
-        thumbnail_url, face_count, vertex_count, license, and download_size.
-        """
+        ``license`` — filter by Creative Commons..."""
         resolved_key = api_key or os.environ.get("SKETCHFAB_API_KEY")
 
         params: dict[str, Any] = {
@@ -732,17 +637,10 @@ catch (Exception ex)
         model_uid: str,
         api_key: str | None = None,
     ) -> dict[str, Any]:
-        """
-        Retrieve full metadata for a Sketchfab model by its UID.
+        """Retrieve full metadata for a Sketchfab model by its UID.
 
         ``model_uid`` — the Sketchfab model UID (24-character string visible in
-            the model URL on sketchfab.com).
-        ``api_key`` — Sketchfab API key; falls back to ``SKETCHFAB_API_KEY`` env
-            var.
-
-        Returns the full model record plus a ``download_formats`` list
-        enumerating which format archives are available.
-        """
+            the model URL on sketchfab.com)...."""
         resolved_key = api_key or os.environ.get("SKETCHFAB_API_KEY")
         headers: dict[str, str] = {}
         if resolved_key:
@@ -803,33 +701,10 @@ catch (Exception ex)
         import_to_rhino: bool = True,
         scale: float = 1.0,
     ) -> dict[str, Any]:
-        """
-        Download a Sketchfab model and optionally import it into Rhino.
+        """Download a Sketchfab model and optionally import it into Rhino.
 
         ``model_uid`` — 24-character Sketchfab model UID.
-        ``api_key`` — Sketchfab API key (required for downloads); falls back to
-            the ``SKETCHFAB_API_KEY`` environment variable.
-        ``format`` — download archive format: ``"gltf"`` (default), ``"usdz"``,
-            or ``"source"``.
-        ``output_dir`` — directory to save the extracted files; uses the system
-            temp directory when omitted.
-        ``import_to_rhino`` — when ``True`` (default), the downloaded model is
-            immediately imported into the active Rhino document.
-        ``scale`` — uniform scale factor applied after import (default 1.0 =
-            no scaling).
-
-        The archive is downloaded as a ``.zip``, extracted in-place, and the
-        primary model file is identified for import.
-
-        Returns::
-
-            {
-                "ok": True,
-                "filepath": "/tmp/sketchfab_abc123/scene.gltf",
-                "model_uid": "abc123...",
-                "imported": True
-            }
-        """
+        ``api_key`` — Sketchfab API key (required for downloads); falls..."""
         if not _re.fullmatch(r"[0-9a-fA-F]{32}", model_uid):
             return {"ok": False, "error": f"Invalid model_uid: expected 32 hex characters, got {model_uid!r}"}
 
@@ -963,21 +838,10 @@ catch (Exception ex)
 
 
 def _import_file_to_rhino(filepath: str, scale: float = 1.0) -> dict[str, Any]:
-    """
-    Import a file into the active Rhino document via the plugin socket.
+    """Import a file into the active Rhino document via the plugin socket.
 
     Sends C# code that calls ``RhinoDoc.ActiveDoc.Import()``.  When ``scale``
-    differs from 1.0 a uniform scale transform is applied to every newly added
-    object immediately after import.
-
-    Args:
-        filepath: Absolute path to the file to import.
-        scale: Uniform scale factor (default 1.0 = no scaling).
-
-    Returns:
-        The raw dict returned by the plugin socket, augmented with an ``ok``
-        key derived from the response status.
-    """
+    differs from 1.0 a uniform scale transform is..."""
     # Path used in verbatim C# string (@"...") — backslashes are literal,
     # only double-quotes need doubling (R4-6).
     safe_path = filepath.replace('"', '""')

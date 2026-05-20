@@ -20,14 +20,10 @@ def register(mcp: FastMCP) -> None:
         output_name: str | None = None,
         rhino_id: str | None = None,
     ) -> dict[str, object]:
-        """
-        Retrieve computed output data from a Grasshopper component after solution.
+        """Retrieve computed output data from a Grasshopper component after solution.
 
         instance_guid: Instance GUID of the component.
-        output_name: NickName of the specific output param (e.g. 'C'). If omitted, returns all outputs.
-        Returns outputs[] each with name, data_type, path_count, value_count, and values[].
-        Note: Run gh_run_solution first to ensure output data is current.
-        """
+        output_name: NickName of the specific output param (e.g...."""
         params: dict[str, object] = {"instance_guid": instance_guid}
         if output_name is not None:
             params["output_name"] = output_name
@@ -38,13 +34,10 @@ def register(mcp: FastMCP) -> None:
         instance_guid: str | None = None,
         rhino_id: str | None = None,
     ) -> dict[str, object]:
-        """
-        Retrieve runtime error and warning messages from Grasshopper components.
+        """Retrieve runtime error and warning messages from Grasshopper components.
 
         instance_guid: If provided, get messages only from that component.
-                       If omitted, get messages from all components in the definition.
-        Returns messages[] each with component name, message text, and level (error/warning).
-        """
+                       If omitted, get messages..."""
         params: dict[str, object] = {}
         if instance_guid is not None:
             params["instance_guid"] = instance_guid
@@ -56,14 +49,10 @@ def register(mcp: FastMCP) -> None:
         value: float,
         rhino_id: str | None = None,
     ) -> dict[str, object]:
-        """
-        Set the numeric value of a Grasshopper Number Slider component.
+        """Set the numeric value of a Grasshopper Number Slider component.
 
         instance_guid: Instance GUID of the slider component.
-        value: New slider value (will be clamped to the slider's min/max range).
-        Returns clamped_value — the actual value set after clamping.
-        Triggers a solution refresh automatically.
-        """
+        value: New slider value (will be clamped to the slider's..."""
         return _gh("gh_set_slider", {"instance_guid": instance_guid, "value": value})
 
     @mcp.tool(annotations=ToolAnnotations(title="Set Panel Text", destructiveHint=True))
@@ -86,13 +75,10 @@ def register(mcp: FastMCP) -> None:
         values: list[float],
         rhino_id: str | None = None,
     ) -> dict[str, object]:
-        """
-        Set persistent numeric values on a Grasshopper Number parameter component.
+        """Set persistent numeric values on a Grasshopper Number parameter component.
 
         instance_guid: Instance GUID of the Number param.
-        values: One or more numeric values as a list (e.g. [1.0, 2.5, 3.14]).
-        Replaces any existing persistent data on the parameter.
-        """
+        values: One or more numeric values as a list (e.g. [1.0,..."""
         return _gh("gh_set_number_param", {"instance_guid": instance_guid, "values": values})
 
     @mcp.tool(annotations=ToolAnnotations(title="Set Point Parameter Values", destructiveHint=True))
@@ -101,14 +87,10 @@ def register(mcp: FastMCP) -> None:
         points: list[list[float]],
         rhino_id: str | None = None,
     ) -> dict[str, object]:
-        """
-        Set persistent point values on a Grasshopper Point parameter component.
+        """Set persistent point values on a Grasshopper Point parameter component.
 
         instance_guid: Instance GUID of the Point param.
-        points: List of points, each as [x, y, z] (e.g. [[0,0,0], [1,0,0]]).
-                2D points [x, y] are accepted and extended to [x, y, 0].
-        Replaces any existing persistent data on the parameter.
-        """
+        points: List of points, each as [x, y, z] (e.g. [[0,0,0],..."""
         # Flatten [[x,y,z],...] to [x,y,z,x,y,z,...] for C# handler
         flat: list[float] = []
         for pt in points:
@@ -128,16 +110,10 @@ def register(mcp: FastMCP) -> None:
         y: float,
         rhino_id: str | None = None,
     ) -> dict[str, object]:
-        """
-        Add a script component (Python or C#) to the Grasshopper canvas. Requires Rhino 8.
+        """Add a script component (Python or C#) to the Grasshopper canvas. Requires Rhino 8.
 
         language: 'python' or 'csharp' (also accepts 'cs').
-        code: Source code string to pre-load into the script component.
-        inputs: List of input parameter names (e.g. ['x', 'y']).
-        outputs: List of output parameter names (e.g. ['result']).
-        x, y: Canvas coordinates for placement.
-        Returns instance_guid of the new script component.
-        """
+        code: Source code string to pre-load into the..."""
         if language not in ("python", "csharp", "cs"):
             return {"ok": False, "error": "language must be 'python' or 'csharp'"}
         return _gh("gh_add_script_component", {
@@ -155,13 +131,10 @@ def register(mcp: FastMCP) -> None:
         code: str,
         rhino_id: str | None = None,
     ) -> dict[str, object]:
-        """
-        Replace the source code in an existing Grasshopper script component. Requires Rhino 8.
+        """Replace the source code in an existing Grasshopper script component. Requires Rhino 8.
 
         instance_guid: Instance GUID of the script component.
-        code: New source code string.
-        Triggers a solution refresh automatically.
-        """
+        code: New source code string...."""
         return _gh("gh_set_script_code", {"instance_guid": instance_guid, "code": code})
 
 

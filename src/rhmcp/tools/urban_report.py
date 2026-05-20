@@ -146,12 +146,9 @@ def register(mcp: FastMCP) -> None:
         include_design_language: bool = True,
         format: str = "pdf",
     ) -> dict[str, object]:
-        """
-        Export a branded PDF (or HTML) report: cover page, executive summary,
+        """Export a branded PDF (or HTML) report: cover page, executive summary,
         massing renders, metrics, solar analysis, design language, parameters.
-        Uploads to S3 and returns a 7-day presigned URL.
-        Falls back to local ~/.urbanagent/reports/ when cloud credentials absent.
-        """
+        Uploads to S3 and returns a 7-day..."""
         from rhmcp.tools import urban_design_language, urban_renders
         from rhmcp.tools.urban import _urban_get_metrics
 

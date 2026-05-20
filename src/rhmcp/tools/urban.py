@@ -260,12 +260,10 @@ def _iter_geojson_coords(value: object):
 
 
 def _site_dimensions_from_boundary(site_boundary: dict[str, object] | None) -> dict[str, object]:
-    """
-    Extract approximate site dimensions from GeoJSON-like input.
+    """Extract approximate site dimensions from GeoJSON-like input.
 
     Coordinates are treated as model units. For lon/lat GIS input, callers
-    should project before calling or pass explicit dimensions in the prompt.
-    """
+    should project before calling or pass explicit dimensions..."""
     if not site_boundary:
         return {"ok": False, "error": "site_boundary is empty"}
     coords = list(_iter_geojson_coords(site_boundary))
@@ -396,13 +394,10 @@ def _gh(command: str, params: dict[str, object]) -> dict[str, object]:
 
 
 def _discover_gh_nicknames() -> dict[str, str]:
-    """
-    Return Grasshopper object NickName -> InstanceGuid for the active document.
+    """Return Grasshopper object NickName -> InstanceGuid for the active document.
 
     Prefer the plugin's structured canvas command. Fall back to a Rhino Python
-    probe that prints JSON for older plugin builds whose execute_python handler
-    does not return a result variable.
-    """
+    probe that prints JSON for older..."""
     canvas = _gh("gh_get_canvas", {"include_wires": False})
     if canvas.get("ok"):
         raw = canvas.get("result", {})
@@ -657,13 +652,10 @@ def register(mcp: FastMCP) -> None:
 
     @mcp.tool(annotations=ToolAnnotations(title="Get Urban Massing Metrics", readOnlyHint=True))
     def urban_get_metrics(rhino_id: str | None = None) -> dict[str, object]:
-        """
-        Read GFA, FAR, estimated unit count, and open space percentage from the
+        """Read GFA, FAR, estimated unit count, and open space percentage from the
         currently open Grasshopper massing definition's Metrics output panel.
 
-        Returns {gfa_m2, far, unit_count_est, open_space_pct}.
-        Returns zeros if no massing definition is currently open.
-        """
+        Returns {gfa_m2, far, unit_count_est,..."""
         return _urban_get_metrics()
 
     @mcp.tool(annotations=ToolAnnotations(title="Generate Urban Massing", destructiveHint=True))
@@ -676,21 +668,10 @@ def register(mcp: FastMCP) -> None:
         layer_prefix: str = "Urban",
         rhino_id: str | None = None,
     ) -> dict[str, object]:
-        """
-        Generate parametric 3D urban massing in Rhino by driving a pre-built
+        """Generate parametric 3D urban massing in Rhino by driving a pre-built
         Grasshopper definition.
 
-        typology: One of "tower", "podium_tower", "courtyard", "perimeter_block",
-                  "street_grid".
-        site_origin: [x, y, z] in model units (metres). Baked geometry is moved
-                     here after solving.
-        site_width: Site width in metres.
-        site_depth: Site depth in metres.
-        params: Slider overrides, e.g. {"floor_count": 20, "residential_pct": 75}.
-                Any key from the typology's slider map is valid.
-        layer_prefix: Baked geometry goes to {layer_prefix}::Massing::{typology}.
-        Returns: {ok, typology, layer, gfa_m2, far, unit_count_est, open_space_pct}.
-        """
+        typology: One of "tower", "podium_tower", "courtyard",..."""
         global _current_typology, _current_slider_guids, _current_metrics_guid, _current_bake_guid
         global _current_params, _current_site_width, _current_site_depth, _current_metrics_cache
 
@@ -757,14 +738,10 @@ def register(mcp: FastMCP) -> None:
         value: float,
         rhino_id: str | None = None,
     ) -> dict[str, object]:
-        """
-        Update a single slider parameter on the currently open Grasshopper massing
+        """Update a single slider parameter on the currently open Grasshopper massing
         definition and re-run the solver.
 
-        param_name: NickName of the slider to update, e.g. "floor_count".
-        value: New value. Grasshopper clamps to the slider's min/max.
-        Returns {ok, param_name, gfa_m2, far, unit_count_est, open_space_pct}.
-        """
+        param_name: NickName of the slider to update, e.g...."""
         if param_name not in _current_slider_guids:
             active = sorted(_current_slider_guids.keys()) or ["none - call urban_generate_massing first"]
             return {
@@ -820,14 +797,10 @@ def register(mcp: FastMCP) -> None:
         grid_size: float = 1.0,
         rhino_id: str | None = None,
     ) -> dict[str, object]:
-        """
-        Run environmental analysis on baked massing geometry using Grasshopper.
+        """Run environmental analysis on baked massing geometry using Grasshopper.
 
         Currently supports analysis_type="solar". The analysis definition is
-        expected to expose NickNames for epw_path, geometry_layer,
-        analysis_period, grid_size, radiation_mesh, avg_radiation_kwh_m2, and
-        overshadow_hours_worst.
-        """
+        expected to expose NickNames for..."""
         if analysis_type not in _ANALYSIS_GH_MAP:
             return {
                 "ok": False,
@@ -846,12 +819,10 @@ def register(mcp: FastMCP) -> None:
         layer_prefix: str = "Urban",
         rhino_id: str | None = None,
     ) -> dict[str, object]:
-        """
-        Delete all baked urban massing and analysis objects on matching layers.
+        """Delete all baked urban massing and analysis objects on matching layers.
 
         layer_prefix defaults to "Urban". Pass "Urban::Massing" to clear only
-        generated massing layers while keeping analysis layers elsewhere.
-        """
+        generated massing layers while keeping..."""
         global _current_typology, _current_slider_guids, _current_metrics_guid, _current_bake_guid
         global _current_params, _current_site_width, _current_site_depth, _current_metrics_cache
 
@@ -911,13 +882,10 @@ def register(mcp: FastMCP) -> None:
 
     @mcp.tool(annotations=ToolAnnotations(title="Parse Urban Prompt", readOnlyHint=True))
     def parse_urban_prompt(prompt: str, rhino_id: str | None = None) -> dict[str, object]:
-        """
-        Parse a natural-language urban design brief into structured parameters.
+        """Parse a natural-language urban design brief into structured parameters.
 
         Returns typology, FAR target, site dimensions, use mix, climate zone,
-        generated slider params, missing fields, and confidence. This is a
-        deterministic schema guard for LLM clients.
-        """
+        generated slider params, missing..."""
         # R6-4: Cap prompt length
         if prompt and len(prompt) > 8000:
             return {"ok": False, "error": "prompt exceeds maximum length of 8000 characters."}

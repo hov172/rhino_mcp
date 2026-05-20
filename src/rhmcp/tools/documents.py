@@ -84,21 +84,11 @@ def _parse_page_spec(spec: str | None, page_count: int) -> list[int]:
 
 
 def _parse_scale_hint(hint: str) -> tuple[float, str]:
-    """
-    Parse a drawing scale string and return (paper_inches_per_real_unit, real_unit).
+    """Parse a drawing scale string and return (paper_inches_per_real_unit, real_unit).
 
     Supported formats
     -----------------
-    Architectural imperial  ``1/4" = 1'``  ``1/8" = 1'-0"``  ``1" = 20'``
-    Metric ratio            ``1:100``  ``1:50``  ``1:200``
-
-    Returns
-    -------
-    paper_in_per_unit : float
-        How many paper inches represent one real-world unit.
-    unit : str
-        ``"feet"`` for imperial formats, ``"meters"`` for ratio formats.
-    """
+    Architectural imperial  ``1/4" = 1'``  ``1/8" = 1'-0"``  ``1" =..."""
     hint = hint.strip()
 
     # Metric ratio: 1:100, 1:50, 1 : 200
@@ -249,31 +239,10 @@ def register(mcp: FastMCP) -> None:
         max_pages: int = 10,
         scale_hint: str | None = None,
     ) -> dict[str, Any]:
-        """
-        Render PDF pages to images and optionally extract text.
+        """Render PDF pages to images and optionally extract text.
 
         Each page is returned as a base64-encoded PNG so the agent can see
-        drawings, floor plans, diagrams, and annotations directly.
-
-        :param path: Absolute path to the PDF.
-        :param pages: Which pages to return (1-based). Accepts single numbers,
-            ranges, and comma-separated combinations: ``"1"``, ``"1-4"``,
-            ``"1,3,5-8"``. Omit for all pages up to *max_pages*.
-        :param dpi: Render resolution (default 150). Use 200-300 for fine
-            drawing detail. Higher values increase response size.
-        :param extract_text: Also return the text layer. Scanned PDFs return
-            empty strings; text-layer PDFs return parseable content.
-        :param max_pages: Hard cap on pages returned per call (default 10).
-        :param scale_hint: Drawing scale annotation so pixel coordinates can
-            be converted to real-world distances.  Supported formats:
-            ``"1/4\\" = 1'"`` (architectural imperial, result in feet),
-            ``"1/8\\" = 1'"``, ``"1\\" = 20'"`` etc.; or metric ratio
-            ``"1:100"``, ``"1:50"`` (result in meters).
-            When provided, each page entry and the top-level response include
-            ``px_per_real_unit``, ``real_units_per_px``, ``real_unit``,
-            ``real_width``, and ``real_height`` so coordinates can be mapped
-            directly to model space.
-        """
+        drawings, floor plans, diagrams, and annotations..."""
         from rhmcp.tools_helpers.security import clamp
         dpi = clamp(dpi, 50, 600)
         max_pages = clamp(max_pages, 1, 50)
@@ -366,28 +335,11 @@ def register(mcp: FastMCP) -> None:
         real_distance: float,
         real_unit: str = "feet",
     ) -> dict[str, Any]:
-        """
-        Compute the exact pixel-to-real-world scale from two identified points
+        """Compute the exact pixel-to-real-world scale from two identified points
         in a rendered PDF page.
 
         After calling ``read_pdf``, visually identify two points whose
-        real-world distance is known (e.g. column centrelines 20 ft apart,
-        or the ends of a dimensioned wall) and pass their pixel coordinates
-        here.  The tool calculates the true ``px_per_real_unit`` ratio,
-        correcting for any print-to-fit scaling that makes the printed scale
-        annotation inaccurate.
-
-        The returned values are in the same format as the ``scale`` block
-        returned by ``read_pdf(scale_hint=...)``, so you can substitute them
-        directly for model-space coordinate mapping.
-
-        :param pixel_point_1: ``[x, y]`` pixel coordinate of the first point
-            in the rendered page image (top-left origin).
-        :param pixel_point_2: ``[x, y]`` pixel coordinate of the second point.
-        :param real_distance: Known real-world distance between the two points.
-        :param real_unit: Unit of *real_distance* — ``"feet"``, ``"meters"``,
-            ``"inches"``, or ``"mm"``.
-        """
+        real-world..."""
         import math
         if len(pixel_point_1) < 2 or len(pixel_point_2) < 2:
             return {"ok": False, "error": "pixel_point_1 and pixel_point_2 must each be [x, y]"}
@@ -426,33 +378,11 @@ def register(mcp: FastMCP) -> None:
         real_unit: str = "feet",
         min_length_px: float = 2.0,
     ) -> dict[str, Any]:
-        """
-        Extract vector paths (lines, rectangles, curves) from a PDF page as
+        """Extract vector paths (lines, rectangles, curves) from a PDF page as
         structured coordinate data.
 
         Works best for PDFs exported from CAD/BIM tools (Revit, AutoCAD,
-        Rhino).  Returns exact line and rectangle coordinates from the PDF
-        vector layer — no pixel estimation.  Returns
-        ``{"ok": False, "error": "no_vectors", ...}`` gracefully for
-        scanned / raster-only PDFs.
-
-        When *real_units_per_px* is provided (from ``calibrate_pdf_scale``
-        or the ``real_units_per_px`` value in a ``read_pdf`` response), each
-        segment also includes ``start_real``, ``end_real``, ``length_real``,
-        and ``real_unit`` so coordinates map directly to model space.
-
-        :param path: Absolute path to the PDF.
-        :param pages: Which pages to extract (1-based).  Accepts single
-            numbers, ranges, and comma-separated combinations: ``"1"``,
-            ``"1-4"``, ``"1,3,5-8"``.  Omit for all pages up to 10.
-        :param real_units_per_px: Scale factor from ``calibrate_pdf_scale``
-            or ``read_pdf``.  When provided, real-world coordinates are
-            included for every segment.
-        :param real_unit: Label for real-world coordinates (e.g. ``"feet"``,
-            ``"meters"``).  Informational only — does not affect calculation.
-        :param min_length_px: Minimum segment length in PDF points to include.
-            Filters out hairlines and degenerate paths (default 2.0).
-        """
+        Rhino)...."""
         import math
 
         try:
@@ -596,33 +526,11 @@ def register(mcp: FastMCP) -> None:
         real_unit: str = "feet",
         dpi: int = 150,
     ) -> dict[str, Any]:
-        """
-        Extract dimension annotation strings and their positions from a PDF's
+        """Extract dimension annotation strings and their positions from a PDF's
         text layer.
 
         Parses strings matching common architectural/engineering dimension
-        formats (``20'-6"``, ``3000mm``, ``4.5m``, bare integers >= 100) and
-        returns each with its bounding box in pixel space.  When
-        *real_units_per_px* is provided, also returns the centre coordinate
-        in real-world space.
-
-        Useful for cross-checking AI-traced geometry against annotated
-        distances, or for building a dimension map before calling
-        ``create_rhino_geometry``.
-
-        :param path: Absolute path to the PDF.
-        :param pages: Which pages to extract (1-based).  Accepts single
-            numbers, ranges, and comma-separated combinations: ``"1"``,
-            ``"1-4"``, ``"1,3,5-8"``.  Omit for all pages up to 10.
-        :param real_units_per_px: Scale factor from ``calibrate_pdf_scale``
-            or ``read_pdf``.  When provided, ``center_real`` is included for
-            every dimension.
-        :param real_unit: Label for real-world coordinates.  Informational
-            only — does not affect calculation.
-        :param dpi: Reference render DPI used to convert PDF point coordinates
-            to pixel coordinates (default 150; must match the DPI used when
-            ``read_pdf`` rendered the page).
-        """
+        formats (``20'-6"``,..."""
         _DIM_PATTERNS = [
             re.compile(r"\d+\s*['’]\s*-?\s*\d*\s*['’\"]?"),  # 20'-6", 3'-0"
             re.compile(r"\d+(?:\.\d+)?\s*(?:ft|feet|')\b"),             # 20 ft, 20'
@@ -732,19 +640,10 @@ def register(mcp: FastMCP) -> None:
         max_dimension: int = 2048,
         quality: int = 90,
     ) -> dict[str, Any]:
-        """
-        Read an image file and return it as a base64-encoded PNG.
+        """Read an image file and return it as a base64-encoded PNG.
 
         Supports JPG, PNG, TIFF, BMP, WEBP, GIF, HEIC/HEIF.  The image is
-        resized (preserving aspect ratio) if either dimension exceeds
-        *max_dimension*, keeping response sizes manageable.
-
-        :param path: Absolute path to the image file.
-        :param max_dimension: Largest allowed pixel dimension after resizing
-            (default 2048). Set higher for detailed drawings.
-        :param quality: JPEG-equivalent quality hint used when the source is
-            JPEG; ignored for lossless formats.
-        """
+        resized (preserving aspect ratio) if either dimension..."""
         from rhmcp.tools_helpers.security import clamp
         if max_dimension is not None:
             max_dimension = clamp(max_dimension, 1, 8192)
@@ -809,18 +708,10 @@ def register(mcp: FastMCP) -> None:
         max_rows: int = 500,
         header_row: bool = True,
     ) -> dict[str, Any]:
-        """
-        Read a CSV or Excel file and return rows as structured data.
+        """Read a CSV or Excel file and return rows as structured data.
 
         For Excel files, pass *sheet* as a sheet name or 1-based index.
-        Omit *sheet* to read the first sheet.  Returns all sheet names so
-        you can enumerate the workbook before fetching individual sheets.
-
-        :param path: Absolute path to the file (.csv, .xlsx, or .xls).
-        :param sheet: Sheet name or 1-based sheet index (Excel only).
-        :param max_rows: Maximum data rows returned (default 500).
-        :param header_row: Treat the first row as column headers.
-        """
+        Omit *sheet* to read the first sheet.  Returns all sheet..."""
         from rhmcp.tools_helpers.security import clamp
         max_rows = clamp(max_rows, 1, 100_000)
         try:
@@ -925,20 +816,10 @@ def register(mcp: FastMCP) -> None:
         render_png: bool = True,
         render_dpi: int = 150,
     ) -> dict[str, Any]:
-        """
-        Read an SVG file and return its content and metadata.
+        """Read an SVG file and return its content and metadata.
 
         Returns the raw SVG text (valid XML the agent can parse) and a
-        rendered PNG preview.  Extracts the declared width, height, and
-        viewBox, and counts top-level elements so the agent understands
-        drawing complexity before parsing.
-
-        :param path: Absolute path to the SVG file.
-        :param include_raw: Include the full SVG XML text in the response.
-        :param render_png: Render a PNG preview via cairosvg (if installed).
-            Falls back gracefully if cairosvg is unavailable.
-        :param render_dpi: Resolution for PNG rendering (default 150).
-        """
+        rendered PNG preview.  Extracts the declared width, height,..."""
         from rhmcp.tools_helpers.security import clamp
         render_dpi = clamp(render_dpi, 24, 600)
         try:
@@ -1022,18 +903,10 @@ def register(mcp: FastMCP) -> None:
         include_tables: bool = True,
         max_paragraphs: int | None = None,
     ) -> dict[str, Any]:
-        """
-        Read a Word document (.docx) and return its text and tables.
+        """Read a Word document (.docx) and return its text and tables.
 
         Returns paragraphs as a list of ``{text, style}`` objects and tables
-        as row-major lists of string cells.  Use this to read specifications,
-        project briefs, room schedules, and any Word-format documentation.
-
-        :param path: Absolute path to the .docx file.
-        :param include_tables: Extract table content in addition to paragraphs.
-        :param max_paragraphs: Limit number of paragraphs returned. Omit to
-            return all.
-        """
+        as row-major lists of string cells.  Use this to..."""
         from rhmcp.tools_helpers.security import clamp
         max_paragraphs = clamp(max_paragraphs or 50_000, 1, 50_000)
         try:

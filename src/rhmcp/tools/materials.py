@@ -36,15 +36,10 @@ def register(mcp: FastMCP) -> None:
         transparency: float = 0.0,
         rhino_id: str | None = None,
     ) -> dict[str, object]:
-        """
-        Create a new Rhino material with the specified properties.
+        """Create a new Rhino material with the specified properties.
 
         ``diffuse`` (or ``color``) — RGB list [r, g, b] with values 0-255.
-        ``specular`` — RGB list [r, g, b] with values 0-255.
-        ``emission`` — RGB list [r, g, b] with values 0-255.
-        ``shininess`` — integer 0-255; higher values produce a sharper highlight.
-        ``transparency`` — float 0.0 (opaque) to 1.0 (fully transparent).
-        """
+        ``specular`` — RGB list [r, g, b] with values..."""
         # Resolve diffuse vs color alias; diffuse wins if both provided.
         resolved_diffuse = diffuse if diffuse is not None else color
 
@@ -83,13 +78,10 @@ def register(mcp: FastMCP) -> None:
         material_name: str | None = None,
         rhino_id: str | None = None,
     ) -> dict[str, object]:
-        """
-        Assign a material to a Rhino object by its GUID.
+        """Assign a material to a Rhino object by its GUID.
 
         Provide either ``material_index`` (integer index into the document
-        material table) or ``material_name`` (string) to look up the material.
-        At least one of the two must be supplied.
-        """
+        material table) or ``material_name`` (string) to look up the..."""
         err = validate.guid(id, "id")
         if err: return err
         if material_index is None and material_name is None:
