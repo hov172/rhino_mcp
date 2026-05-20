@@ -38,6 +38,7 @@ Control Rhino 3D from Claude, Cursor, Codex, and any other MCP-capable AI tool. 
 - [Backend Selection](#backend-selection)
   - [Session & Instance Management](#session--instance-management)
 - [Environment Variables](#environment-variables)
+- [Tool Profiles](#tool-profiles)
 - [Remote Host Support](#remote-host-support)
 - [Telemetry](#telemetry)
 - [Third-Party Plugin Support](#third-party-plugin-support)
@@ -45,7 +46,8 @@ Control Rhino 3D from Claude, Cursor, Codex, and any other MCP-capable AI tool. 
   - [Manual Installation](#manual-installation)
   - [File-based Installation](#file-based-installation)
   - [Checking Plugin Status](#checking-plugin-status)
-- [All 300+ Tools](#all-353-tools)
+- [Tool Profiles](#tool-profiles)
+- [All 360 Tools](#all-360-tools)
   - [Plugin Management](#plugin-management)
   - [Grasshopper — Canvas](#grasshopper--canvas)
   - [Grasshopper — Parameters](#grasshopper--parameters)
@@ -151,7 +153,7 @@ Restart Rhino. The plugin loads automatically and starts its socket server on `1
 
 #### Step 3 — Verify the Python MCP server
 
-> **This is the MCP server — not another plugin.** It runs as a separate Python process outside Rhino and exposes the 300+ tools to your AI client. Claude Desktop spawns it automatically from the cloned folder.
+> **This is the MCP server — not another plugin.** It runs as a separate Python process outside Rhino and exposes the 360 tools to your AI client. Claude Desktop spawns it automatically from the cloned folder.
 
 ```bash
 uv run python -m rhmcp --help
@@ -208,7 +210,7 @@ The `command` + `args` lines are literally the shell command Claude Desktop runs
 
 #### Step 6 — Restart Claude Desktop and start using it
 
-Fully quit Claude Desktop (don't just close the window) and reopen it. Claude Desktop reads the config on launch, spawns the MCP server in the background, and the 300+ Rhino tools become available automatically.
+Fully quit Claude Desktop (don't just close the window) and reopen it. Claude Desktop reads the config on launch, spawns the MCP server in the background, and the 360 Rhino tools become available automatically.
 
 Test it by typing in Claude:
 
@@ -297,7 +299,7 @@ Same as Path A Step 4. Open Rhino — the plugin auto-starts and prints `Rhino M
 
 #### Step 5 — Restart Claude Desktop and start using it
 
-Fully quit and reopen Claude Desktop. It connects to the running container and the 300+ tools appear.
+Fully quit and reopen Claude Desktop. It connects to the running container and the 360 tools appear.
 
 **Connection flow:**
 ```
@@ -1123,6 +1125,7 @@ Use `get_rhino_backend_status` from any AI client to check which backends are cu
 | `RHINO_MCP_RATE_LIMIT_RPM` | `120` | HTTP transport: maximum requests per minute per token. |
 | `RHINO_MCP_USE_SLOT_REGISTRY` | *(unset)* | Set to `1` to always route `plugin_result()` via the slot registry (auto-discover Rhino instances). Default: off (uses `RHINO_MCP_HOST`/`RHINO_MCP_PORT` directly). |
 | `RHINO_MCP_RHINO_PATH` | *(auto-detected)* | Override path to the Rhino executable used by `launch_rhino`. Default: searches standard install locations. |
+| `RHMCP_PROFILE` | `full` | Tool profile to load at startup: `core`, `grasshopper`, `rendering`, `urban`, `bim`, or `full`. Equivalent to `--profile` CLI flag. See [Tool Profiles](#tool-profiles). |
 
 ### Rhino Plugin (C# side)
 
@@ -1130,6 +1133,51 @@ Use `get_rhino_backend_status` from any AI client to check which backends are cu
 |---|---|---|
 | `RHINO_MCP_BIND_HOST` | `127.0.0.1` | IP address the Rhino plugin binds its TCP listener to. Set to `0.0.0.0` to accept connections from any network interface (required for remote AI clients). Must be set in Rhino's environment before `MCPStart` is run. |
 | `RHINO_MCP_PLUGIN_SECRET` | *(unset)* | Pre-shared key required from the Python server on every connection. Set the same value on both machines when using network (non-loopback) binding. Unset = no authentication (safe for localhost-only). |
+
+---
+
+## Tool Profiles
+
+Loading all 360 tools costs ~52k tokens of context on every request. If you only need a subset of tools, use a **profile** to load only the modules you need.
+
+| Profile | Tools | ~Tokens | Includes |
+|---------|-------|---------|---------|
+| `full` *(default)* | 360 | ~52k | Everything |
+| `core` | 194 | ~28k | Geometry, layers, transforms, curves, surfaces, meshes, materials, export, annotations, document |
+| `grasshopper` | 277 | ~40k | `core` + all Grasshopper modules (GH1, GH2, Pufferfish, Weaverbird, LunchBox, Kangaroo, Ladybug…) |
+| `rendering` | 225 | ~35k | `core` + V-Ray, Enscape, PBR materials, asset libraries |
+| `urban` | 226 | ~34k | `core` + urban design, massing, studio pipeline, AI generation |
+| `bim` | 212 | ~31k | `core` + VisualARQ, Lands Design |
+
+**CLI flag:**
+```bash
+rhino-mcp --profile core
+rhino-mcp --profile grasshopper
+```
+
+**Environment variable** (useful in Claude Desktop config):
+```bash
+RHMCP_PROFILE=core
+```
+
+**Claude Desktop example** — add `"--profile", "core"` to `args`:
+```json
+{
+  "mcpServers": {
+    "rhino": {
+      "command": "uv",
+      "args": ["run", "--directory", "/path/to/rhino-mcp", "python", "-m", "rhmcp", "--profile", "core"],
+      "env": {
+        "RHINO_MCP_BACKEND": "plugin",
+        "RHINO_MCP_HOST": "127.0.0.1",
+        "RHINO_MCP_PORT": "1999"
+      }
+    }
+  }
+}
+```
+
+The `core` profile covers standard Rhino modeling — geometry creation, boolean ops, curves, surfaces, meshes, layers, materials, transforms, export, and document tools. Switch to `grasshopper`, `rendering`, `urban`, or `bim` when you need those specific plugin tools.
 
 ---
 
@@ -1443,7 +1491,7 @@ You can also call `check_plugin_loaded(plugin_name="V-Ray")` directly to test wh
 
 ---
 
-## All 300+ Tools
+## All 360 Tools
 
 ---
 
@@ -1950,7 +1998,7 @@ Read external design files — floor plans, specifications, spreadsheets, and re
 | `execute_rhino_csharp` | Run arbitrary C# code inside Rhino via Roslyn scripting. Returns stdout output or document changes. Requires RhinoCode C# support (Rhino 8). |
 | `get_rhino_commands` | List all available Rhino command names, optionally filtered by substring (`filter="circle"`). `loaded_only=true` (default) limits to loaded plugins. Call this before `run_rhino_command` to discover exact spellings. |
 | `run_rhino_command` | Execute a Rhino command macro string (e.g. `_Box 0,0,0 1,1,1`). `echo=true` echoes the command to Rhino's history. Returns `output` with captured command-window text so the AI can read results. Requires the Rhino plugin to be running (auto-starts with Rhino). |
-| `list_tool_categories` | **Start here for complex tasks.** Returns all 353 tool categories with counts. Use `include_tool_names=true` to list every tool name per category without loading all 353 descriptions into context. |
+| `list_tool_categories` | **Start here for complex tasks.** Returns all 360 tool categories with counts. Use `include_tool_names=true` to list every tool name per category without loading all 360 descriptions into context. |
 | `search_rhino_docs` | Full-text search of bundled Rhino scripting notes. |
 | `get_rhinoscript_docs` | Look up RhinoScriptSyntax module-level documentation. Pass a module name (`"curve"`, `"surface"`, `"object"`, etc.) to list its functions. |
 | `search_rhinoscript_functions` | Search RhinoScriptSyntax function reference by name or keyword. **Always call this before writing Python scripts** to avoid hallucinated function names. |
@@ -2354,7 +2402,7 @@ uv run python -m pytest tests/test_urban_unit.py tests/test_urban_design_languag
 # Grasshopper integration tests (requires Rhino running with MCPStart active)
 uv run python -m pytest tests/test_gh_integration.py -v -m integration
 
-# All non-integration tests (161 tests, ~1.7s)
+# All non-integration tests (403 tests, ~1.7s)
 uv run python -m pytest tests/ --ignore=tests/test_gh_integration.py -v
 ```
 
