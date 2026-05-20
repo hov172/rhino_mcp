@@ -177,10 +177,7 @@ def register(mcp: FastMCP) -> None:
 
     @mcp.tool(annotations=ToolAnnotations(title="List Tool Categories", readOnlyHint=True))
     def list_tool_categories(include_tool_names: bool = False) -> dict[str, object]:
-        """Return all tool categories with their tool counts.
-
-        Use this before a complex task to discover which categories are
-        available and how many tools each contains, without loading..."""
+        """Return all tool categories with their tool counts and optional tool names."""
         import rhmcp.tools as _pkg
 
         tools_dir = _pkg.__path__[0]
