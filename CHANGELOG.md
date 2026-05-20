@@ -5,17 +5,10 @@ Versioning follows [Semantic Versioning](https://semver.org/).
 
 ---
 
-## [0.15.2] — 2026-05-20
-
-### Fixed
-- `capture_rhino_view` with `zoom_to_fit=True` raised `AttributeError` in Rhino's IronPython runtime. Fixed by importing `rhinoscriptsyntax as rs` and calling `rs.ZoomExtents()` — neither `RhinoView.ZoomExtents` nor `RhinoViewport.ZoomExtents` are exposed as callable Python methods in IronPython.
-
----
-
 ## [0.15.1] — 2026-05-20
 
 ### Fixed
-- `capture_rhino_view` with `zoom_to_fit=True` — initial fix attempt (see [0.15.2] for the correct fix).
+- `capture_rhino_view` with `zoom_to_fit=True` raised `AttributeError` in Rhino's IronPython runtime. Fixed by importing `rhinoscriptsyntax as rs` and calling `rs.ZoomExtents()` — neither `RhinoView.ZoomExtents` nor `RhinoViewport.ZoomExtents` are exposed as callable Python methods in IronPython.
 
 ---
 
