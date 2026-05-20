@@ -5,6 +5,13 @@ Versioning follows [Semantic Versioning](https://semver.org/).
 
 ---
 
+## [0.15.1] — 2026-05-20
+
+### Fixed
+- `capture_rhino_view` with `zoom_to_fit=True` raised `AttributeError: 'RhinoView' object has no attribute 'ZoomExtents'`. Fixed by calling `vp.ZoomExtents()` on the `RhinoViewport` instead of `view.ZoomExtents()` on the `RhinoView`.
+
+---
+
 ## [0.15.0] — 2026-05-20
 
 ### Added

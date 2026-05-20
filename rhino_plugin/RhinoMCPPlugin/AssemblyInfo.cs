@@ -2,7 +2,7 @@ using System.Reflection;
 using System.Runtime.InteropServices;
 using Rhino.PlugIns;
 
-[assembly: AssemblyInformationalVersion("0.15.0")]
+[assembly: AssemblyInformationalVersion("0.15.1")]
 
 [assembly: PlugInDescription(DescriptionType.Icon, "RhinoMCPPlugin.icon.png")]
 [assembly: PlugInDescription(DescriptionType.Organization, "Ayala Solutions")]
