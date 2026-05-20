@@ -80,6 +80,15 @@ def main() -> int:
             "Env: RHMCP_PROFILE. Default: full."
         ),
     )
+    parser.add_argument(
+        "--compact",
+        action="store_true",
+        default=bool(os.environ.get("RHMCP_COMPACT")),
+        help=(
+            "Compact mode: register 3 meta-tools instead of all schemas. "
+            "Env: RHMCP_COMPACT. Default: false."
+        ),
+    )
     args = parser.parse_args()
 
     data_dir = os.path.join(os.path.dirname(os.path.abspath(__file__)), "data")
@@ -127,24 +136,51 @@ def main() -> int:
             return "Function '{}' not found.".format(function_name)
         return "# {Name}\n\n**Module:** {module}\n\n```python\nrs.{Signature}\n```\n\n{Description}\n\nReturns: {Returns}".format(**func)
 
-    import rhmcp.tools as tools_pkg
+    if args.compact:
+        from rhmcp.tools_helpers.compact_registry import CompactRegistry
 
-    _loaded = []
-    for _importer, modname, _ispkg in pkgutil.iter_modules(tools_pkg.__path__):
-        if modname.startswith("_"):
-            continue
-        if active_modules is not None and modname not in active_modules:
-            continue
-        mod = importlib.import_module("rhmcp.tools.{:s}".format(modname))
-        if hasattr(mod, "register"):
-            mod.register(mcp)
-            _loaded.append(modname)
+        _registry = CompactRegistry()
+        _registry.load_from_modules(active_modules)
+        _n = len(_registry._tools)
 
-    if args.profile != "full":
+        @mcp.tool()
+        def list_rhino_tools(category: str = "") -> list[dict]:
+            """List all available Rhino tools with one-line descriptions."""
+            return _registry.list_tools(category)
+
+        @mcp.tool()
+        def describe_rhino_tool(name: str) -> dict:
+            """Get the full description and input schema for a specific Rhino tool."""
+            return _registry.describe_tool(name)
+
+        @mcp.tool()
+        async def call_rhino_tool(name: str, arguments: dict | None = None) -> object:
+            """Call any Rhino tool by name with a dict of arguments."""
+            return await _registry.call_tool(name, arguments or {})
+
         print(
-            f"Rhino MCP: profile '{args.profile}' — {len(_loaded)} modules loaded",
+            f"Rhino MCP: compact mode — 3 meta-tools loaded ({_n} tools available on demand)",
             file=sys.stderr,
         )
+    else:
+        import rhmcp.tools as tools_pkg
+
+        _loaded = []
+        for _importer, modname, _ispkg in pkgutil.iter_modules(tools_pkg.__path__):
+            if modname.startswith("_"):
+                continue
+            if active_modules is not None and modname not in active_modules:
+                continue
+            mod = importlib.import_module("rhmcp.tools.{:s}".format(modname))
+            if hasattr(mod, "register"):
+                mod.register(mcp)
+                _loaded.append(modname)
+
+        if args.profile != "full":
+            print(
+                f"Rhino MCP: profile '{args.profile}' — {len(_loaded)} modules loaded",
+                file=sys.stderr,
+            )
 
     # Install optional telemetry interceptor after all tools are registered.
     from rhmcp import telemetry
