@@ -1128,7 +1128,7 @@ Use `get_rhino_backend_status` from any AI client to check which backends are cu
 | `RHINO_MCP_USE_SLOT_REGISTRY` | *(unset)* | Set to `1` to always route `plugin_result()` via the slot registry (auto-discover Rhino instances). Default: off (uses `RHINO_MCP_HOST`/`RHINO_MCP_PORT` directly). |
 | `RHINO_MCP_RHINO_PATH` | *(auto-detected)* | Override path to the Rhino executable used by `launch_rhino`. Default: searches standard install locations. |
 | `RHMCP_PROFILE` | `full` | Tool profile to load at startup: `core`, `grasshopper`, `rendering`, `urban`, `bim`, or `full`. Equivalent to `--profile` CLI flag. See [Tool Profiles](#tool-profiles). |
-| `RHMCP_COMPACT` | *(unset)* | Set to `1` to enable compact mode: registers 3 meta-tools instead of all schemas, cutting token cost to ~1.5k. See [Compact Mode](#compact-mode). |
+| `RHMCP_COMPACT` | `1` | Compact mode enabled by default. Set to `0` to load all schemas upfront. See [Compact Mode](#compact-mode). |
 
 ### Rhino Plugin (C# side)
 
@@ -1194,34 +1194,17 @@ Compact mode registers 3 meta-tools instead of full schemas, reducing the per-re
 | `describe_rhino_tool` | Returns the full description and input schema for a named tool. |
 | `call_rhino_tool` | Calls any tool by name with a `arguments` dict. |
 
-**CLI flag:**
-```bash
-rhino-mcp --compact
-```
+Compact mode is **on by default**. To disable and load all schemas upfront:
 
-**Environment variable:**
 ```bash
-RHMCP_COMPACT=1
+rhino-mcp --no-compact
+RHMCP_COMPACT=0 rhino-mcp
 ```
 
 **Works alongside `--profile`** — the registry behind the meta-tools is filtered to the active profile:
 ```bash
-rhino-mcp --compact --profile core
-```
-
-**Claude Desktop example:**
-```json
-{
-  "mcpServers": {
-    "rhino": {
-      "command": "uv",
-      "args": ["run", "--directory", "/path/to/rhino-mcp", "python", "-m", "rhmcp", "--compact"],
-      "env": {
-        "RHINO_MCP_BACKEND": "plugin"
-      }
-    }
-  }
-}
+rhino-mcp --profile core   # compact + core (default compact applies)
+rhino-mcp --no-compact --profile core  # full schemas, core tools only
 ```
 
 | Mode | ~Tokens |

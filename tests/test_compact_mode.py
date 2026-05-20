@@ -89,30 +89,30 @@ class TestCompactArgparse:
         import argparse
         parser = argparse.ArgumentParser()
         parser.add_argument(
-            "--compact", action="store_true",
-            default=bool(os.environ.get("RHMCP_COMPACT")),
+            "--compact", action=argparse.BooleanOptionalAction,
+            default=os.environ.get("RHMCP_COMPACT", "1") not in ("0", "false", "no"),
         )
-        args = parser.parse_args(["--compact"])
-        assert args.compact is True
+        args = parser.parse_args(["--no-compact"])
+        assert args.compact is False
 
-    def test_compact_default_false_without_env(self, monkeypatch):
+    def test_compact_default_true_without_env(self, monkeypatch):
         monkeypatch.delenv("RHMCP_COMPACT", raising=False)
         import argparse
         parser = argparse.ArgumentParser()
         parser.add_argument(
-            "--compact", action="store_true",
-            default=bool(os.environ.get("RHMCP_COMPACT")),
+            "--compact", action=argparse.BooleanOptionalAction,
+            default=os.environ.get("RHMCP_COMPACT", "1") not in ("0", "false", "no"),
         )
         args = parser.parse_args([])
-        assert args.compact is False
+        assert args.compact is True
 
-    def test_compact_env_var_sets_default(self, monkeypatch):
-        monkeypatch.setenv("RHMCP_COMPACT", "1")
+    def test_compact_env_var_zero_disables(self, monkeypatch):
+        monkeypatch.setenv("RHMCP_COMPACT", "0")
         import argparse
         parser = argparse.ArgumentParser()
         parser.add_argument(
-            "--compact", action="store_true",
-            default=bool(os.environ.get("RHMCP_COMPACT")),
+            "--compact", action=argparse.BooleanOptionalAction,
+            default=os.environ.get("RHMCP_COMPACT", "1") not in ("0", "false", "no"),
         )
-        args = parser.parse_args([])  # no --compact flag, but env var is set
-        assert args.compact is True
+        args = parser.parse_args([])
+        assert args.compact is False

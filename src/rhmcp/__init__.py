@@ -82,11 +82,11 @@ def main() -> int:
     )
     parser.add_argument(
         "--compact",
-        action="store_true",
-        default=bool(os.environ.get("RHMCP_COMPACT")),
+        action=argparse.BooleanOptionalAction,
+        default=os.environ.get("RHMCP_COMPACT", "1") not in ("0", "false", "no"),
         help=(
-            "Compact mode: register 3 meta-tools instead of all schemas. "
-            "Env: RHMCP_COMPACT. Default: false."
+            "Compact mode: 3 meta-tools instead of full schemas (default: on). "
+            "Use --no-compact or RHMCP_COMPACT=0 to load all schemas upfront."
         ),
     )
     args = parser.parse_args()
