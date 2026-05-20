@@ -24,6 +24,42 @@ from rhmcp.tools_helpers.rhinoscript_docs import RHINOSCRIPT_MODULES, get_functi
 _TRANSPORTS = ("stdio", "http")
 
 
+def _resolve_profile(
+    name: str,
+    profiles: dict,
+    _depth: int = 0,
+) -> set[str] | None:
+    """Resolve a profile name to a set of module names, or None for 'load all'."""
+    if _depth > 3:
+        raise ValueError(
+            f"Profile inheritance too deep or cyclic near {name!r}"
+        )
+    if name not in profiles:
+        valid = ", ".join(sorted(profiles))
+        print(
+            f"rhino-mcp: unknown profile {name!r}. Valid: {valid}",
+            file=sys.stderr,
+        )
+        sys.exit(1)
+    profile = profiles[name]
+    if profile is None:
+        return None
+    if isinstance(profile, list):
+        return set(profile)
+    if isinstance(profile, dict):
+        base_name = profile.get("_extends")
+        extra: list[str] = profile.get("_modules", [])
+        base: set[str] = (
+            _resolve_profile(base_name, profiles, _depth + 1)
+            if base_name
+            else set()
+        )
+        if base is None:  # extends 'full' → full
+            return None
+        return base | set(extra)
+    raise ValueError(f"Invalid profile definition for {name!r}")
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(description="MCP server for Rhino 3D.")
     parser.add_argument(
@@ -35,11 +71,25 @@ def main() -> int:
     )
     parser.add_argument("--host", default="127.0.0.1", help="HTTP host (default: 127.0.0.1).")
     parser.add_argument("--port", "-p", type=int, default=8000, help="HTTP port (default: 8000).")
+    parser.add_argument(
+        "--profile",
+        default=os.environ.get("RHMCP_PROFILE", "full"),
+        metavar="PROFILE",
+        help=(
+            "Tool profile to load: core, grasshopper, rendering, urban, bim, full. "
+            "Env: RHMCP_PROFILE. Default: full."
+        ),
+    )
     args = parser.parse_args()
 
     data_dir = os.path.join(os.path.dirname(os.path.abspath(__file__)), "data")
     with open(os.path.join(data_dir, "prompts.yml"), encoding="utf-8") as fh:
         prompts = yaml.safe_load(fh)
+
+    with open(os.path.join(data_dir, "profiles.yml"), encoding="utf-8") as fh:
+        profiles_data = yaml.safe_load(fh)
+
+    active_modules = _resolve_profile(args.profile, profiles_data)
 
     mcp = FastMCP("rhino-mcp", instructions=str(prompts["initial_instructions"]))
 
@@ -79,12 +129,22 @@ def main() -> int:
 
     import rhmcp.tools as tools_pkg
 
+    _loaded = []
     for _importer, modname, _ispkg in pkgutil.iter_modules(tools_pkg.__path__):
         if modname.startswith("_"):
+            continue
+        if active_modules is not None and modname not in active_modules:
             continue
         mod = importlib.import_module("rhmcp.tools.{:s}".format(modname))
         if hasattr(mod, "register"):
             mod.register(mcp)
+            _loaded.append(modname)
+
+    if args.profile != "full":
+        print(
+            f"Rhino MCP: profile '{args.profile}' — {len(_loaded)} modules loaded",
+            file=sys.stderr,
+        )
 
     # Install optional telemetry interceptor after all tools are registered.
     from rhmcp import telemetry
