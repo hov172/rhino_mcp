@@ -5,10 +5,10 @@ Versioning follows [Semantic Versioning](https://semver.org/).
 
 ---
 
-## [0.15.1] — 2026-05-20
+## [0.15.2] — 2026-05-20
 
 ### Fixed
-- `capture_rhino_view` with `zoom_to_fit=True` raised `AttributeError: 'RhinoView' object has no attribute 'ZoomExtents'`. Fixed by calling `vp.ZoomExtents()` on the `RhinoViewport` instead of `view.ZoomExtents()` on the `RhinoView`.
+- `capture_rhino_view` with `zoom_to_fit=True` raised `AttributeError` in Rhino's IronPython runtime. Fixed by importing `rhinoscriptsyntax as rs` and calling `rs.ZoomExtents()` — neither `RhinoView.ZoomExtents` nor `RhinoViewport.ZoomExtents` are exposed as callable Python methods in IronPython.
 
 ---
 
