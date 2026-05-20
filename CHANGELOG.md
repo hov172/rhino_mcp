@@ -5,6 +5,33 @@ Versioning follows [Semantic Versioning](https://semver.org/).
 
 ---
 
+## [0.13.0] — 2026-05-19
+
+### Added
+
+- **Tool profiles** — new `--profile` CLI flag (and `RHMCP_PROFILE` env var) selects which tool modules are loaded at startup. Cuts context window usage significantly for users who don't need specialty plugins.
+
+  Available profiles:
+
+  | Profile | Tools | ~Tokens |
+  |---------|-------|---------|
+  | `full` *(default)* | 360 | ~52k |
+  | `core` | 194 | ~28k |
+  | `grasshopper` | 277 | ~40k |
+  | `rendering` | 225 | ~35k |
+  | `urban` | 226 | ~34k |
+  | `bim` | 212 | ~31k |
+
+  `core` covers geometry creation, layers, transforms, booleans, curves, surfaces, meshes, materials, export, annotations, and document management — everything needed for standard Rhino modeling. Specialty profiles extend core with their respective plugin tools.
+
+  Usage: `rhino-mcp --profile core` or `RHMCP_PROFILE=grasshopper rhino-mcp`
+
+### Improved
+
+- **Trimmed tool descriptions** — stripped verbose `Parameters`/`Args`/`Notes` sections from all 360 tool docstrings. These sections duplicated information already present in the JSON schema and inflated token usage unnecessarily. The `full` profile now costs ~52k tokens vs. ~62k before (16% reduction even without a profile).
+
+---
+
 ## [0.12.2] — 2026-05-19
 
 ### Added
