@@ -47,8 +47,6 @@ Control Rhino 3D from Claude, Cursor, Codex, and any other MCP-capable AI tool. 
   - [Manual Installation](#manual-installation)
   - [File-based Installation](#file-based-installation)
   - [Checking Plugin Status](#checking-plugin-status)
-- [Tool Profiles](#tool-profiles)
-- [Compact Mode](#compact-mode)
 - [All 360 Tools](#all-360-tools)
   - [Plugin Management](#plugin-management)
   - [Grasshopper — Canvas](#grasshopper--canvas)
@@ -151,17 +149,11 @@ Restart Rhino. The plugin loads automatically and starts its socket server on `1
 
 > **This is the only file that goes into Rhino.** The `rhino_plugin/package/rhino-mcp.rhp` file is the Rhino plugin binary. The rest of the repo (the `src/` folder) is the Python MCP server — a completely separate process that never touches Rhino's plug-ins folder.
 >
-> **Don't have the repo yet?** You can also download [`rhino-mcp.rhp`](https://github.com/hov172/rhino_mcp/releases/download/v0.12.1/rhino-mcp.rhp) directly from the latest release and copy it from `~/Downloads/` instead.
+> **Don't have the repo yet?** You can also download `rhino-mcp.rhp` directly from the [latest release](https://github.com/hov172/rhino_mcp/releases/latest) and copy it from `~/Downloads/` instead.
 
 #### Step 3 — Verify the Python MCP server
 
 > **This is the MCP server — not another plugin.** It runs as a separate Python process outside Rhino and exposes the 360 tools to your AI client. Claude Desktop spawns it automatically from the cloned folder.
-
-```bash
-uv run python -m rhmcp --help
-```
-
-Verify it works:
 
 ```bash
 uv run python -m rhmcp --help
@@ -339,7 +331,7 @@ Claude Desktop → HTTP → localhost:8000 (Docker container)
 | **Enscape** | Launch Enscape window, capture screenshots, export 360° panoramas, export standalone executables, set time of day and atmosphere, save named views |
 | **Views** | Capture the active viewport — **Claude receives the image and can see the scene**; set named views, camera position, target, and lens length; save PNG to disk |
 | **Files** | Save and export to `.3dm`, `.obj`, `.stl`, `.fbx`, `.step`, `.iges`, `.dwg`. Import any Rhino-supported format with automatic display setup: DWG/DXF → Wireframe + black background + AutoCAD colours; FBX/OBJ/STL/STEP → Shaded mode. Zoom to extents applied on every import. |
-| **Scripting** | Run arbitrary Rhino Python (RhinoScriptSyntax / RhinoCommon) or C# (Roslyn) directly. Python scripts auto-revert newly added objects if the script raises an exception. Use `verified_functions` to suppress the API-hallucination warning |
+| **Scripting** | Run arbitrary Rhino Python (RhinoScriptSyntax / RhinoCommon) or C# (Roslyn) directly. Python scripts auto-revert newly added objects if the script raises an exception. Use `verified_functions` to suppress the API-hallucination warning. Execution gates (`RHINO_MCP_ENABLE_RHINOSCRIPT`, `RHINO_MCP_ENABLE_CSHARP`, `RHINO_MCP_ENABLE_RUN_COMMAND`) let operators disable these tools. |
 | **AI Generation** | Generate 3D models from text or images via Hunyuan3D, import results into Rhino |
 | **Asset Libraries** | Search and import Poly Haven textures/HDRIs, download Sketchfab models |
 | **VisualARQ (BIM)** | Create walls, doors, windows, slabs, columns, stairs, railings, levels; query BIM properties; export IFC |
@@ -471,6 +463,8 @@ AI Client (Claude / Cursor / Codex)
 
 The **Python MCP server** exposes all tools to the AI client via the Model Context Protocol over stdio. It connects to the **Rhino plugin** over a local TCP socket. All Rhino-side operations (including all Grasshopper canvas mutations) execute on Rhino's main UI thread via `RhinoApp.InvokeOnUiThread`, keeping the document consistent and undo-safe.
 
+The Python server maintains a **persistent TCP connection** to the Rhino plugin (keep-alive enabled by default) so tool calls don't pay a fresh TCP handshake on every invocation. Disable with `RHINO_MCP_KEEPALIVE=0` if needed.
+
 A `rhinocode` fallback path (Rhino 8.11+ only) is also available for most non-Grasshopper tools when the plugin is not loaded.
 
 ---
@@ -556,7 +550,7 @@ The plugin is a `.rhp` file that runs a TCP socket server inside Rhino on port 1
 
 #### Option A — Copy the pre-built `.rhp` directly (fastest)
 
-Download [`rhino-mcp.rhp`](https://github.com/hov172/rhino_mcp/releases/download/v0.12.1/rhino-mcp.rhp) from the latest release, then copy it to the Rhino plug-ins folder:
+Download `rhino-mcp.rhp` from the [latest release](https://github.com/hov172/rhino_mcp/releases/latest), then copy it to the Rhino plug-ins folder:
 
 ```bash
 # macOS — user plug-ins folder (no admin rights needed)
@@ -575,16 +569,16 @@ Then restart Rhino. The plugin loads automatically on startup.
 
 #### Option B — Install via Yak CLI
 
-Download [`rhino-mcp-0.12.1-rh8_17-any.yak`](https://github.com/hov172/rhino_mcp/releases/download/v0.12.1/rhino-mcp-0.12.1-rh8_17-any.yak) from the latest release, then run:
+Download the `.yak` file from the [latest release](https://github.com/hov172/rhino_mcp/releases/latest), then run (replace the filename with the one you downloaded):
 
 ```bash
 # macOS
-"/Applications/Rhino 8.app/Contents/Resources/bin/yak" install --source ~/Downloads/rhino-mcp-0.12.1-rh8_17-any.yak
+"/Applications/Rhino 8.app/Contents/Resources/bin/yak" install --source ~/Downloads/rhino-mcp-*.yak
 ```
 
 ```powershell
 # Windows
-& "C:\Program Files\Rhino 8\System\yak.exe" install --source "$env:USERPROFILE\Downloads\rhino-mcp-0.12.1-rh8_17-any.yak"
+& "C:\Program Files\Rhino 8\System\yak.exe" install --source "$env:USERPROFILE\Downloads\rhino-mcp-*.yak"
 ```
 
 Restart Rhino after the install completes.
@@ -1129,6 +1123,11 @@ Use `get_rhino_backend_status` from any AI client to check which backends are cu
 | `RHINO_MCP_RHINO_PATH` | *(auto-detected)* | Override path to the Rhino executable used by `launch_rhino`. Default: searches standard install locations. |
 | `RHMCP_PROFILE` | `full` | Tool profile to load at startup: `core`, `grasshopper`, `rendering`, `urban`, `bim`, or `full`. Equivalent to `--profile` CLI flag. See [Tool Profiles](#tool-profiles). |
 | `RHMCP_COMPACT` | `1` | Compact mode enabled by default. Set to `0` to load all schemas upfront. See [Compact Mode](#compact-mode). |
+| `RHINO_MCP_KEEPALIVE` | `1` | Reuse a single persistent TCP connection to the Rhino plugin. Set to `0` to open a new connection per call (slower, useful for debugging). |
+| `RHINO_MCP_ENABLE_RHINOSCRIPT` | `1` | Execution gate for `execute_rhino_python` / `execute_rhinoscript_python_code`. Set to `0` to refuse arbitrary Python execution. |
+| `RHINO_MCP_ENABLE_CSHARP` | `1` | Execution gate for `execute_rhino_csharp` / `execute_rhinocommon_csharp_code`. Set to `0` to refuse arbitrary C# execution. |
+| `RHINO_MCP_ENABLE_RUN_COMMAND` | `1` | Execution gate for `run_rhino_command` / `run_command`. Set to `0` to refuse command macro execution. |
+| `RHINO_MCP_ALLOW_REMOTE` | `0` | Set to `1` to allow the Python server to connect to a non-loopback Rhino host (required when `RHINO_MCP_HOST` is a remote address or `host.docker.internal`). See [Remote Host Support](#remote-host-support). |
 
 ### Rhino Plugin (C# side)
 
@@ -1218,7 +1217,18 @@ rhino-mcp --no-compact --profile core  # full schemas, core tools only
 
 ## Remote Host Support
 
-The Python MCP server and the Rhino plugin communicate over TCP. By default both sides use `127.0.0.1` (loopback), so Rhino and the AI client must be on the same machine. Setting `RHINO_MCP_BIND_HOST` lets the plugin accept connections from any address, enabling Claude (or any MCP client) to drive Rhino on a dedicated render workstation, a cloud VM, or across a local network.
+The Python MCP server and the Rhino plugin communicate over TCP. By default both sides use `127.0.0.1` (loopback), so Rhino and the AI client must be on the same machine.
+
+Two independent settings control remote connectivity:
+
+| Setting | Where | Purpose |
+|---|---|---|
+| `RHINO_MCP_BIND_HOST` | **Rhino plugin (C# side)** | Which network interface the plugin listens on. Default: `127.0.0.1`. Set to `0.0.0.0` to accept connections from other machines. |
+| `RHINO_MCP_ALLOW_REMOTE` | **Python MCP server** | Whether the server is allowed to connect to a non-loopback host. Default: `0` (blocked). Set to `1` when `RHINO_MCP_HOST` is a remote IP or `host.docker.internal`. |
+
+Both must be configured for cross-machine or Docker setups. The Python-side guard (`RHINO_MCP_ALLOW_REMOTE`) prevents the server from accidentally connecting to an unintended remote Rhino instance — a useful safeguard on shared machines.
+
+> **Docker users:** The Dockerfile already sets `RHINO_MCP_ALLOW_REMOTE=1` and `RHINO_MCP_HOST=host.docker.internal` — no extra configuration needed.
 
 ---
 
@@ -1365,7 +1375,7 @@ If the connection is refused, recheck the bind address in `MCPStatus` and confir
 
 ---
 
-> **Security note:** Port 1999 accepts unauthenticated JSON commands that can execute arbitrary Python inside Rhino. Only expose it on trusted private networks. Never open it to the public internet. If you need remote access over the internet, tunnel through SSH (`ssh -L 1999:localhost:1999 user@rhino-host`) rather than exposing the port directly.
+> **Security note:** Port 1999 accepts JSON commands that can execute arbitrary Python inside Rhino. Only expose it on trusted private networks. Never open it to the public internet. If you need remote access over the internet, tunnel through SSH (`ssh -L 1999:localhost:1999 user@rhino-host`) rather than exposing the port directly. Use execution gates (`RHINO_MCP_ENABLE_RHINOSCRIPT=0`, `RHINO_MCP_ENABLE_CSHARP=0`, `RHINO_MCP_ENABLE_RUN_COMMAND=0`) to restrict what the AI client can execute when operating in a shared or multi-user environment.
 
 ---
 
@@ -2053,6 +2063,16 @@ Read external design files — floor plans, specifications, spreadsheets, and re
 
 Providing `verified_functions` suppresses the `api_warning` in the response and signals that API calls were verified, not guessed.
 
+**Execution safety gates** — operators can disable arbitrary-code execution via environment variables:
+
+| Variable | Tool(s) controlled |
+|---|---|
+| `RHINO_MCP_ENABLE_RHINOSCRIPT=0` | `execute_rhino_python`, `execute_rhinoscript_python_code` |
+| `RHINO_MCP_ENABLE_CSHARP=0` | `execute_rhino_csharp`, `execute_rhinocommon_csharp_code` |
+| `RHINO_MCP_ENABLE_RUN_COMMAND=0` | `run_rhino_command`, `run_command` |
+
+All gates default to enabled (`1`). When disabled, the tool returns `{"ok": false, "error_code": "TOOL_DISABLED"}` rather than raising an exception.
+
 **Named MCP Resources** (read-only, browseable in MCP clients that support resources):
 
 | Resource URI | Description |
@@ -2430,6 +2450,12 @@ uv run python -m pytest tests/test_tools_unit.py tests/test_plugin_files.py -v
 # Server metadata test (starts the MCP server process, no Rhino required)
 uv run python -m pytest tests/test_server_metadata.py -v
 
+# Security gates and remote host guard tests
+uv run python -m pytest tests/test_security_gates.py -v
+
+# Keep-alive TCP connection tests
+uv run python -m pytest tests/test_plugin_client.py -v
+
 # Urban + Studio Pipeline tests (no Rhino required — all external APIs mocked)
 uv run python -m pytest tests/test_urban_unit.py tests/test_urban_design_language.py \
     tests/test_urban_renders.py tests/test_urban_report.py tests/test_urban_pipeline.py -v
@@ -2437,7 +2463,7 @@ uv run python -m pytest tests/test_urban_unit.py tests/test_urban_design_languag
 # Grasshopper integration tests (requires Rhino running with MCPStart active)
 uv run python -m pytest tests/test_gh_integration.py -v -m integration
 
-# All non-integration tests (403 tests, ~1.7s)
+# All non-integration tests (467 tests, ~1.7s)
 uv run python -m pytest tests/ --ignore=tests/test_gh_integration.py -v
 ```
 
