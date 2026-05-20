@@ -1,0 +1,89 @@
+# src/rhmcp/data/profiles.yml
+#
+# Named tool profiles for rhino-mcp.
+# Select with: --profile <name>  or  RHMCP_PROFILE=<name>
+#
+# Format:
+#   <name>: [list of module names]           # flat list
+#   <name>:                                  # dict with inheritance
+#     _extends: <base-profile>
+#     _modules: [additional modules]
+#   full: null                               # null = load everything
+
+core:
+  - advanced_geometry
+  - analysis
+  - annotations
+  - blocks
+  - boolean_operations
+  - curve_operations
+  - docs
+  - document
+  - documents
+  - export_cad
+  - export_images
+  - export_native
+  - export_print
+  - export_visual
+  - geometry
+  - geometry_validation
+  - groups
+  - layers
+  - materials
+  - mesh_ops
+  - objects
+  - plugin_socket
+  - plugins
+  - python
+  - reference_compat
+  - session
+  - slots
+  - surface_ops
+  - transforms
+  - undo
+  - userdata
+  - view
+
+grasshopper:
+  _extends: core
+  _modules:
+    - gh2
+    - gh_anemone
+    - gh_canvas
+    - gh_document
+    - gh_human_elefront
+    - gh_intelligence
+    - gh_kangaroo
+    - gh_ladybug
+    - gh_lunchbox
+    - gh_params
+    - gh_pufferfish
+    - gh_solution
+    - gh_weaverbird
+
+rendering:
+  _extends: core
+  _modules:
+    - asset_libraries
+    - enscape
+    - pbr_materials
+    - vray
+
+urban:
+  _extends: core
+  _modules:
+    - ai_generation
+    - urban
+    - urban_design_language
+    - urban_pipeline
+    - urban_prompt
+    - urban_renders
+    - urban_report
+
+bim:
+  _extends: core
+  _modules:
+    - lands_design
+    - visualarq
+
+full: null
