@@ -8,6 +8,7 @@ from mcp.server.fastmcp import FastMCP
 from mcp.types import ToolAnnotations
 
 from rhmcp.tools_helpers import backend as rhino
+from rhmcp.tools_helpers.security import check_execution_gate
 
 
 def register(mcp: FastMCP) -> None:
@@ -56,6 +57,9 @@ result = {"commands": names, "count": len(names)}
 
         ``echo=True`` echoes the command string to Rhino's command history so users
         can follow along in the Rhino window. Only..."""
+        err = check_execution_gate("RHINO_MCP_ENABLE_RUN_COMMAND", "run_rhino_command")
+        if err:
+            return err
         return rhino.run_command(command, echo=echo, rhino_id=rhino_id)
 
     @mcp.tool(annotations=ToolAnnotations(title="Get Rhino Backend Status", readOnlyHint=True))

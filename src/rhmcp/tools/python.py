@@ -8,6 +8,7 @@ from mcp.server.fastmcp import FastMCP
 from mcp.types import ToolAnnotations
 
 from rhmcp.tools_helpers import backend as rhino
+from rhmcp.tools_helpers.security import check_execution_gate
 
 # R6-3: Maximum code length for execution tools (200 KB)
 _MAX_CODE_LEN = 200_000
@@ -64,6 +65,9 @@ def register(mcp: FastMCP) -> None:
 
         The code runs with access to Rhino's Python environment, including
         ``rhinoscriptsyntax`` and RhinoCommon. Assign a JSON-serialisable value..."""
+        err = check_execution_gate("RHINO_MCP_ENABLE_RHINOSCRIPT", "execute_rhino_python")
+        if err:
+            return err
         # R6-3: Enforce maximum code length
         if len(code) > _MAX_CODE_LEN:
             return {"ok": False, "error": f"Code exceeds maximum length of {_MAX_CODE_LEN} characters."}
@@ -82,6 +86,9 @@ def register(mcp: FastMCP) -> None:
 
         This requires RhinoCode C# script support in the target Rhino version.
         Return information through stdout or by changing..."""
+        err = check_execution_gate("RHINO_MCP_ENABLE_CSHARP", "execute_rhino_csharp")
+        if err:
+            return err
         # R6-3: Enforce maximum code length
         if len(code) > _MAX_CODE_LEN:
             return {"ok": False, "error": f"Code exceeds maximum length of {_MAX_CODE_LEN} characters."}

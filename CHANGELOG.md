@@ -8,6 +8,20 @@ Versioning follows [Semantic Versioning](https://semver.org/).
 ## [Unreleased]
 
 ### Added
+- **Execution safety gates** — three env vars let operators disable arbitrary-code
+  execution tools at the server level:
+  - `RHINO_MCP_ENABLE_RHINOSCRIPT=0` — disables `execute_rhino_python` and
+    `execute_rhinoscript_python_code`. Default: `1` (enabled).
+  - `RHINO_MCP_ENABLE_CSHARP=0` — disables `execute_rhino_csharp` and
+    `execute_rhinocommon_csharp_code`. Default: `1` (enabled).
+  - `RHINO_MCP_ENABLE_RUN_COMMAND=0` — disables `run_rhino_command` and
+    `run_command`. Default: `1` (enabled).
+  Disabled tools return `{"ok": false, "error_code": "TOOL_DISABLED"}` rather
+  than raising, so clients receive a clear message instead of a server error.
+- **Remote host guard** — the MCP server now refuses to connect to a non-loopback
+  Rhino plugin host unless `RHINO_MCP_ALLOW_REMOTE=1` is set. Prevents
+  accidental connections to production Rhino instances or LAN hosts. Docker
+  deployments have this set automatically via the Dockerfile.
 - **Keep-alive TCP connection**: the Python client now reuses a single persistent
   TCP connection to the Rhino plugin instead of opening a new connection per
   tool call. Eliminates per-call TCP handshake overhead; transparent reconnect

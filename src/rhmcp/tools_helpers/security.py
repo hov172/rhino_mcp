@@ -70,6 +70,64 @@ def clamp(value: int, lo: int, hi: int) -> int:
     return max(lo, min(hi, value))
 
 
+# ---------------------------------------------------------------------------
+# Execution safety gates
+# ---------------------------------------------------------------------------
+
+# Env vars that disable arbitrary-code execution tools.
+# Default is enabled (1) so existing deployments are unaffected.
+# Set to "0" / "false" / "no" to refuse execution at runtime.
+_GATE_DISABLED = frozenset(("0", "false", "no"))
+
+
+def check_execution_gate(env_var: str, tool_name: str) -> dict | None:
+    """
+    Return an error dict if the execution gate *env_var* is turned off,
+    or ``None`` if the tool is allowed to proceed.
+
+    Usage::
+
+        err = check_execution_gate("RHINO_MCP_ENABLE_RHINOSCRIPT", "execute_rhino_python")
+        if err:
+            return err
+    """
+    if os.environ.get(env_var, "1").lower() in _GATE_DISABLED:
+        return {
+            "ok": False,
+            "error": (
+                f"'{tool_name}' is disabled by server configuration. "
+                f"Set {env_var}=1 to enable it."
+            ),
+            "error_code": "TOOL_DISABLED",
+        }
+    return None
+
+
+# ---------------------------------------------------------------------------
+# Remote host guard
+# ---------------------------------------------------------------------------
+
+_LOOPBACK_HOSTS = frozenset(("127.0.0.1", "::1", "localhost", ""))
+
+
+def check_remote_allowed(host: str) -> None:
+    """
+    Raise ``PermissionError`` if *host* is not a loopback address and
+    ``RHINO_MCP_ALLOW_REMOTE`` is not set to ``1`` / ``true`` / ``yes``.
+
+    Call this inside ``connection_settings`` to enforce the default
+    loopback-only policy for the Rhino plugin bridge.
+    """
+    if host.lower() in _LOOPBACK_HOSTS:
+        return
+    allowed = os.environ.get("RHINO_MCP_ALLOW_REMOTE", "0").lower()
+    if allowed not in ("1", "true", "yes"):
+        raise PermissionError(
+            f"Remote Rhino plugin host '{host}' is not allowed by default. "
+            "Set RHINO_MCP_ALLOW_REMOTE=1 to permit connections to non-loopback hosts."
+        )
+
+
 def safe_extractall(source: "str | BinaryIO", dest_dir: str) -> None:
     """
     Extract a zip archive to *dest_dir* while blocking Zip Slip attacks.

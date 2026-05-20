@@ -29,8 +29,11 @@ def connection_settings(
     port: int | None = None,
     timeout: float | None = None,
 ) -> tuple[str, int, float]:
+    from rhmcp.tools_helpers.security import check_remote_allowed
+    resolved_host = host or os.environ.get("RHINO_MCP_HOST", DEFAULT_HOST)
+    check_remote_allowed(resolved_host)
     return (
-        host or os.environ.get("RHINO_MCP_HOST", DEFAULT_HOST),
+        resolved_host,
         port or int(os.environ.get("RHINO_MCP_PORT", str(DEFAULT_PORT))),
         timeout or float(os.environ.get("RHINO_MCP_SOCKET_TIMEOUT", str(DEFAULT_TIMEOUT))),
     )

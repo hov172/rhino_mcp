@@ -10,6 +10,7 @@ from mcp.server.fastmcp import FastMCP
 from mcp.types import ToolAnnotations
 
 from rhmcp.tools_helpers import backend as rhino
+from rhmcp.tools_helpers.security import check_execution_gate
 
 # R6-3: Maximum code length for execution tools (200 KB)
 _MAX_CODE_LEN = 200_000
@@ -219,6 +220,9 @@ def register(mcp: FastMCP) -> None:
         """
         Reference-compatible alias for executing Rhino Python.
         """
+        err = check_execution_gate("RHINO_MCP_ENABLE_RHINOSCRIPT", "execute_rhinoscript_python_code")
+        if err:
+            return err
         # R6-3: Enforce maximum code length
         if len(code) > _MAX_CODE_LEN:
             return {"ok": False, "error": f"Code exceeds maximum length of {_MAX_CODE_LEN} characters."}
@@ -230,6 +234,9 @@ def register(mcp: FastMCP) -> None:
         """
         Reference-compatible alias for executing RhinoCommon C#.
         """
+        err = check_execution_gate("RHINO_MCP_ENABLE_CSHARP", "execute_rhinocommon_csharp_code")
+        if err:
+            return err
         # R6-3: Enforce maximum code length
         if len(code) > _MAX_CODE_LEN:
             return {"ok": False, "error": f"Code exceeds maximum length of {_MAX_CODE_LEN} characters."}
@@ -312,6 +319,9 @@ result = {"commands": names, "count": len(names)}
         jingcheng-chen/rhinomcp alias for run_rhino_command.
         Execute a Rhino command macro string and return captured output.
         """
+        err = check_execution_gate("RHINO_MCP_ENABLE_RUN_COMMAND", "run_command")
+        if err:
+            return err
         return rhino.run_command(command, rhino_id=rhino_id)
 
     @mcp.tool(annotations=ToolAnnotations(title="Undo", destructiveHint=True))
