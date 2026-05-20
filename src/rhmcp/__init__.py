@@ -73,7 +73,7 @@ def main() -> int:
     parser.add_argument("--port", "-p", type=int, default=8000, help="HTTP port (default: 8000).")
     parser.add_argument(
         "--profile",
-        default=os.environ.get("RHMCP_PROFILE", "full"),
+        default=os.environ.get("RHMCP_PROFILE") or "full",
         metavar="PROFILE",
         help=(
             "Tool profile to load: core, grasshopper, rendering, urban, bim, full. "
