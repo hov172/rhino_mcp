@@ -6,7 +6,7 @@
   "compilationOptions": {},
   "targets": {
     ".NETCoreApp,Version=v8.0": {
-      "rhino-mcp/0.12.1": {
+      "rhino-mcp/0.15.0": {
         "dependencies": {
           "Microsoft.CodeAnalysis.CSharp.Scripting": "4.8.0",
           "System.Drawing.Common": "8.0.0"
@@ -252,7 +252,7 @@
     }
   },
   "libraries": {
-    "rhino-mcp/0.12.1": {
+    "rhino-mcp/0.15.0": {
       "type": "project",
       "serviceable": false,
       "sha512": ""

@@ -1,9 +1,9 @@
 name: rhino-mcp
-version: 0.12.1
+version: 0.15.0
 authors:
   - Ayala Solutions
 description: >
-  MCP socket server plug-in for Rhino 7/8. Exposes 353 tools covering
+  MCP socket server plug-in for Rhino 7/8. Exposes 360 tools covering
   geometry creation, Grasshopper automation, layers, materials, rendering,
   BIM (VisualARQ/Lands Design), AI 3D generation, import/export (STEP, IGES,
   DWG, OBJ, FBX, GLB, STL, 3MF, 3DM), full import material/texture fidelity,
