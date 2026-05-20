@@ -359,7 +359,7 @@ try:
     if show_cplane_axes is not None:
         vp.ConstructionAxesVisible = bool(show_cplane_axes)
     if zoom_to_fit:
-        view.ZoomExtents()
+        vp.ZoomExtents()
     view.Redraw()
     bitmap = view.CaptureToBitmap(System.Drawing.Size(w, h))
 finally:
