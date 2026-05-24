@@ -47,7 +47,7 @@ Control Rhino 3D from Claude, Cursor, Codex, and any other MCP-capable AI tool. 
   - [Manual Installation](#manual-installation)
   - [File-based Installation](#file-based-installation)
   - [Checking Plugin Status](#checking-plugin-status)
-- [All 360 Tools](#all-360-tools)
+- [All 358 Tools](#all-358-tools)
   - [Plugin Management](#plugin-management)
   - [Grasshopper — Canvas](#grasshopper--canvas)
   - [Grasshopper — Parameters](#grasshopper--parameters)
@@ -114,6 +114,13 @@ Control Rhino 3D from Claude, Cursor, Codex, and any other MCP-capable AI tool. 
 
 Two paths to get up and running. Both require the Rhino plugin — only the server setup differs.
 
+| Choose this path | When to use it |
+|---|---|
+| **Path A — Manual setup** | Best for development, local editing, and users already comfortable with Python/uv. Claude Desktop starts the MCP server with stdio. |
+| **Path B — Docker setup** | Best when you want isolated Python dependencies or an HTTP MCP endpoint for multiple clients. Rhino still runs on the host machine. |
+
+For first-time installs, use `RHINO_MCP_BACKEND=plugin`. The plugin backend is the full-featured path and is required for Grasshopper support.
+
 ---
 
 ### Path A — Manual setup with Claude Desktop
@@ -153,13 +160,21 @@ Restart Rhino. The plugin loads automatically and starts its socket server on `1
 
 #### Step 3 — Verify the Python MCP server
 
-> **This is the MCP server — not another plugin.** It runs as a separate Python process outside Rhino and exposes the 360 tools to your AI client. Claude Desktop spawns it automatically from the cloned folder.
+> **This is the MCP server — not another plugin.** It runs as a separate Python process outside Rhino and exposes the 358 tools to your AI client. Claude Desktop spawns it automatically from the cloned folder.
 
 ```bash
 uv run python -m rhmcp --help
 ```
 
 You should see the argument list printed. If you see it, the server is ready.
+
+To verify the documented tool count from source:
+
+```bash
+uv run python -c "from rhmcp.tools_helpers.compact_registry import CompactRegistry; r=CompactRegistry(); r.load_from_modules(None); print(len(r._tools))"
+```
+
+Expected output: `358`.
 
 #### Step 4 — Tell Claude Desktop how to start the server
 
@@ -204,7 +219,7 @@ The `command` + `args` lines are literally the shell command Claude Desktop runs
 
 #### Step 6 — Restart Claude Desktop and start using it
 
-Fully quit Claude Desktop (don't just close the window) and reopen it. Claude Desktop reads the config on launch, spawns the MCP server in the background, and the 360 Rhino tools become available automatically.
+Fully quit Claude Desktop (don't just close the window) and reopen it. Claude Desktop reads the config on launch, spawns the MCP server in the background, and the 358 Rhino tools become available automatically.
 
 Test it by typing in Claude:
 
@@ -293,7 +308,7 @@ Same as Path A Step 4. Open Rhino — the plugin auto-starts and prints `Rhino M
 
 #### Step 5 — Restart Claude Desktop and start using it
 
-Fully quit and reopen Claude Desktop. It connects to the running container and the 360 tools appear.
+Fully quit and reopen Claude Desktop. It connects to the running container and the 358 tools appear.
 
 **Connection flow:**
 ```
@@ -1083,6 +1098,16 @@ export RHINO_MCP_BACKEND=plugin    # or rhinocode, auto
 
 Use `get_rhino_backend_status` from any AI client to check which backends are currently reachable.
 
+Backend selection rule of thumb:
+
+| Need | Backend |
+|---|---|
+| Grasshopper, GH2, plugin commands, or best feature coverage | `plugin` |
+| Rhino 8.11+ script execution without installing the plugin | `rhinocode` |
+| Mixed environments where the plugin may not always be loaded | `auto` |
+
+When debugging connection failures, set `RHINO_MCP_BACKEND=plugin` temporarily. That prevents silent fallback to `rhinocode` and returns the socket error directly.
+
 ### Session & Instance Management
 
 | Tool | Description |
@@ -1144,12 +1169,30 @@ Profiles let you control which tool modules are loaded at startup. Use a narrowe
 
 | Profile | Tools | ~Tokens | Includes |
 |---------|-------|---------|---------|
-| `full` *(default)* | 360 | ~52k | Everything |
+| `full` *(default)* | 358 | ~52k | Everything |
 | `core` | 194 | ~28k | Geometry, layers, transforms, curves, surfaces, meshes, materials, export, annotations, document |
 | `grasshopper` | 277 | ~40k | `core` + all Grasshopper modules (GH1, GH2, Pufferfish, Weaverbird, LunchBox, Kangaroo, Ladybug…) |
 | `rendering` | 225 | ~35k | `core` + V-Ray, Enscape, PBR materials, asset libraries |
 | `urban` | 226 | ~34k | `core` + urban design, massing, studio pipeline, AI generation |
 | `bim` | 212 | ~31k | `core` + VisualARQ, Lands Design |
+
+Regenerate the profile counts with:
+
+```bash
+uv run python - <<'PY'
+from rhmcp import _resolve_profile
+from rhmcp.tools_helpers.compact_registry import CompactRegistry
+import yaml
+
+with open("src/rhmcp/data/profiles.yml") as f:
+    profiles = yaml.safe_load(f)
+
+for name in ["full", "core", "grasshopper", "rendering", "urban", "bim"]:
+    registry = CompactRegistry()
+    registry.load_from_modules(_resolve_profile(name, profiles))
+    print(name, len(registry._tools))
+PY
+```
 
 **CLI flag:**
 ```bash
@@ -1536,7 +1579,7 @@ You can also call `check_plugin_loaded(plugin_name="V-Ray")` directly to test wh
 
 ---
 
-## All 360 Tools
+## All 358 Tools
 
 ---
 
@@ -2463,11 +2506,24 @@ uv run python -m pytest tests/test_urban_unit.py tests/test_urban_design_languag
 # Grasshopper integration tests (requires Rhino running with MCPStart active)
 uv run python -m pytest tests/test_gh_integration.py -v -m integration
 
-# All non-integration tests (467 tests, ~1.7s)
-uv run python -m pytest tests/ --ignore=tests/test_gh_integration.py -v
+# All non-integration tests
+uv run python -m pytest tests/ \
+    --ignore=tests/test_integration.py \
+    --ignore=tests/test_gh_integration.py \
+    --ignore=tests/test_studio_pipeline_integration.py \
+    --ignore=tests/test_gh_intelligence_integration.py \
+    -q
+
+# Confirm the current non-integration test count
+uv run python -m pytest tests/ \
+    --ignore=tests/test_integration.py \
+    --ignore=tests/test_gh_integration.py \
+    --ignore=tests/test_studio_pipeline_integration.py \
+    --ignore=tests/test_gh_intelligence_integration.py \
+    --collect-only -q
 ```
 
-The integration tests auto-skip cleanly if the plugin socket is not reachable.
+The current non-integration collection is 432 tests. Integration tests auto-skip cleanly if the plugin socket is not reachable.
 
 ---
 

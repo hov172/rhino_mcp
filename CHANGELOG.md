@@ -86,7 +86,7 @@ Versioning follows [Semantic Versioning](https://semver.org/).
 
   | Profile | Tools | ~Tokens |
   |---------|-------|---------|
-  | `full` *(default)* | 360 | ~52k |
+  | `full` *(default)* | 358 | ~52k |
   | `core` | 194 | ~28k |
   | `grasshopper` | 277 | ~40k |
   | `rendering` | 225 | ~35k |
@@ -99,7 +99,7 @@ Versioning follows [Semantic Versioning](https://semver.org/).
 
 ### Improved
 
-- **Trimmed tool descriptions** — stripped verbose `Parameters`/`Args`/`Notes` sections from all 360 tool docstrings. These sections duplicated information already present in the JSON schema and inflated token usage unnecessarily. The `full` profile now costs ~52k tokens vs. ~62k before (16% reduction even without a profile).
+- **Trimmed tool descriptions** — stripped verbose `Parameters`/`Args`/`Notes` sections from all registered tool docstrings. These sections duplicated information already present in the JSON schema and inflated token usage unnecessarily. The `full` profile now costs ~52k tokens vs. ~62k before (16% reduction even without a profile).
 
 ---
 

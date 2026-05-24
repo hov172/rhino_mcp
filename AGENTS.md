@@ -8,10 +8,10 @@ This file gives AI coding agents (Claude, Codex, Gemini, etc.) the context neede
 
 **rhino-mcp** is an MCP (Model Context Protocol) server that lets AI assistants control Rhino 3D. It has two components:
 
-1. **Python MCP server** (`src/rhmcp/`) — FastMCP-based server exposing 353 tools to AI clients
+1. **Python MCP server** (`src/rhmcp/`) — FastMCP-based server exposing 358 tools to AI clients
 2. **C# Rhino plugin** (`rhino_plugin/`) — TCP socket server inside Rhino (port 1999) that receives and executes commands
 
-Current version: **0.12.0**
+Current version: **0.15.1**
 
 ---
 
@@ -119,7 +119,7 @@ uv run pytest tests/test_integration.py -v -m integration
 uvx ruff check src/rhmcp --select=E,W,F --ignore=E501,E701,E402,E741
 ```
 
-**360 tests** (unit, smoke, script-syntax, and security) must pass before any commit. The CI workflow (`.github/workflows/ci.yml`) runs these on Python 3.10/3.11/3.12.
+**432 tests** (unit, smoke, script-syntax, and security) must pass before any commit. The CI workflow (`.github/workflows/ci.yml`) runs these on Python 3.10/3.11/3.12.
 
 ---
 
@@ -149,18 +149,23 @@ When bumping the version (e.g. `0.11.0` → `0.12.0`):
 6. `CHANGELOG.md` — add new entry at top
 7. `.env.example` — verify all new env vars are documented
 
-Tool count: verify with `uv run python -c "..."` (see below) before updating docs.
+Tool count: verify with the registry command below before updating docs. Keep `AGENTS.md`, `README.md`, `pyproject.toml`, `rhino_plugin/package/manifest.yml`, and `CHANGELOG.md` in sync when the public count changes.
 
 ```bash
 uv run python -c "
-from mcp.server.fastmcp import FastMCP
-import rhmcp.tools as t, pkgutil, importlib
-mcp = FastMCP('c')
-for _, n, _ in pkgutil.iter_modules(t.__path__):
-    m = importlib.import_module(f'rhmcp.tools.{n}')
-    if hasattr(m, 'register'): m.register(mcp)
-print(len(mcp._tool_manager._tools))
+from rhmcp.tools_helpers.compact_registry import CompactRegistry
+r = CompactRegistry()
+r.load_from_modules(None)
+print(len(r._tools))
 "
+```
+
+Profile counts: regenerate with the script in `README.md` under **Tool Profiles** before editing the profile table.
+
+Test count: verify with:
+
+```bash
+uv run pytest tests/ --ignore=tests/test_integration.py --ignore=tests/test_gh_integration.py --ignore=tests/test_studio_pipeline_integration.py --ignore=tests/test_gh_intelligence_integration.py --collect-only -q
 ```
 
 ---
