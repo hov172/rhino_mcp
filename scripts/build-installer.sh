@@ -117,7 +117,7 @@ mkdir -p /Users/Shared/rhino_mcp/plugin
 echo "[5/14] Bundling Python 3.13 runtimes (arm64 + x86_64)..."
 UV_PYTHON_DIR=$(uv python dir)
 
-PYTHON_ARM64=$(ls -d "$UV_PYTHON_DIR"/cpython-3.13*-macos-aarch64-none 2>/dev/null | sort -V | tail -1)
+PYTHON_ARM64=$(find "$UV_PYTHON_DIR" -maxdepth 1 -type d -name "cpython-3.13*-macos-aarch64-none" 2>/dev/null | sort -V | tail -1)
 [ -n "$PYTHON_ARM64" ] || {
     echo "ERROR: No uv-managed cpython-3.13 arm64 install found." >&2
     echo "       Run: uv python install 3.13" >&2
@@ -125,11 +125,11 @@ PYTHON_ARM64=$(ls -d "$UV_PYTHON_DIR"/cpython-3.13*-macos-aarch64-none 2>/dev/nu
 }
 echo "       arm64:  $PYTHON_ARM64"
 
-PYTHON_X86=$(ls -d "$UV_PYTHON_DIR"/cpython-3.13*-macos-x86_64-none 2>/dev/null | sort -V | tail -1)
+PYTHON_X86=$(find "$UV_PYTHON_DIR" -maxdepth 1 -type d -name "cpython-3.13*-macos-x86_64-none" 2>/dev/null | sort -V | tail -1)
 if [ -z "$PYTHON_X86" ]; then
     echo "       x86_64 Python not found — installing via uv..."
     uv python install "cpython-3.13-macos-x86_64"
-    PYTHON_X86=$(ls -d "$UV_PYTHON_DIR"/cpython-3.13*-macos-x86_64-none 2>/dev/null | sort -V | tail -1)
+    PYTHON_X86=$(find "$UV_PYTHON_DIR" -maxdepth 1 -type d -name "cpython-3.13*-macos-x86_64-none" 2>/dev/null | sort -V | tail -1)
 fi
 [ -n "$PYTHON_X86" ] || {
     echo "ERROR: Failed to find/install cpython-3.13 x86_64." >&2
