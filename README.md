@@ -120,7 +120,7 @@ Two paths to get up and running. Both require the Rhino plugin — only the serv
 |---|---|
 | **Path A — Manual setup** | Best for development, local editing, and users already comfortable with Python/uv. Claude Desktop starts the MCP server with stdio. |
 | **Path B — Docker setup** | Best when you want isolated Python dependencies or an HTTP MCP endpoint for multiple clients. Rhino still runs on the host machine. |
-| **Path C — macOS Installer** | Best for macOS users who want zero-terminal setup. Double-click the `.pkg`, and the installer handles Python, the MCP server, and AI client configuration automatically. |
+| **Path C — macOS Installer** | Best for macOS users who want zero-terminal setup. Double-click the `.pkg` (Apple Silicon or Intel, Rhino 7/8/9), and the installer handles Python, the MCP server, and AI client configuration automatically. |
 
 For first-time installs, use `RHINO_MCP_BACKEND=plugin`. The plugin backend is the full-featured path and is required for Grasshopper support.
 
@@ -321,6 +321,29 @@ Claude Desktop → HTTP → localhost:8000 (Docker container)
                                ↓
                           Rhino 3D geometry
 ```
+
+---
+
+### Path C — macOS Installer (.pkg)
+
+The `.pkg` installer is the fastest way to get up and running on macOS. It requires no terminal, no Python install, and no manual config editing.
+
+**Requirements:** macOS 13 Ventura or later · Rhino 7, 8, or 9 · Apple Silicon or Intel
+
+**What it installs:**
+- A self-contained Python 3.13 runtime and virtual environment under `/Users/Shared/rhino_mcp/` (shared across all users on the machine)
+- The `rhino-mcp.rhp` plugin into every Rhino version detected on the machine (7, 8, 9)
+- The `rhino` MCP server entry into Claude Desktop and Claude Code automatically
+
+**Steps:**
+1. Download `rhino-mcp-<version>-universal-installer.pkg` from the [latest release](https://github.com/hov172/rhino_mcp/releases/latest)
+2. Double-click the `.pkg` and follow the installer prompts
+3. Launch Rhino — the plugin loads automatically
+4. Launch your AI client — the MCP server is already configured
+
+> Any previous version of the plugin (including Yak-installed copies) is removed automatically before the new version is placed.
+
+An uninstaller (`rhino-mcp-<version>-universal-uninstaller.pkg`) is available in the same release to fully remove all installed files.
 
 ---
 
@@ -707,6 +730,33 @@ docker run -d -p 8000:8000 --add-host=host.docker.internal:host-gateway \
 Once running, point your AI client at `http://localhost:8000/` — see [Docker / HTTP Transport](#docker--http-transport) below.
 
 **Both paths work independently.** Existing manual stdio setups are unaffected by the Docker option.
+
+---
+
+### macOS Installer (.pkg) (alternative to steps 1–3)
+
+The `.pkg` installer replaces steps 1, 2, and 3 entirely on macOS. See [Path C — macOS Installer (.pkg)](#path-c--macos-installer-pkg) for requirements and steps.
+
+**What gets installed and where:**
+
+| Path | Contents |
+|---|---|
+| `/Users/Shared/rhino_mcp/python-arm64/` or `python-x86_64/` | Bundled Python 3.13 runtime (matched to machine arch) |
+| `/Users/Shared/rhino_mcp/.venv/` | Virtual environment with `rhmcp` installed (symlink to arch-specific venv) |
+| `/Users/Shared/rhino_mcp/plugin/rhino-mcp.rhp` | Rhino plugin source used during per-user configuration |
+| `/Users/Shared/rhino_mcp/VERSION` | Installed version string |
+| `/usr/local/bin/rhino-mcp-configure` | Per-user configuration script (re-run manually if needed) |
+| `~/Library/Application Support/McNeel/Rhinoceros/<ver>/Plug-ins/rhino-mcp.rhp` | Plugin copy for each installed Rhino version (7, 8, 9) |
+
+**Re-running configuration manually:**
+
+If auto-configuration was skipped (headless install, new user account), run:
+
+```bash
+/usr/local/bin/rhino-mcp-configure
+```
+
+This installs the plugin for all detected Rhino versions and writes the `rhino` MCP server entry into Claude Desktop and Claude Code configs.
 
 ---
 
