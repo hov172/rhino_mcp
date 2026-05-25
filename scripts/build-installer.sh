@@ -33,7 +33,20 @@ if [ -z "${INSTALLER_SIGNING_ID:-}" ]; then
         echo "       Set INSTALLER_SIGNING_ID in .env or install the certificate." >&2
         exit 1
     }
-    echo "       Signing identity: $INSTALLER_SIGNING_ID"
+    echo "       Installer signing identity: $INSTALLER_SIGNING_ID"
+fi
+
+# Auto-detect Developer ID Application cert (needed to sign bundled binaries)
+if [ -z "${APP_SIGNING_ID:-}" ]; then
+    APP_SIGNING_ID=$(security find-identity -v | \
+        grep '"Developer ID Application:' | head -1 | \
+        sed 's/.*"\(Developer ID Application:[^"]*\)".*/\1/')
+    [ -n "$APP_SIGNING_ID" ] || {
+        echo "ERROR: No 'Developer ID Application' certificate found in Keychain." >&2
+        echo "       Set APP_SIGNING_ID in .env or install the certificate." >&2
+        exit 1
+    }
+    echo "       Application signing identity: $APP_SIGNING_ID"
 fi
 YAK="${YAK:-/Applications/Rhino 8.app/Contents/Resources/bin/yak}"
 
@@ -65,11 +78,11 @@ VERSION=$(uv run python -c "import tomllib; print(tomllib.load(open('pyproject.t
 echo "=== Building rhino-mcp installer v$VERSION ==="
 
 # ── 2. Build Rhino plugin ─────────────────────────────────────────────────────
-echo "[1/13] Building Rhino plugin..."
+echo "[1/14] Building Rhino plugin..."
 "$ROOT/scripts/build-plugin.sh"
 
 # ── 3. Package plugin ─────────────────────────────────────────────────────────
-echo "[2/13] Packaging plugin (.rhp + .yak)..."
+echo "[2/14] Packaging plugin (.rhp + .yak)..."
 "$ROOT/scripts/package-plugin.sh"
 
 # ── 4. Assert version in yak filename ────────────────────────────────────────
@@ -85,7 +98,7 @@ YAK_FILE=$(find "$ROOT/rhino_plugin/package" -maxdepth 1 -name "rhino-mcp-*.yak"
 echo "       Plugin verified: $(basename "$YAK_FILE") ✓"
 
 # ── 5. Mark installer scripts executable ─────────────────────────────────────
-echo "[3/13] Setting script permissions..."
+echo "[3/14] Setting script permissions..."
 chmod +x \
     "$ROOT/scripts/installer/preinstall" \
     "$ROOT/scripts/installer/postinstall" \
@@ -93,7 +106,7 @@ chmod +x \
     "$ROOT/scripts/installer/uninstaller/postinstall"
 
 # ── 6. Clean stale /tmp artifacts + ensure shared dirs ───────────────────────
-echo "[4/13] Cleaning stale build artifacts..."
+echo "[4/14] Cleaning stale build artifacts..."
 rm -rf "$BUILDTMP"
 mkdir -p "$BUILDTMP"
 
@@ -101,7 +114,7 @@ mkdir -p "$BUILDTMP"
 mkdir -p /Users/Shared/rhino_mcp/plugin
 
 # ── 7. Bundle full Python runtime ─────────────────────────────────────────────
-echo "[5/13] Bundling Python 3.13 runtime..."
+echo "[5/14] Bundling Python 3.13 runtime..."
 UV_PYTHON_DIR=$(uv python dir)
 PYTHON_INSTALL=$(ls -d "$UV_PYTHON_DIR"/cpython-3.13*-macos-aarch64-none 2>/dev/null | sort -V | tail -1)
 [ -n "$PYTHON_INSTALL" ] || {
@@ -115,24 +128,24 @@ rm -rf /Users/Shared/rhino_mcp/python
 cp -R "$PYTHON_INSTALL" /Users/Shared/rhino_mcp/python
 
 # ── 8. Create portable venv from bundled Python ───────────────────────────────
-echo "[6/13] Creating portable venv..."
+echo "[6/14] Creating portable venv..."
 rm -rf /Users/Shared/rhino_mcp/.venv
 /Users/Shared/rhino_mcp/python/bin/python3.13 -m venv /Users/Shared/rhino_mcp/.venv
 
 # ── 9. Install rhino-mcp into venv ────────────────────────────────────────────
-echo "[7/13] Installing rhino-mcp into venv..."
+echo "[7/14] Installing rhino-mcp into venv..."
 /Users/Shared/rhino_mcp/.venv/bin/pip install --quiet "$ROOT"
 
 # ── 10. Write VERSION file ────────────────────────────────────────────────────
-echo "[8/13] Writing VERSION..."
+echo "[8/14] Writing VERSION..."
 printf "%s" "$VERSION" > /Users/Shared/rhino_mcp/VERSION
 
 # ── 11. Stage Rhino plugin ────────────────────────────────────────────────────
-echo "[9/13] Staging Rhino plugin..."
+echo "[9/14] Staging Rhino plugin..."
 cp "$ROOT/rhino_plugin/release/rhino-mcp.rhp" /Users/Shared/rhino_mcp/plugin/rhino-mcp.rhp
 
 # ── 12. Stage component payloads ──────────────────────────────────────────────
-echo "[10/13] Staging package payloads..."
+echo "[10/14] Staging package payloads..."
 
 # Component 1: full filesystem tree (installs to / )
 mkdir -p "$BUILDTMP/pkg1/Users/Shared/rhino_mcp"
@@ -149,8 +162,26 @@ chmod +x "$BUILDTMP/pkg1/usr/local/bin/rhino-mcp-configure"
 mkdir -p "$BUILDTMP/pkg2"
 cp "$ROOT/scripts/installer/com.ayala.rhino-mcp.configure.plist" "$BUILDTMP/pkg2/"
 
+# ── 11. Deep-sign all native binaries in payload ──────────────────────────────
+# Apple notarization requires every .dylib, .so, and Mach-O executable to be
+# signed with a Developer ID Application cert, with --timestamp and --options runtime.
+echo "[11/14] Deep-signing native binaries..."
+SIGN_ARGS=(--sign "$APP_SIGNING_ID" --timestamp --options runtime --force)
+
+# Sign all dylibs and shared objects
+find "$BUILDTMP/pkg1" \( -name "*.dylib" -o -name "*.so" \) -print0 \
+    | xargs -0 -P4 codesign "${SIGN_ARGS[@]}"
+
+# Sign Mach-O executables (skip shell scripts and text files)
+while IFS= read -r -d '' f; do
+    file "$f" 2>/dev/null | grep -q "Mach-O" || continue
+    codesign "${SIGN_ARGS[@]}" "$f"
+done < <(find "$BUILDTMP/pkg1" -type f -perm +0111 -print0)
+
+echo "       Signed $(find "$BUILDTMP/pkg1" \( -name "*.dylib" -o -name "*.so" \) | wc -l | tr -d ' ') dylibs/SOs"
+
 # ── 13. Build component packages ─────────────────────────────────────────────
-echo "[11/13] Building component packages..."
+echo "[12/14] Building component packages..."
 
 pkgbuild \
     --root "$BUILDTMP/pkg1" \
@@ -200,7 +231,7 @@ cat > "$DIST_XML" <<DISTEOF
 DISTEOF
 
 # ── 15. Product archive ───────────────────────────────────────────────────────
-echo "[12/13] Building product archive..."
+echo "[13/14] Building product archive..."
 mkdir -p "$ROOT/release"
 FINAL_PKG="$ROOT/release/rhino-mcp-${VERSION}-arm64-installer.pkg"
 productbuild \
@@ -211,7 +242,7 @@ productbuild \
 rm -f "$DIST_XML"
 
 # ── 16. Build uninstaller package ────────────────────────────────────────────
-echo "[13/13] Building uninstaller package..."
+echo "[14/14] Building uninstaller package..."
 UNINSTALLER_PKG="$ROOT/release/rhino-mcp-${VERSION}-arm64-uninstaller.pkg"
 pkgbuild \
     --nopayload \
