@@ -4,6 +4,12 @@ set -euo pipefail
 # World-readable/executable BEFORE configure calls the venv Python
 chmod -R a+rX /Users/Shared/rhino_mcp/
 
+# Guard: plugin staging directory must exist (absent = corrupt install)
+if [ ! -d "/Users/Shared/rhino_mcp/plugin" ]; then
+    echo "ERROR: /Users/Shared/rhino_mcp/plugin/ not found — installation is corrupt." >&2
+    exit 1
+fi
+
 # Detect the GUI user at the console (postinstall always runs as root)
 CONSOLE_USER=$(stat -f "%Su" /dev/console)
 

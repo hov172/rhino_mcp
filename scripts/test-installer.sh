@@ -2,6 +2,7 @@
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
+cd "$ROOT"
 
 # Must run as root (installer requires it)
 if [ "$(id -u)" -ne 0 ]; then
@@ -86,6 +87,44 @@ if [ "$VENV_HOME" = "/Users/Shared/rhino_mcp/python/bin" ]; then
 else
     echo "  FAIL: pyvenv.cfg home = '$VENV_HOME' (expected /Users/Shared/rhino_mcp/python/bin)"
     FAIL=$((FAIL + 1))
+fi
+
+# Per-user checks (resolve the current console user's home)
+CONSOLE_USER=$(stat -f "%Su" /dev/console 2>/dev/null || echo "")
+if [ -n "$CONSOLE_USER" ] && [ "$CONSOLE_USER" != "root" ]; then
+    USER_HOME=$(dscl . -read "/Users/$CONSOLE_USER" NFSHomeDirectory 2>/dev/null | awk '{print $2}')
+    if [ -n "$USER_HOME" ]; then
+        PLUGIN_PATH="$USER_HOME/Library/Application Support/McNeel/Rhinoceros/8.0/Plug-ins/rhino-mcp.rhp"
+        if [ -f "$PLUGIN_PATH" ]; then
+            echo "  PASS: Rhino plugin installed for $CONSOLE_USER"
+            PASS=$((PASS + 1))
+        else
+            echo "  FAIL: Rhino plugin not found for $CONSOLE_USER: $PLUGIN_PATH"
+            FAIL=$((FAIL + 1))
+        fi
+
+        if [ -d "$USER_HOME/.claude" ]; then
+            MCP_JSON="$USER_HOME/.claude/mcp.json"
+            if [ -f "$MCP_JSON" ] && grep -q '"rhino"' "$MCP_JSON" 2>/dev/null; then
+                echo "  PASS: Claude Code mcp.json contains rhino entry"
+                PASS=$((PASS + 1))
+            else
+                echo "  FAIL: Claude Code mcp.json missing or has no rhino entry"
+                FAIL=$((FAIL + 1))
+            fi
+        fi
+
+        if [ -d "/Applications/Claude.app" ]; then
+            CLAUDE_CFG="$USER_HOME/Library/Application Support/Claude/claude_desktop_config.json"
+            if [ -f "$CLAUDE_CFG" ] && grep -q '"rhino"' "$CLAUDE_CFG" 2>/dev/null; then
+                echo "  PASS: Claude Desktop config contains rhino entry"
+                PASS=$((PASS + 1))
+            else
+                echo "  FAIL: Claude Desktop config missing or has no rhino entry"
+                FAIL=$((FAIL + 1))
+            fi
+        fi
+    fi
 fi
 
 echo ""
