@@ -113,28 +113,44 @@ mkdir -p "$BUILDTMP"
 # /Users/Shared is world-writable (mode 1777) — no sudo needed
 mkdir -p /Users/Shared/rhino_mcp/plugin
 
-# ── 7. Bundle full Python runtime ─────────────────────────────────────────────
-echo "[5/14] Bundling Python 3.13 runtime..."
+# ── 7. Bundle Python runtimes (arm64 + x86_64) ────────────────────────────────
+echo "[5/14] Bundling Python 3.13 runtimes (arm64 + x86_64)..."
 UV_PYTHON_DIR=$(uv python dir)
-PYTHON_INSTALL=$(ls -d "$UV_PYTHON_DIR"/cpython-3.13*-macos-aarch64-none 2>/dev/null | sort -V | tail -1)
-[ -n "$PYTHON_INSTALL" ] || {
+
+PYTHON_ARM64=$(ls -d "$UV_PYTHON_DIR"/cpython-3.13*-macos-aarch64-none 2>/dev/null | sort -V | tail -1)
+[ -n "$PYTHON_ARM64" ] || {
     echo "ERROR: No uv-managed cpython-3.13 arm64 install found." >&2
     echo "       Run: uv python install 3.13" >&2
     exit 1
 }
-echo "       Source: $PYTHON_INSTALL"
+echo "       arm64:  $PYTHON_ARM64"
 
-rm -rf /Users/Shared/rhino_mcp/python
-cp -R "$PYTHON_INSTALL" /Users/Shared/rhino_mcp/python
+PYTHON_X86=$(ls -d "$UV_PYTHON_DIR"/cpython-3.13*-macos-x86_64-none 2>/dev/null | sort -V | tail -1)
+if [ -z "$PYTHON_X86" ]; then
+    echo "       x86_64 Python not found — installing via uv..."
+    uv python install "cpython-3.13-macos-x86_64"
+    PYTHON_X86=$(ls -d "$UV_PYTHON_DIR"/cpython-3.13*-macos-x86_64-none 2>/dev/null | sort -V | tail -1)
+fi
+[ -n "$PYTHON_X86" ] || {
+    echo "ERROR: Failed to find/install cpython-3.13 x86_64." >&2
+    exit 1
+}
+echo "       x86_64: $PYTHON_X86"
 
-# ── 8. Create portable venv from bundled Python ───────────────────────────────
-echo "[6/14] Creating portable venv..."
-rm -rf /Users/Shared/rhino_mcp/.venv
-/Users/Shared/rhino_mcp/python/bin/python3.13 -m venv /Users/Shared/rhino_mcp/.venv
+rm -rf /Users/Shared/rhino_mcp/python-arm64 /Users/Shared/rhino_mcp/python-x86_64
+cp -R "$PYTHON_ARM64" /Users/Shared/rhino_mcp/python-arm64
+cp -R "$PYTHON_X86"   /Users/Shared/rhino_mcp/python-x86_64
 
-# ── 9. Install rhino-mcp into venv ────────────────────────────────────────────
-echo "[7/14] Installing rhino-mcp into venv..."
-/Users/Shared/rhino_mcp/.venv/bin/pip install --quiet "$ROOT"
+# ── 8. Create portable venvs for both architectures ───────────────────────────
+echo "[6/14] Creating portable venvs..."
+rm -rf /Users/Shared/rhino_mcp/.venv-arm64 /Users/Shared/rhino_mcp/.venv-x86_64
+/Users/Shared/rhino_mcp/python-arm64/bin/python3.13 -m venv /Users/Shared/rhino_mcp/.venv-arm64
+/Users/Shared/rhino_mcp/python-x86_64/bin/python3.13 -m venv /Users/Shared/rhino_mcp/.venv-x86_64
+
+# ── 9. Install rhino-mcp into both venvs ──────────────────────────────────────
+echo "[7/14] Installing rhino-mcp into venvs..."
+/Users/Shared/rhino_mcp/.venv-arm64/bin/pip install --quiet "$ROOT"
+/Users/Shared/rhino_mcp/.venv-x86_64/bin/pip install --quiet "$ROOT"
 
 # ── 10. Write VERSION file ────────────────────────────────────────────────────
 echo "[8/14] Writing VERSION..."
@@ -149,8 +165,10 @@ echo "[10/14] Staging package payloads..."
 
 # Component 1: full filesystem tree (installs to / )
 mkdir -p "$BUILDTMP/pkg1/Users/Shared/rhino_mcp"
-cp -R /Users/Shared/rhino_mcp/python  "$BUILDTMP/pkg1/Users/Shared/rhino_mcp/"
-cp -R /Users/Shared/rhino_mcp/.venv   "$BUILDTMP/pkg1/Users/Shared/rhino_mcp/"
+cp -R /Users/Shared/rhino_mcp/python-arm64  "$BUILDTMP/pkg1/Users/Shared/rhino_mcp/"
+cp -R /Users/Shared/rhino_mcp/python-x86_64 "$BUILDTMP/pkg1/Users/Shared/rhino_mcp/"
+cp -R /Users/Shared/rhino_mcp/.venv-arm64   "$BUILDTMP/pkg1/Users/Shared/rhino_mcp/"
+cp -R /Users/Shared/rhino_mcp/.venv-x86_64  "$BUILDTMP/pkg1/Users/Shared/rhino_mcp/"
 cp -R /Users/Shared/rhino_mcp/plugin  "$BUILDTMP/pkg1/Users/Shared/rhino_mcp/"
 cp    /Users/Shared/rhino_mcp/VERSION  "$BUILDTMP/pkg1/Users/Shared/rhino_mcp/"
 mkdir -p "$BUILDTMP/pkg1/usr/local/bin"
@@ -204,7 +222,7 @@ cat > "$DIST_XML" <<DISTEOF
 <?xml version="1.0" encoding="utf-8"?>
 <installer-gui-script minSpecVersion="2">
     <title>Rhino MCP v${VERSION}</title>
-    <options hostArchitectures="arm64" customize="allow" require-scripts="false" />
+    <options customize="allow" require-scripts="false" />
     <volume-check>
         <allowed-os-versions>
             <os-version min="13.0" />
@@ -233,7 +251,7 @@ DISTEOF
 # ── 15. Product archive ───────────────────────────────────────────────────────
 echo "[13/14] Building product archive..."
 mkdir -p "$ROOT/release"
-FINAL_PKG="$ROOT/release/rhino-mcp-${VERSION}-arm64-installer.pkg"
+FINAL_PKG="$ROOT/release/rhino-mcp-${VERSION}-universal-installer.pkg"
 productbuild \
     --distribution "$DIST_XML" \
     --resources "$ROOT/scripts/installer/resources" \
@@ -243,7 +261,7 @@ rm -f "$DIST_XML"
 
 # ── 16. Build uninstaller package ────────────────────────────────────────────
 echo "[14/14] Building uninstaller package..."
-UNINSTALLER_PKG="$ROOT/release/rhino-mcp-${VERSION}-arm64-uninstaller.pkg"
+UNINSTALLER_PKG="$ROOT/release/rhino-mcp-${VERSION}-universal-uninstaller.pkg"
 pkgbuild \
     --nopayload \
     --scripts "$ROOT/scripts/installer/uninstaller" \
@@ -262,6 +280,6 @@ echo "    Installer size: $(du -sh "$FINAL_PKG" | cut -f1)"
 echo ""
 echo "    To sign:"
 echo "      productsign --sign \"Developer ID Installer: Jesus Ayala (N859JA9UCJ)\" \\"
-echo "        $FINAL_PKG release/rhino-mcp-${VERSION}-arm64-signed.pkg"
+echo "        $FINAL_PKG release/rhino-mcp-${VERSION}-universal-signed.pkg"
 echo "      productsign --sign \"Developer ID Installer: Jesus Ayala (N859JA9UCJ)\" \\"
-echo "        $UNINSTALLER_PKG release/rhino-mcp-${VERSION}-arm64-uninstaller-signed.pkg"
+echo "        $UNINSTALLER_PKG release/rhino-mcp-${VERSION}-universal-uninstaller-signed.pkg"

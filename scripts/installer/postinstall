@@ -1,6 +1,16 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
+# Create arch-appropriate symlinks so configure always uses .venv and python
+ARCH=$(uname -m)
+if [ "$ARCH" = "arm64" ]; then
+    ln -sfn python-arm64  /Users/Shared/rhino_mcp/python
+    ln -sfn .venv-arm64   /Users/Shared/rhino_mcp/.venv
+else
+    ln -sfn python-x86_64 /Users/Shared/rhino_mcp/python
+    ln -sfn .venv-x86_64  /Users/Shared/rhino_mcp/.venv
+fi
+
 # World-readable/executable BEFORE configure calls the venv Python
 chmod -R a+rX /Users/Shared/rhino_mcp/
 
