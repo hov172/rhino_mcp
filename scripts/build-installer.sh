@@ -59,9 +59,7 @@ check_tool xcrun       "Run: xcode-select --install"
     echo "ERROR: yak not found at '$YAK'. Is Rhino 8 installed?" >&2; exit 1
 }
 
-check_env APPLE_ID          "Create an app-specific password at appleid.apple.com"
-check_env APPLE_APP_PASSWORD "Create an app-specific password at appleid.apple.com"
-check_env APPLE_TEAM_ID     "Find your team ID in App Store Connect > Membership"
+NOTARYTOOL_PROFILE="${NOTARYTOOL_PROFILE:-rhino-mcp}"
 
 # ── 1. Read VERSION ───────────────────────────────────────────────────────────
 VERSION=$(uv run python -c "import tomllib; print(tomllib.load(open('pyproject.toml','rb'))['project']['version'])")
@@ -225,9 +223,7 @@ rm -f "$UNSIGNED_PKG"
 # ── 17. Notarize ─────────────────────────────────────────────────────────────
 echo "       Submitting to Apple notary service (this takes 1-3 minutes)..."
 xcrun notarytool submit "$SIGNED_PKG" \
-    --apple-id "$APPLE_ID" \
-    --password "$APPLE_APP_PASSWORD" \
-    --team-id "$APPLE_TEAM_ID" \
+    --keychain-profile "$NOTARYTOOL_PROFILE" \
     --wait \
     --timeout 600
 
