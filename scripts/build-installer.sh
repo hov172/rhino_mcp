@@ -23,7 +23,18 @@ if [ -f "$ROOT/.env" ]; then
 fi
 
 # ── Pre-flight checks ─────────────────────────────────────────────────────────
-INSTALLER_SIGNING_ID="${INSTALLER_SIGNING_ID:-Developer ID Installer: Jesus Ayala (N859JA9UCJ)}"
+# Auto-detect Developer ID Installer cert if not set in .env
+if [ -z "${INSTALLER_SIGNING_ID:-}" ]; then
+    INSTALLER_SIGNING_ID=$(security find-identity -v | \
+        grep '"Developer ID Installer:' | head -1 | \
+        sed 's/.*"\(Developer ID Installer:[^"]*\)".*/\1/')
+    [ -n "$INSTALLER_SIGNING_ID" ] || {
+        echo "ERROR: No 'Developer ID Installer' certificate found in Keychain." >&2
+        echo "       Set INSTALLER_SIGNING_ID in .env or install the certificate." >&2
+        exit 1
+    }
+    echo "       Signing identity: $INSTALLER_SIGNING_ID"
+fi
 YAK="${YAK:-/Applications/Rhino 8.app/Contents/Resources/bin/yak}"
 
 check_tool() {
