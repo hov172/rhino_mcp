@@ -66,9 +66,21 @@ if os.path.exists(config_path):
 else:
     cfg = {}
 
+if not isinstance(cfg, dict):
+    shutil.copy(config_path, config_path + ".bak")
+    print(f"  Backed up non-dict JSON to {config_path}.bak", flush=True)
+    cfg = {}
+
 cfg.setdefault("mcpServers", {})["rhino"] = entry
-with open(config_path, "w") as f:
-    json.dump(cfg, f, indent=2)
+import tempfile
+tmp_fd, tmp_path = tempfile.mkstemp(dir=os.path.dirname(config_path), suffix=".tmp")
+try:
+    with os.fdopen(tmp_fd, "w") as f:
+        json.dump(cfg, f, indent=2)
+    os.replace(tmp_path, config_path)
+except Exception:
+    os.unlink(tmp_path)
+    raise
 print(f"  Written: {config_path}", flush=True)
 PYEOF
 }
@@ -101,15 +113,28 @@ if os.path.exists(settings_path):
             cfg = json.load(f)
     except (json.JSONDecodeError, ValueError):
         shutil.copy(settings_path, settings_path + ".bak")
+        print(f"  Backed up broken JSON to {settings_path}.bak", flush=True)
         cfg = {}
 else:
+    cfg = {}
+
+if not isinstance(cfg, dict):
+    shutil.copy(settings_path, settings_path + ".bak")
+    print(f"  Backed up non-dict JSON to {settings_path}.bak", flush=True)
     cfg = {}
 
 servers = cfg.setdefault("enabledMcpjsonServers", [])
 if "rhino" not in servers:
     servers.append("rhino")
-with open(settings_path, "w") as f:
-    json.dump(cfg, f, indent=2)
+import tempfile
+tmp_fd, tmp_path = tempfile.mkstemp(dir=os.path.dirname(settings_path), suffix=".tmp")
+try:
+    with os.fdopen(tmp_fd, "w") as f:
+        json.dump(cfg, f, indent=2)
+    os.replace(tmp_path, settings_path)
+except Exception:
+    os.unlink(tmp_path)
+    raise
 print(f"  Written: {settings_path}", flush=True)
 PYEOF
         log "Claude Code CLI configured"
@@ -148,6 +173,8 @@ if [ -d "/Applications/Codex.app" ]; then
 fi
 
 # ── Write sentinel ────────────────────────────────────────────────────────────
-printf "%s" "$INSTALLED_VERSION" > "$SENTINEL"
-log "Sentinel written: $SENTINEL = $INSTALLED_VERSION"
+if [ "$INSTALLED_VERSION" != "unknown" ]; then
+    printf "%s" "$INSTALLED_VERSION" > "$SENTINEL"
+    log "Sentinel written: $SENTINEL = $INSTALLED_VERSION"
+fi
 log "=== configure complete ==="
