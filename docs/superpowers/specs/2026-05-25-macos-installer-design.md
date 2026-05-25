@@ -1,7 +1,7 @@
 # macOS Installer Package — Design Spec
 **Project:** rhino-mcp  
 **Date:** 2026-05-25  
-**Status:** Approved (senior dev review pass 2 — 2026-05-25)
+**Status:** Approved (senior dev review pass 3 — 2026-05-25)
 
 ---
 
@@ -185,26 +185,39 @@ Env vars loaded from `.env` if present (never committed to git). Build script fa
                 scripts/installer/rhino-mcp-configure.sh
 6.  Create /Users/Shared/rhino_mcp/ on build machine if absent
     (world-writable by default, no sudo needed)
-7.  uv venv /Users/Shared/rhino_mcp/.venv
+7.  uv venv --clear /Users/Shared/rhino_mcp/.venv
     uv pip install <repo-root> --python /Users/Shared/rhino_mcp/.venv/bin/python
-    (venv built at exact final install path — shebangs will be correct on target)
+    (--clear overwrites any existing venv from a prior build; venv built at exact
+     final install path so absolute shebangs are correct on target)
 8.  echo "$VERSION" > /Users/Shared/rhino_mcp/VERSION
 9.  Copy release/rhino-mcp.rhp → /Users/Shared/rhino_mcp/plugin/rhino-mcp.rhp
-10. Stage payload:
-      /Users/Shared/rhino_mcp/ → Component 1 root (--install-location /Users/Shared/rhino_mcp)
-      scripts/installer/rhino-mcp-configure.sh → Component 1 root at usr/local/bin/
-      scripts/installer/com.ayala.rhino-mcp.configure.plist → Component 2 root
-11. pkgbuild --root <Component1 root>
+10. Stage Component 1 payload into /tmp/rhino-mcp-pkg1/ (full filesystem layout,
+    install-location will be /):
+      mkdir -p /tmp/rhino-mcp-pkg1/Users/Shared/rhino_mcp
+      cp -R /Users/Shared/rhino_mcp/.venv  → /tmp/rhino-mcp-pkg1/Users/Shared/rhino_mcp/
+      cp -R /Users/Shared/rhino_mcp/plugin → /tmp/rhino-mcp-pkg1/Users/Shared/rhino_mcp/
+      cp /Users/Shared/rhino_mcp/VERSION   → /tmp/rhino-mcp-pkg1/Users/Shared/rhino_mcp/
+      mkdir -p /tmp/rhino-mcp-pkg1/usr/local/bin
+      cp scripts/installer/rhino-mcp-configure.sh
+                                           → /tmp/rhino-mcp-pkg1/usr/local/bin/rhino-mcp-configure
+    (A single pkgbuild component can only have one --install-location. Using /
+     with a full filesystem tree under the staging root is the only way to place
+     files in both /Users/Shared/rhino_mcp/ and /usr/local/bin/ in one component.)
+
+    Stage Component 2 payload into /tmp/rhino-mcp-pkg2/:
+      mkdir -p /tmp/rhino-mcp-pkg2
+      cp scripts/installer/com.ayala.rhino-mcp.configure.plist → /tmp/rhino-mcp-pkg2/
+11. pkgbuild --root /tmp/rhino-mcp-pkg1
              --install-location /
              --scripts scripts/installer
              --identifier com.ayala.rhino-mcp.server
              --version $VERSION
-             rhino-mcp-server.pkg
-12. pkgbuild --root <Component2 root>
+             /tmp/rhino-mcp-server.pkg
+12. pkgbuild --root /tmp/rhino-mcp-pkg2
              --install-location /Library/LaunchAgents
              --identifier com.ayala.rhino-mcp.launchagent
              --version $VERSION
-             rhino-mcp-launchagent.pkg
+             /tmp/rhino-mcp-launchagent.pkg
 13. Generate distribution.xml:
       title "Rhino MCP v$VERSION"
       hostArchitectures="arm64"
@@ -213,8 +226,10 @@ Env vars loaded from `.env` if present (never committed to git). Build script fa
       both component pkgs listed; customize option enabled
 14. productbuild --distribution distribution.xml
                  --resources scripts/installer/resources
-                 --package-path .
+                 --package-path /tmp
                  rhino-mcp-$VERSION-arm64-unsigned.pkg
+    (--package-path /tmp tells productbuild where to find the component .pkg files
+     generated in steps 11–12)
 15. productsign --sign "Developer ID Installer: Jesus Ayala (N859JA9UCJ)"
                 rhino-mcp-$VERSION-arm64-unsigned.pkg
                 rhino-mcp-$VERSION-arm64.pkg
@@ -226,7 +241,9 @@ Env vars loaded from `.env` if present (never committed to git). Build script fa
     (prints UUID on start; --wait blocks until Apple returns result)
 17. xcrun stapler staple rhino-mcp-$VERSION-arm64.pkg
 18. cp → release/rhino-mcp-$VERSION-arm64-installer.pkg
-    rm -f rhino-mcp-$VERSION-arm64-unsigned.pkg  (clean up intermediate)
+    rm -f rhino-mcp-$VERSION-arm64-unsigned.pkg   (clean up unsigned intermediate)
+    rm -rf /tmp/rhino-mcp-pkg1 /tmp/rhino-mcp-pkg2
+          /tmp/rhino-mcp-server.pkg /tmp/rhino-mcp-launchagent.pkg
 ```
 
 > **Build machine side-effect (expected):** `/Users/Shared/rhino_mcp/` is created on the developer's machine as a valid local install. Leave it in place — it serves as a working local deployment for the developer and matches exactly what target machines receive.
@@ -241,7 +258,7 @@ Env vars loaded from `.env` if present (never committed to git). Build script fa
 
 ### `postinstall`
 - Plugin staging directory missing → exits 1 (critical — files must be in place before configure runs)
-- `stat /dev/console` returns no user (headless) → log manual instructions, exit 0
+- `stat /dev/console` returns empty or `root` (headless install or no GUI session) → log manual instructions, exit 0; do NOT run configure as root
 - `sudo -u "$CONSOLE_USER" -H ...` fails → logged, exit 0 (LaunchAgent handles it at next login)
 - `chmod -R a+rX` failure → logged, non-fatal
 
@@ -307,7 +324,13 @@ scripts/test-installer.sh
 .env.example                    (adds APPLE_ID, APPLE_APP_PASSWORD, APPLE_TEAM_ID)
 ```
 
-`release/*.pkg`, `release/*-unsigned.pkg`, and `.env` remain in `.gitignore`.
+`.gitignore` must be updated to add (not currently present):
+```
+release/*.pkg
+release/*-unsigned.pkg
+.env
+```
+The existing `.gitignore` already covers `rhino_plugin/release/` and `.venv/` but does **not** cover `release/*.pkg` at the repo root — this must be added as part of the implementation.
 
 ---
 
