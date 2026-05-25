@@ -3,8 +3,7 @@ set -euo pipefail
 
 # ── Cleanup trap ──────────────────────────────────────────────────────────────
 cleanup() {
-    rm -rf /tmp/rhino-mcp-pkg1 /tmp/rhino-mcp-pkg2 \
-           /tmp/rhino-mcp-server.pkg /tmp/rhino-mcp-launchagent.pkg 2>/dev/null || true
+    rm -rf "${BUILDTMP:-/tmp/rhino-mcp-build}" 2>/dev/null || true
     [ -n "${DIST_XML:-}" ]    && rm -f "$DIST_XML"    2>/dev/null || true
     [ -n "${UNSIGNED_PKG:-}" ] && rm -f "$UNSIGNED_PKG" 2>/dev/null || true
     [ -n "${SIGNED_PKG:-}" ]  && rm -f "$SIGNED_PKG"  2>/dev/null || true
@@ -13,6 +12,7 @@ trap cleanup EXIT
 
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 cd "$ROOT"
+BUILDTMP="${TMPDIR%/}/rhino-mcp-build"
 
 # ── Load .env if present ──────────────────────────────────────────────────────
 if [ -f "$ROOT/.env" ]; then
@@ -93,11 +93,8 @@ chmod +x \
 
 # ── 6. Clean stale /tmp artifacts + ensure shared dirs ───────────────────────
 echo "[4/12] Cleaning stale build artifacts..."
-rm -rf \
-    /tmp/rhino-mcp-pkg1 \
-    /tmp/rhino-mcp-pkg2 \
-    /tmp/rhino-mcp-server.pkg \
-    /tmp/rhino-mcp-launchagent.pkg
+rm -rf "$BUILDTMP"
+mkdir -p "$BUILDTMP"
 
 # /Users/Shared is world-writable (mode 1777) — no sudo needed
 mkdir -p /Users/Shared/rhino_mcp/plugin
@@ -137,37 +134,37 @@ cp "$ROOT/rhino_plugin/release/rhino-mcp.rhp" /Users/Shared/rhino_mcp/plugin/rhi
 echo "[10/12] Staging package payloads..."
 
 # Component 1: full filesystem tree (installs to / )
-mkdir -p /tmp/rhino-mcp-pkg1/Users/Shared/rhino_mcp
-cp -R /Users/Shared/rhino_mcp/python  /tmp/rhino-mcp-pkg1/Users/Shared/rhino_mcp/
-cp -R /Users/Shared/rhino_mcp/.venv   /tmp/rhino-mcp-pkg1/Users/Shared/rhino_mcp/
-cp -R /Users/Shared/rhino_mcp/plugin  /tmp/rhino-mcp-pkg1/Users/Shared/rhino_mcp/
-cp    /Users/Shared/rhino_mcp/VERSION  /tmp/rhino-mcp-pkg1/Users/Shared/rhino_mcp/
-mkdir -p /tmp/rhino-mcp-pkg1/usr/local/bin
+mkdir -p "$BUILDTMP/pkg1/Users/Shared/rhino_mcp"
+cp -R /Users/Shared/rhino_mcp/python  "$BUILDTMP/pkg1/Users/Shared/rhino_mcp/"
+cp -R /Users/Shared/rhino_mcp/.venv   "$BUILDTMP/pkg1/Users/Shared/rhino_mcp/"
+cp -R /Users/Shared/rhino_mcp/plugin  "$BUILDTMP/pkg1/Users/Shared/rhino_mcp/"
+cp    /Users/Shared/rhino_mcp/VERSION  "$BUILDTMP/pkg1/Users/Shared/rhino_mcp/"
+mkdir -p "$BUILDTMP/pkg1/usr/local/bin"
 cp "$ROOT/scripts/installer/rhino-mcp-configure.sh" \
-   /tmp/rhino-mcp-pkg1/usr/local/bin/rhino-mcp-configure
-chmod +x /tmp/rhino-mcp-pkg1/usr/local/bin/rhino-mcp-configure
+   "$BUILDTMP/pkg1/usr/local/bin/rhino-mcp-configure"
+chmod +x "$BUILDTMP/pkg1/usr/local/bin/rhino-mcp-configure"
 
 # Component 2: LaunchAgent plist only
-mkdir -p /tmp/rhino-mcp-pkg2
-cp "$ROOT/scripts/installer/com.ayala.rhino-mcp.configure.plist" /tmp/rhino-mcp-pkg2/
+mkdir -p "$BUILDTMP/pkg2"
+cp "$ROOT/scripts/installer/com.ayala.rhino-mcp.configure.plist" "$BUILDTMP/pkg2/"
 
 # ── 13. Build component packages ─────────────────────────────────────────────
 echo "[11/12] Building component packages..."
 
 pkgbuild \
-    --root /tmp/rhino-mcp-pkg1 \
+    --root "$BUILDTMP/pkg1" \
     --install-location / \
     --scripts "$ROOT/scripts/installer" \
     --identifier com.ayala.rhino-mcp.server \
     --version "$VERSION" \
-    /tmp/rhino-mcp-server.pkg
+    "$BUILDTMP/rhino-mcp-server.pkg"
 
 pkgbuild \
-    --root /tmp/rhino-mcp-pkg2 \
+    --root "$BUILDTMP/pkg2" \
     --install-location /Library/LaunchAgents \
     --identifier com.ayala.rhino-mcp.launchagent \
     --version "$VERSION" \
-    /tmp/rhino-mcp-launchagent.pkg
+    "$BUILDTMP/rhino-mcp-launchagent.pkg"
 
 # ── 14. Generate distribution.xml ────────────────────────────────────────────
 DIST_XML="$ROOT/rhino-mcp-distribution.xml"
@@ -208,16 +205,12 @@ FINAL_PKG="$ROOT/release/rhino-mcp-${VERSION}-arm64-installer.pkg"
 productbuild \
     --distribution "$DIST_XML" \
     --resources "$ROOT/scripts/installer/resources" \
-    --package-path /tmp \
+    --package-path "$BUILDTMP" \
     "$FINAL_PKG"
 rm -f "$DIST_XML"
 
 # ── 16. Cleanup ───────────────────────────────────────────────────────────────
-rm -rf \
-    /tmp/rhino-mcp-pkg1 \
-    /tmp/rhino-mcp-pkg2 \
-    /tmp/rhino-mcp-server.pkg \
-    /tmp/rhino-mcp-launchagent.pkg
+rm -rf "$BUILDTMP"
 
 echo ""
 echo "=== Done! ==="
