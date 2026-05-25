@@ -65,11 +65,11 @@ VERSION=$(uv run python -c "import tomllib; print(tomllib.load(open('pyproject.t
 echo "=== Building rhino-mcp installer v$VERSION ==="
 
 # ── 2. Build Rhino plugin ─────────────────────────────────────────────────────
-echo "[1/12] Building Rhino plugin..."
+echo "[1/13] Building Rhino plugin..."
 "$ROOT/scripts/build-plugin.sh"
 
 # ── 3. Package plugin ─────────────────────────────────────────────────────────
-echo "[2/12] Packaging plugin (.rhp + .yak)..."
+echo "[2/13] Packaging plugin (.rhp + .yak)..."
 "$ROOT/scripts/package-plugin.sh"
 
 # ── 4. Assert version in yak filename ────────────────────────────────────────
@@ -85,14 +85,15 @@ YAK_FILE=$(find "$ROOT/rhino_plugin/package" -maxdepth 1 -name "rhino-mcp-*.yak"
 echo "       Plugin verified: $(basename "$YAK_FILE") ✓"
 
 # ── 5. Mark installer scripts executable ─────────────────────────────────────
-echo "[3/12] Setting script permissions..."
+echo "[3/13] Setting script permissions..."
 chmod +x \
     "$ROOT/scripts/installer/preinstall" \
     "$ROOT/scripts/installer/postinstall" \
-    "$ROOT/scripts/installer/rhino-mcp-configure.sh"
+    "$ROOT/scripts/installer/rhino-mcp-configure.sh" \
+    "$ROOT/scripts/installer/uninstaller/postinstall"
 
 # ── 6. Clean stale /tmp artifacts + ensure shared dirs ───────────────────────
-echo "[4/12] Cleaning stale build artifacts..."
+echo "[4/13] Cleaning stale build artifacts..."
 rm -rf "$BUILDTMP"
 mkdir -p "$BUILDTMP"
 
@@ -100,7 +101,7 @@ mkdir -p "$BUILDTMP"
 mkdir -p /Users/Shared/rhino_mcp/plugin
 
 # ── 7. Bundle full Python runtime ─────────────────────────────────────────────
-echo "[5/12] Bundling Python 3.13 runtime..."
+echo "[5/13] Bundling Python 3.13 runtime..."
 UV_PYTHON_DIR=$(uv python dir)
 PYTHON_INSTALL=$(ls -d "$UV_PYTHON_DIR"/cpython-3.13*-macos-aarch64-none 2>/dev/null | sort -V | tail -1)
 [ -n "$PYTHON_INSTALL" ] || {
@@ -114,24 +115,24 @@ rm -rf /Users/Shared/rhino_mcp/python
 cp -R "$PYTHON_INSTALL" /Users/Shared/rhino_mcp/python
 
 # ── 8. Create portable venv from bundled Python ───────────────────────────────
-echo "[6/12] Creating portable venv..."
+echo "[6/13] Creating portable venv..."
 rm -rf /Users/Shared/rhino_mcp/.venv
 /Users/Shared/rhino_mcp/python/bin/python3.13 -m venv /Users/Shared/rhino_mcp/.venv
 
 # ── 9. Install rhino-mcp into venv ────────────────────────────────────────────
-echo "[7/12] Installing rhino-mcp into venv..."
+echo "[7/13] Installing rhino-mcp into venv..."
 /Users/Shared/rhino_mcp/.venv/bin/pip install --quiet "$ROOT"
 
 # ── 10. Write VERSION file ────────────────────────────────────────────────────
-echo "[8/12] Writing VERSION..."
+echo "[8/13] Writing VERSION..."
 printf "%s" "$VERSION" > /Users/Shared/rhino_mcp/VERSION
 
 # ── 11. Stage Rhino plugin ────────────────────────────────────────────────────
-echo "[9/12] Staging Rhino plugin..."
+echo "[9/13] Staging Rhino plugin..."
 cp "$ROOT/rhino_plugin/release/rhino-mcp.rhp" /Users/Shared/rhino_mcp/plugin/rhino-mcp.rhp
 
 # ── 12. Stage component payloads ──────────────────────────────────────────────
-echo "[10/12] Staging package payloads..."
+echo "[10/13] Staging package payloads..."
 
 # Component 1: full filesystem tree (installs to / )
 mkdir -p "$BUILDTMP/pkg1/Users/Shared/rhino_mcp"
@@ -149,7 +150,7 @@ mkdir -p "$BUILDTMP/pkg2"
 cp "$ROOT/scripts/installer/com.ayala.rhino-mcp.configure.plist" "$BUILDTMP/pkg2/"
 
 # ── 13. Build component packages ─────────────────────────────────────────────
-echo "[11/12] Building component packages..."
+echo "[11/13] Building component packages..."
 
 pkgbuild \
     --root "$BUILDTMP/pkg1" \
@@ -199,7 +200,7 @@ cat > "$DIST_XML" <<DISTEOF
 DISTEOF
 
 # ── 15. Product archive ───────────────────────────────────────────────────────
-echo "[12/12] Building product archive..."
+echo "[12/13] Building product archive..."
 mkdir -p "$ROOT/release"
 FINAL_PKG="$ROOT/release/rhino-mcp-${VERSION}-arm64-installer.pkg"
 productbuild \
@@ -209,14 +210,27 @@ productbuild \
     "$FINAL_PKG"
 rm -f "$DIST_XML"
 
-# ── 16. Cleanup ───────────────────────────────────────────────────────────────
+# ── 16. Build uninstaller package ────────────────────────────────────────────
+echo "[13/13] Building uninstaller package..."
+UNINSTALLER_PKG="$ROOT/release/rhino-mcp-${VERSION}-arm64-uninstaller.pkg"
+pkgbuild \
+    --nopayload \
+    --scripts "$ROOT/scripts/installer/uninstaller" \
+    --identifier com.ayala.rhino-mcp.uninstaller \
+    --version "$VERSION" \
+    "$UNINSTALLER_PKG"
+
+# ── 17. Cleanup ───────────────────────────────────────────────────────────────
 rm -rf "$BUILDTMP"
 
 echo ""
 echo "=== Done! ==="
-echo "    Installer: $FINAL_PKG"
-echo "    Size: $(du -sh "$FINAL_PKG" | cut -f1)"
+echo "    Installer:   $FINAL_PKG"
+echo "    Uninstaller: $UNINSTALLER_PKG"
+echo "    Installer size: $(du -sh "$FINAL_PKG" | cut -f1)"
 echo ""
-echo "    To sign and notarize:"
+echo "    To sign:"
 echo "      productsign --sign \"Developer ID Installer: Jesus Ayala (N859JA9UCJ)\" \\"
 echo "        $FINAL_PKG release/rhino-mcp-${VERSION}-arm64-signed.pkg"
+echo "      productsign --sign \"Developer ID Installer: Jesus Ayala (N859JA9UCJ)\" \\"
+echo "        $UNINSTALLER_PKG release/rhino-mcp-${VERSION}-arm64-uninstaller-signed.pkg"

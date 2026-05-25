@@ -1,0 +1,82 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+SHARED=/Users/Shared/rhino_mcp
+LAUNCH_AGENT_PLIST=/Library/LaunchAgents/com.ayala.rhino-mcp.configure.plist
+CONFIGURE_BIN=/usr/local/bin/rhino-mcp-configure
+PYTHON="${SHARED}/.venv/bin/python3.13"
+
+# Write per-user JSON cleanup to a temp script
+CLEANUP_PY=$(mktemp /tmp/rhino-mcp-cleanup-XXXXXX.py)
+trap 'rm -f "$CLEANUP_PY"' EXIT
+
+cat > "$CLEANUP_PY" << 'PYEOF'
+import sys, json, os, tempfile
+
+user_home = sys.argv[1]
+configs = [
+    os.path.join(user_home, "Library/Application Support/Claude/claude_desktop_config.json"),
+    os.path.join(user_home, ".claude/mcp.json"),
+    os.path.join(user_home, "Library/Application Support/ChatGPT/claude_desktop_config.json"),
+]
+for path in configs:
+    if not os.path.exists(path):
+        continue
+    try:
+        with open(path) as f:
+            data = json.load(f)
+        if not isinstance(data, dict):
+            continue
+        mc = data.get("mcpServers", {})
+        if "rhino" not in mc:
+            continue
+        del mc["rhino"]
+        fd, tmp = tempfile.mkstemp(dir=os.path.dirname(path))
+        try:
+            with os.fdopen(fd, "w") as tf:
+                json.dump(data, tf, indent=2)
+            os.replace(tmp, path)
+        except Exception:
+            try:
+                os.unlink(tmp)
+            except Exception:
+                pass
+    except Exception:
+        pass
+PYEOF
+
+chmod 644 "$CLEANUP_PY"
+
+# ── 1. Per-user cleanup (before removing venv so Python is still available) ──
+for USER_HOME in /Users/*/; do
+    USERNAME=$(basename "$USER_HOME")
+    [ "$USERNAME" = "Shared" ] && continue
+    [ -d "$USER_HOME" ] || continue
+    id "$USERNAME" &>/dev/null || continue
+
+    # Unload LaunchAgent for this user
+    sudo -u "$USERNAME" launchctl unload "$LAUNCH_AGENT_PLIST" 2>/dev/null || true
+
+    # Remove Rhino plugin registration (Rhino 8 and 9)
+    for RH_VER in 8.0 9.0; do
+        PLUG_DIR="$USER_HOME/Library/Application Support/McNeel/Rhinoceros/$RH_VER/Plug-ins"
+        [ -d "$PLUG_DIR" ] || continue
+        find "$PLUG_DIR" -maxdepth 1 -name "rhino-mcp*" -exec rm -rf {} + 2>/dev/null || true
+    done
+
+    # Remove rhino entry from AI client MCP configs
+    if [ -x "$PYTHON" ]; then
+        sudo -u "$USERNAME" "$PYTHON" "$CLEANUP_PY" "$USER_HOME" 2>/dev/null || true
+    fi
+
+    # Remove idempotency sentinel
+    rm -f "$USER_HOME/.rhino-mcp-configured" 2>/dev/null || true
+done
+
+# ── 2. Remove system-wide artifacts ──────────────────────────────────────────
+rm -f "$LAUNCH_AGENT_PLIST"
+rm -f "$CONFIGURE_BIN"
+rm -rf "$SHARED"
+
+echo "rhino-mcp uninstalled successfully."
+exit 0
