@@ -1,7 +1,7 @@
 # macOS Installer Package — Design Spec
 **Project:** rhino-mcp  
 **Date:** 2026-05-25  
-**Status:** Approved (senior dev review pass 3 — 2026-05-25)
+**Status:** Approved (senior dev review pass 4 — 2026-05-25)
 
 ---
 
@@ -145,17 +145,21 @@ The configure script exits immediately (0) if `~/.rhino-mcp-configured` contains
 Detects the console user and runs the configure script immediately so the installing admin is configured without logging out:
 
 ```bash
+# Ensure world-readable/executable permissions FIRST so configure can use the venv
+chmod -R a+rX /Users/Shared/rhino_mcp/
+
 CONSOLE_USER=$(stat -f "%Su" /dev/console)
+
+# Guard: skip if no GUI user (headless) or if console is root (no user session)
+if [ -z "$CONSOLE_USER" ] || [ "$CONSOLE_USER" = "root" ]; then
+    echo "No GUI session detected — run rhino-mcp-configure manually to configure AI clients and install the Rhino plugin"
+    exit 0
+fi
+
 sudo -u "$CONSOLE_USER" -H /usr/local/bin/rhino-mcp-configure
 ```
 
-`-H` sets `$HOME` to the target user's home directory. Called from root (postinstall always runs as root), so no password is required. If no console user detected (headless install), logs: "Run `rhino-mcp-configure` manually to configure AI clients and install the Rhino plugin" and exits 0.
-
-After running configure, postinstall sets world-readable permissions on the shared directory:
-
-```bash
-chmod -R a+rX /Users/Shared/rhino_mcp/
-```
+`-H` sets `$HOME` to the target user's home directory. Called from root (postinstall always runs as root), so no password is required. `chmod -R a+rX` runs first so the venv Python binary is executable before configure calls it.
 
 ---
 
@@ -165,7 +169,7 @@ chmod -R a+rX /Users/Shared/rhino_mcp/
 
 | Source | Value |
 |---|---|
-| Version | Parsed from `pyproject.toml` (`grep '^version' pyproject.toml`) |
+| Version | Parsed from `pyproject.toml`: `python3 -c "import tomllib; print(tomllib.load(open('pyproject.toml','rb'))['project']['version'])"` |
 | Signing identity | `INSTALLER_SIGNING_ID` env var (default: `"Developer ID Installer: Jesus Ayala (N859JA9UCJ)"`) |
 | Apple ID | `APPLE_ID` env var |
 | App-specific password | `APPLE_APP_PASSWORD` env var |
@@ -194,12 +198,19 @@ Env vars loaded from `.env` if present (never committed to git). Build script fa
 10. Stage Component 1 payload into /tmp/rhino-mcp-pkg1/ (full filesystem layout,
     install-location will be /):
       mkdir -p /tmp/rhino-mcp-pkg1/Users/Shared/rhino_mcp
-      cp -R /Users/Shared/rhino_mcp/.venv  → /tmp/rhino-mcp-pkg1/Users/Shared/rhino_mcp/
-      cp -R /Users/Shared/rhino_mcp/plugin → /tmp/rhino-mcp-pkg1/Users/Shared/rhino_mcp/
-      cp /Users/Shared/rhino_mcp/VERSION   → /tmp/rhino-mcp-pkg1/Users/Shared/rhino_mcp/
+      cp -RL /Users/Shared/rhino_mcp/.venv  → /tmp/rhino-mcp-pkg1/Users/Shared/rhino_mcp/
+      cp -RL /Users/Shared/rhino_mcp/plugin → /tmp/rhino-mcp-pkg1/Users/Shared/rhino_mcp/
+      cp /Users/Shared/rhino_mcp/VERSION    → /tmp/rhino-mcp-pkg1/Users/Shared/rhino_mcp/
       mkdir -p /tmp/rhino-mcp-pkg1/usr/local/bin
       cp scripts/installer/rhino-mcp-configure.sh
-                                           → /tmp/rhino-mcp-pkg1/usr/local/bin/rhino-mcp-configure
+                                            → /tmp/rhino-mcp-pkg1/usr/local/bin/rhino-mcp-configure
+    CRITICAL — use cp -RL (not cp -R) for the venv:
+      uv creates venv Python binaries as symlinks into uv's own Python cache
+      (~/.local/share/uv/python/cpython-3.13-macos-aarch64-none/bin/python3.13).
+      cp -R copies symlinks as-is → dangling symlink on every target machine →
+      MCP command silently broken. cp -RL dereferences all symlinks and copies
+      the real binary, making the pkg fully self-contained with no build-machine
+      path dependencies.
     (A single pkgbuild component can only have one --install-location. Using /
      with a full filesystem tree under the staging root is the only way to place
      files in both /Users/Shared/rhino_mcp/ and /usr/local/bin/ in one component.)
@@ -240,10 +251,11 @@ Env vars loaded from `.env` if present (never committed to git). Build script fa
           --wait
     (prints UUID on start; --wait blocks until Apple returns result)
 17. xcrun stapler staple rhino-mcp-$VERSION-arm64.pkg
-18. cp → release/rhino-mcp-$VERSION-arm64-installer.pkg
-    rm -f rhino-mcp-$VERSION-arm64-unsigned.pkg   (clean up unsigned intermediate)
+18. mkdir -p release/
+    cp rhino-mcp-$VERSION-arm64.pkg release/rhino-mcp-$VERSION-arm64-installer.pkg
+    rm -f rhino-mcp-$VERSION-arm64-unsigned.pkg rhino-mcp-$VERSION-arm64.pkg
     rm -rf /tmp/rhino-mcp-pkg1 /tmp/rhino-mcp-pkg2
-          /tmp/rhino-mcp-server.pkg /tmp/rhino-mcp-launchagent.pkg
+           /tmp/rhino-mcp-server.pkg /tmp/rhino-mcp-launchagent.pkg
 ```
 
 > **Build machine side-effect (expected):** `/Users/Shared/rhino_mcp/` is created on the developer's machine as a valid local install. Leave it in place — it serves as a working local deployment for the developer and matches exactly what target machines receive.
@@ -257,10 +269,10 @@ Env vars loaded from `.env` if present (never committed to git). Build script fa
 - Rhino 8 not found → warning only, install proceeds (MCP server still usable)
 
 ### `postinstall`
-- Plugin staging directory missing → exits 1 (critical — files must be in place before configure runs)
-- `stat /dev/console` returns empty or `root` (headless install or no GUI session) → log manual instructions, exit 0; do NOT run configure as root
-- `sudo -u "$CONSOLE_USER" -H ...` fails → logged, exit 0 (LaunchAgent handles it at next login)
-- `chmod -R a+rX` failure → logged, non-fatal
+- Plugin staging directory (`/Users/Shared/rhino_mcp/plugin/`) missing → exits 1 (critical)
+- `chmod -R a+rX /Users/Shared/rhino_mcp/` runs first — venv Python must be executable before configure is called
+- `stat /dev/console` returns empty or `root` → log manual instructions, exit 0; never run configure as root
+- `sudo -u "$CONSOLE_USER" -H ...` fails → logged, exit 0 (LaunchAgent handles on next login)
 
 ### `rhino-mcp-configure.sh`
 - Each client block wrapped in isolated error trap — one failure never skips others
@@ -280,9 +292,9 @@ Env vars loaded from `.env` if present (never committed to git). Build script fa
 
 ## Testing
 
-`scripts/test-installer.sh` (optional helper):
+`scripts/test-installer.sh` (optional helper — requires root):
 ```
-installer -pkg release/rhino-mcp-$VERSION-arm64-installer.pkg -target /
+sudo installer -pkg release/rhino-mcp-$VERSION-arm64-installer.pkg -target /
 ```
 Verifies:
 - `/Users/Shared/rhino_mcp/.venv/bin/python -m rhmcp --help` exits 0
