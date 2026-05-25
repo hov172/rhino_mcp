@@ -1,7 +1,7 @@
 # macOS Installer Package — Design Spec
 **Project:** rhino-mcp  
 **Date:** 2026-05-25  
-**Status:** Approved (senior dev review pass 5 — 2026-05-25)
+**Status:** Approved (senior dev review pass 6 — 2026-05-25)
 
 ---
 
@@ -23,8 +23,7 @@ scripts/
     ├── com.ayala.rhino-mcp.configure.plist     ← LaunchAgent template
     └── resources/
         ├── welcome.html
-        ├── license.txt
-        └── background.png
+        └── license.txt
 
 Output: release/rhino-mcp-<version>-arm64-installer.pkg
 ```
@@ -89,6 +88,8 @@ No `uv`, no PATH dependency. The venv is pre-built at the exact final install pa
 ### `rhino-mcp-configure.sh` — runs as the target user
 
 Idempotent. Reads `/Users/Shared/rhino_mcp/VERSION`, compares to sentinel at `~/.rhino-mcp-configured`. Skips if version matches; re-runs and updates sentinel if version differs.
+
+> **Missing VERSION edge case:** If `/Users/Shared/rhino_mcp/VERSION` does not exist (corrupted install), treat as version unknown and re-run configure unconditionally. Do not exit early.
 
 All output appended to `~/Library/Logs/rhino-mcp-configure.log` (script uses `$HOME` which is set correctly in user context; does NOT use `~` in the LaunchAgent plist itself).
 
