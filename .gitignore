@@ -23,3 +23,8 @@ live_results.txt
 **/.DS_Store
 *.3dm
 .worktrees/
+
+# macOS installer build artifacts
+release/*.pkg
+release/*-unsigned.pkg
+.env
