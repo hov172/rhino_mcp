@@ -1,6 +1,16 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
+# ── Cleanup trap ──────────────────────────────────────────────────────────────
+cleanup() {
+    rm -rf /tmp/rhino-mcp-pkg1 /tmp/rhino-mcp-pkg2 \
+           /tmp/rhino-mcp-server.pkg /tmp/rhino-mcp-launchagent.pkg 2>/dev/null || true
+    [ -n "${DIST_XML:-}" ]    && rm -f "$DIST_XML"    2>/dev/null || true
+    [ -n "${UNSIGNED_PKG:-}" ] && rm -f "$UNSIGNED_PKG" 2>/dev/null || true
+    [ -n "${SIGNED_PKG:-}" ]  && rm -f "$SIGNED_PKG"  2>/dev/null || true
+}
+trap cleanup EXIT
+
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 cd "$ROOT"
 
@@ -43,7 +53,7 @@ check_env APPLE_APP_PASSWORD "Create an app-specific password at appleid.apple.c
 check_env APPLE_TEAM_ID     "Find your team ID in App Store Connect > Membership"
 
 # ── 1. Read VERSION ───────────────────────────────────────────────────────────
-VERSION=$(python3 -c "import tomllib; print(tomllib.load(open('pyproject.toml','rb'))['project']['version'])")
+VERSION=$(uv run python -c "import tomllib; print(tomllib.load(open('pyproject.toml','rb'))['project']['version'])")
 echo "=== Building rhino-mcp installer v$VERSION ==="
 
 # ── 2. Build Rhino plugin ─────────────────────────────────────────────────────
@@ -207,7 +217,8 @@ xcrun notarytool submit "$SIGNED_PKG" \
     --apple-id "$APPLE_ID" \
     --password "$APPLE_APP_PASSWORD" \
     --team-id "$APPLE_TEAM_ID" \
-    --wait
+    --wait \
+    --timeout 600
 
 # ── 18. Staple ───────────────────────────────────────────────────────────────
 xcrun stapler staple "$SIGNED_PKG"
