@@ -13,6 +13,7 @@ Control Rhino 3D from Claude, Cursor, Codex, and any other MCP-capable AI tool. 
 - [Quick Start](#quick-start)
   - [Path A — Manual setup with Claude Desktop](#path-a--manual-setup-with-claude-desktop)
   - [Path B — Docker setup with Claude Desktop](#path-b--docker-setup-with-claude-desktop)
+  - [Path C — macOS Installer (.pkg)](#path-c--macos-installer-pkg)
 - [What You Can Do](#what-you-can-do)
 - [Urban Massing Workflow](#urban-massing-workflow)
 - [Studio Pipeline](#studio-pipeline)
@@ -23,6 +24,7 @@ Control Rhino 3D from Claude, Cursor, Codex, and any other MCP-capable AI tool. 
   - [1. Install the Rhino Plugin](#1-install-the-rhino-plugin)
   - [2. Install the Python MCP Server](#2-install-the-python-mcp-server)
   - [3. Configure API Keys (Studio Pipeline)](#3-configure-api-keys-studio-pipeline)
+  - [macOS Installer (.pkg)](#macos-installer-pkg-alternative-to-steps-1--3)
   - [Docker Quick-Start (alternative to steps 2 & 3)](#docker-quick-start-alternative-to-steps-2--3)
 - [Starting the Service](#starting-the-service)
 - [Connecting AI Clients](#connecting-ai-clients)
@@ -118,6 +120,7 @@ Two paths to get up and running. Both require the Rhino plugin — only the serv
 |---|---|
 | **Path A — Manual setup** | Best for development, local editing, and users already comfortable with Python/uv. Claude Desktop starts the MCP server with stdio. |
 | **Path B — Docker setup** | Best when you want isolated Python dependencies or an HTTP MCP endpoint for multiple clients. Rhino still runs on the host machine. |
+| **Path C — macOS Installer** | Best for macOS users who want zero-terminal setup. Double-click the `.pkg`, and the installer handles Python, the MCP server, and AI client configuration automatically. |
 
 For first-time installs, use `RHINO_MCP_BACKEND=plugin`. The plugin backend is the full-featured path and is required for Grasshopper support.
 
