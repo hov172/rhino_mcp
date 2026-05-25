@@ -24,4 +24,32 @@ if [ ! -d "/Applications/Rhino 8.app" ]; then
     echo "         The MCP server will install but the Rhino plugin cannot load." >&2
 fi
 
+# Remove previous plugin copies so Rhino doesn't load both old and new simultaneously.
+# Covers: direct copies in Plug-ins/ (Rhino 8 and 9) and Yak-installed packages.
+CONSOLE_USER=$(stat -f "%Su" /dev/console 2>/dev/null || true)
+if [ -n "$CONSOLE_USER" ] && [ "$CONSOLE_USER" != "root" ]; then
+    USER_SUPPORT="/Users/$CONSOLE_USER/Library/Application Support/McNeel/Rhinoceros"
+
+    for RHP in \
+        "$USER_SUPPORT/7.0/Plug-ins/rhino-mcp.rhp" \
+        "$USER_SUPPORT/8.0/Plug-ins/rhino-mcp.rhp" \
+        "$USER_SUPPORT/9.0/Plug-ins/rhino-mcp.rhp"; do
+        if [ -f "$RHP" ]; then
+            rm -f "$RHP"
+            echo "Removed previous plugin: $RHP"
+        fi
+    done
+
+    # Yak installs a versioned subdirectory; remove all versions
+    for YAK_DIR in \
+        "$USER_SUPPORT/packages/7.0/rhino-mcp" \
+        "$USER_SUPPORT/packages/8.0/rhino-mcp" \
+        "$USER_SUPPORT/packages/9.0/rhino-mcp"; do
+        if [ -d "$YAK_DIR" ]; then
+            rm -rf "$YAK_DIR"
+            echo "Removed Yak-installed plugin: $YAK_DIR"
+        fi
+    done
+fi
+
 exit 0

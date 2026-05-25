@@ -31,12 +31,16 @@ log "=== rhino-mcp configure v${INSTALLED_VERSION} for ${USER:-$(id -un)} ==="
 
 # ── 1. Rhino plugin ──────────────────────────────────────────────────────────
 PLUGIN_SRC="$SHARED_DIR/plugin/rhino-mcp.rhp"
-PLUGIN_DST="$HOME/Library/Application Support/McNeel/Rhinoceros/8.0/Plug-ins/rhino-mcp.rhp"
 
 if [ -f "$PLUGIN_SRC" ]; then
-    mkdir -p "$(dirname "$PLUGIN_DST")"
-    cp "$PLUGIN_SRC" "$PLUGIN_DST"
-    log "Rhino plugin installed: $PLUGIN_DST"
+    for RHINO_VER in 7 8 9; do
+        if [ -d "/Applications/Rhino ${RHINO_VER}.app" ]; then
+            PLUGIN_DST="$HOME/Library/Application Support/McNeel/Rhinoceros/${RHINO_VER}.0/Plug-ins/rhino-mcp.rhp"
+            mkdir -p "$(dirname "$PLUGIN_DST")"
+            cp "$PLUGIN_SRC" "$PLUGIN_DST"
+            log "Rhino plugin installed: $PLUGIN_DST"
+        fi
+    done
 else
     log "ERROR: Plugin source not found: $PLUGIN_SRC"
 fi
