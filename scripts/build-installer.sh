@@ -59,7 +59,6 @@ check_tool xcrun       "Run: xcode-select --install"
     echo "ERROR: yak not found at '$YAK'. Is Rhino 8 installed?" >&2; exit 1
 }
 
-NOTARYTOOL_PROFILE="${NOTARYTOOL_PROFILE:-rhino-mcp}"
 
 # ── 1. Read VERSION ───────────────────────────────────────────────────────────
 VERSION=$(uv run python -c "import tomllib; print(tomllib.load(open('pyproject.toml','rb'))['project']['version'])")
@@ -202,40 +201,18 @@ cat > "$DIST_XML" <<DISTEOF
 </installer-gui-script>
 DISTEOF
 
-# ── 15. Product archive (unsigned) ────────────────────────────────────────────
-UNSIGNED_PKG="$ROOT/rhino-mcp-${VERSION}-arm64-unsigned.pkg"
+# ── 15. Product archive ───────────────────────────────────────────────────────
+echo "[12/12] Building product archive..."
+mkdir -p "$ROOT/release"
+FINAL_PKG="$ROOT/release/rhino-mcp-${VERSION}-arm64-installer.pkg"
 productbuild \
     --distribution "$DIST_XML" \
     --resources "$ROOT/scripts/installer/resources" \
     --package-path /tmp \
-    "$UNSIGNED_PKG"
+    "$FINAL_PKG"
 rm -f "$DIST_XML"
 
-# ── 16. Sign ─────────────────────────────────────────────────────────────────
-echo "[12/12] Signing, notarizing, stapling..."
-SIGNED_PKG="$ROOT/rhino-mcp-${VERSION}-arm64.pkg"
-productsign \
-    --sign "$INSTALLER_SIGNING_ID" \
-    "$UNSIGNED_PKG" \
-    "$SIGNED_PKG"
-rm -f "$UNSIGNED_PKG"
-
-# ── 17. Notarize ─────────────────────────────────────────────────────────────
-echo "       Submitting to Apple notary service (this takes 1-3 minutes)..."
-xcrun notarytool submit "$SIGNED_PKG" \
-    --keychain-profile "$NOTARYTOOL_PROFILE" \
-    --wait \
-    --timeout 600
-
-# ── 18. Staple ───────────────────────────────────────────────────────────────
-xcrun stapler staple "$SIGNED_PKG"
-
-# ── 19. Move to release/ + cleanup ───────────────────────────────────────────
-mkdir -p "$ROOT/release"
-FINAL_PKG="$ROOT/release/rhino-mcp-${VERSION}-arm64-installer.pkg"
-cp "$SIGNED_PKG" "$FINAL_PKG"
-rm -f "$SIGNED_PKG"
-
+# ── 16. Cleanup ───────────────────────────────────────────────────────────────
 rm -rf \
     /tmp/rhino-mcp-pkg1 \
     /tmp/rhino-mcp-pkg2 \
@@ -246,3 +223,7 @@ echo ""
 echo "=== Done! ==="
 echo "    Installer: $FINAL_PKG"
 echo "    Size: $(du -sh "$FINAL_PKG" | cut -f1)"
+echo ""
+echo "    To sign and notarize:"
+echo "      productsign --sign \"Developer ID Installer: Jesus Ayala (N859JA9UCJ)\" \\"
+echo "        $FINAL_PKG release/rhino-mcp-${VERSION}-arm64-signed.pkg"
