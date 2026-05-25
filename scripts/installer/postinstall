@@ -1,0 +1,20 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+# World-readable/executable BEFORE configure calls the venv Python
+chmod -R a+rX /Users/Shared/rhino_mcp/
+
+# Detect the GUI user at the console (postinstall always runs as root)
+CONSOLE_USER=$(stat -f "%Su" /dev/console)
+
+# Skip on headless installs or if no user session exists
+if [ -z "$CONSOLE_USER" ] || [ "$CONSOLE_USER" = "root" ]; then
+    echo "No GUI session detected — run /usr/local/bin/rhino-mcp-configure" \
+         "manually to configure AI clients and install the Rhino plugin." >&2
+    exit 0
+fi
+
+# Run configure as the installing user; failure is non-fatal (LaunchAgent handles it)
+sudo -u "$CONSOLE_USER" -H /usr/local/bin/rhino-mcp-configure || true
+
+exit 0
