@@ -1,0 +1,18 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+# Block install on macOS < 13 (Ventura)
+OS_VERSION=$(sw_vers -productVersion)
+OS_MAJOR=$(echo "$OS_VERSION" | cut -d. -f1)
+if [ "$OS_MAJOR" -lt 13 ]; then
+    echo "ERROR: rhino-mcp requires macOS 13 Ventura or later (found $OS_VERSION)." >&2
+    exit 1
+fi
+
+# Warn (do not block) if Rhino 8 is absent
+if [ ! -d "/Applications/Rhino 8.app" ]; then
+    echo "WARNING: Rhino 8 not found at /Applications/Rhino 8.app." >&2
+    echo "         The MCP server will install but the Rhino plugin cannot load." >&2
+fi
+
+exit 0
