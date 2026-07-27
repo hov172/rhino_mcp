@@ -5,6 +5,95 @@ Versioning follows [Semantic Versioning](https://semver.org/).
 
 ---
 
+## [0.16.0] — 2026-07-27
+
+Deep-review fix release: five parallel code reviews across the Python server, tool
+modules, and C# plugin; every confirmed defect fixed. 60 files changed.
+
+### Fixed — transport & backend (silent failures)
+- **HTTP transport was entirely broken**: the `/health` route wrapper mounted the
+  MCP app inside a new Starlette app without forwarding its lifespan, so the
+  streamable-http session manager never started and every MCP request over HTTP
+  (including Docker deployments) failed with an internal server error. The
+  lifespan is now forwarded; verified end-to-end in the Docker container.
+- **Duplicate command execution**: a socket read timeout made the keep-alive client
+  re-send the request (up to 6×) — long-running mutating commands (renders, booleans,
+  scripts) executed repeatedly. Requests are never re-sent once delivered.
+- Keep-alive socket timeout was frozen at creation (poisoned to 1 s by the startup
+  health check); now applied per call.
+- UTF-8 characters split across TCP read boundaries corrupted requests (plugin side)
+  or hard-failed large responses (client side); both sides now decode complete buffers.
+- Plugin-side handler failures were wrapped in `status: ok` and reported as success;
+  `backend.plugin_result` now surfaces inner `success/ok: false` as `ok: false`.
+- Commands the plugin doesn't implement now fall back to the Python script path in
+  auto mode (previously ~15 curve tools returned "Unsupported command type" whenever
+  the plugin was connected).
+- rhinocode wrapper no longer re-indents user code (corrupted multi-line string
+  literals); result JSON written atomically; mid-write reads retry instead of failing;
+  `script_result` now populated on the rhinocode fallback path.
+- Windows: slot-registry liveness check used `os.kill(pid, 0)` (not an existence
+  check on Windows — it pruned valid slots and could deliver Ctrl+C); replaced with
+  an OpenProcess-based check.
+
+### Fixed — tools
+- Grasshopper plugin suite (Kangaroo, Ladybug/Honeybee, LunchBox, Pufferfish,
+  Weaverbird, Anemone, Elefront/Human — ~35 tools) was entirely non-functional:
+  wrong search-result key, wrong wire-protocol keys, and value-setting calls the
+  plugin cannot support. Rewritten against the real protocol; values feed through
+  standalone Number/Panel params wired into component inputs; all tools now
+  propagate real errors instead of unconditional success.
+- Poly Haven: manifest parsing wrong for all three asset types (HDRI/model downloads
+  always failed; textures silently downloaded the normal map as albedo).
+- Hunyuan3D: completed jobs could never be imported by job_id (`local_path` support).
+- Replaced calls to nonexistent APIs: `rs.AddEllipsoid`, `rs.MeshBrep`, `rs.OffsetMesh`,
+  `rs.FilletCurves`, `rs.FilletSurface`, `rs.ExtrudeCurveAlongCurve`,
+  `Rhino.FileIO.RhinoFile`, `ApplicationSettings.MeshingParameters`, `doc.Write`,
+  string `SetToPlanView`, `CaptureToBitmap(ViewCapture)`, `Materials.Delete(int,bool)`.
+- Wrong signatures fixed: `AddSweep2`, `AddRevSrf` (radians/argument order),
+  `AddBlendCurve`, `AddPatch`, `CopyObjects` (single vector), `GetCommandNames`
+  (argument order), `LoadPlugIn` out-param.
+- Export tools: OBJ/FBX/GLB/STEP/IGES/DWG/STL now honor object selections
+  (previously exported the whole document), use the real RhinoCommon option classes,
+  and report unapplicable parameters honestly instead of claiming them applied;
+  `export_stl` no longer crashes when `tolerance` is set; `_SaveAs` fallbacks use
+  the scriptable dashed form (no modal dialog).
+- `transform_rhino_objects` honors `copy=True` for rotate/scale; `orient_objects`
+  now translates as well as rotates; mesh/curve booleans honor `delete_input`/
+  `delete_sources`; `divide_curve` no longer creates duplicate points;
+  `create_rectangle` no longer collapses on tilted planes.
+- Document user text used the wrong API (`SetDocumentData`) and always failed;
+  `measure_volume` supports meshes; `read_svg` gunzips `.svgz`; `read_spreadsheet`
+  validates sheet indices; `get_last_created_objects` uses `RuntimeSerialNumber`.
+- `rhino_id` now forwarded by gh_canvas/gh_params/gh_document/gh_solution/materials
+  tools; `gh_close_definition` → `gh_close_document`; urban massing/metrics/export
+  honesty fixes; V-Ray/Enscape/VisualARQ/Lands Design tools report interactive
+  commands and unapplied parameters honestly (no fabricated success).
+
+### Fixed — C# plugin
+- No more NullReferenceException on every command when no document is open;
+  `ping` added to the read-only set.
+- Failed port bind no longer wedges the server into "already listening";
+  `MCPStart` can recover.
+- `gh_connect_wire`/`gh_disconnect_wire` accept standalone params (panels, sliders,
+  Number params) as wire endpoints.
+- ARC creation honors `start_angle`; `select_objects` `deselect` no longer clears
+  the whole selection; `gh_save_document` on a never-saved document returns an error
+  instead of opening a modal dialog; `gh_set_number_param` rejects an empty `values`
+  list instead of wiping the parameter; `gh_run_solution` no longer blocks the UI
+  thread; layer-name cache invalidated on layer-table changes.
+
+### Security
+- **Behavior change**: the plugin now refuses to listen on a non-loopback address
+  unless `RHINO_MCP_PLUGIN_SECRET` is set (previously a console warning only).
+- URL validation blocks `0.0.0.0/8` and checks all resolved addresses (A + AAAA),
+  not just the first IPv4 record.
+- HTTP transport: auth token can be pinned via `RHINO_MCP_AUTH_TOKEN` (previously
+  regenerated every start, making Docker/Cloud Run deployments impractical);
+  non-ASCII Authorization headers return 401 instead of 500; rate limiter keyed by
+  client IP so unauthenticated clients can't flush legitimate windows.
+
+---
+
 ## [0.15.1] — 2026-05-20
 
 ### Fixed

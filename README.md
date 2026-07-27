@@ -264,6 +264,7 @@ docker build -t rhino-mcp .
 # Run — paste your real API keys
 docker run -d \
   -p 8000:8000 \
+  -e RHINO_MCP_AUTH_TOKEN="choose-a-long-random-string" \
   -e ANTHROPIC_API_KEY="sk-ant-..." \
   -e FAL_KEY="..." \
   --name rhino-mcp \
@@ -277,17 +278,20 @@ The container starts the MCP server in HTTP mode and defaults `RHINO_MCP_HOST=ho
 ```bash
 docker run -d -p 8000:8000 \
   --add-host=host.docker.internal:host-gateway \
+  -e RHINO_MCP_AUTH_TOKEN="choose-a-long-random-string" \
   -e ANTHROPIC_API_KEY="sk-ant-..." \
   -e FAL_KEY="..." \
   --name rhino-mcp \
   rhino-mcp
 ```
 
-Verify the server is up:
+Verify the server is up (the `/health` endpoint needs no auth):
 
 ```bash
-curl http://localhost:8000/
+curl http://localhost:8000/health
 ```
+
+All other endpoints require the bearer token: `Authorization: Bearer <your RHINO_MCP_AUTH_TOKEN>`. If you didn't set `RHINO_MCP_AUTH_TOKEN`, a random token was generated at startup — find it with `docker logs rhino-mcp`.
 
 #### Step 3 — Tell Claude Desktop to connect via URL
 
@@ -297,13 +301,16 @@ In HTTP mode the server is already running — Claude Desktop connects to it rat
 {
   "mcpServers": {
     "rhino": {
-      "url": "http://localhost:8000/"
+      "url": "http://localhost:8000/",
+      "headers": {
+        "Authorization": "Bearer choose-a-long-random-string"
+      }
     }
   }
 }
 ```
 
-No `command`, no `args`, no `env` — the API keys were set when you ran the container.
+No `command`, no `args`, no `env` — the API keys were set when you ran the container. The `Authorization` value must match the `RHINO_MCP_AUTH_TOKEN` you passed to `docker run`.
 
 #### Step 4 — Start Rhino and activate the plugin
 
@@ -378,7 +385,7 @@ An uninstaller (`rhino-mcp-<version>-universal-uninstaller.pkg`) is available in
 | **VisualARQ (BIM)** | Create walls, doors, windows, slabs, columns, stairs, railings, levels; query BIM properties; export IFC |
 | **Lands Design** | Place plants and trees from species library, generate terrain from contours, create paths and water features, export plant schedules |
 | **Multi-Rhino instances** | Discover all running Rhino processes with `get_rhino_instances` (slot registry), launch new ones with `launch_rhino`, and pass `rhino_id` to any tool to target a specific instance. |
-| **Remote host** | Run Rhino on a separate workstation or VM — set `RHINO_MCP_BIND_HOST=0.0.0.0` on the Rhino machine and point the MCP client at its IP |
+| **Remote host** | Run Rhino on a separate workstation or VM — set `RHINO_MCP_BIND_HOST=0.0.0.0` **and** `RHINO_MCP_PLUGIN_SECRET` on the Rhino machine, the same secret on the client machine, and point the MCP client at its IP |
 | **Telemetry** | Optional per-call usage log (JSONL on disk, opt-in, never leaves the machine) for debugging slow tools and measuring usage patterns |
 
 ---
@@ -709,6 +716,7 @@ docker build -t rhino-mcp .
 ```bash
 docker run -d \
   -p 8000:8000 \
+  -e RHINO_MCP_AUTH_TOKEN="choose-a-long-random-string" \
   -e ANTHROPIC_API_KEY="sk-ant-..." \
   -e FAL_KEY="..." \
   -e DOCRAPTOR_API_KEY="..." \
@@ -723,6 +731,7 @@ The container defaults to `RHINO_MCP_HOST=host.docker.internal`, which on **macO
 
 ```bash
 docker run -d -p 8000:8000 --add-host=host.docker.internal:host-gateway \
+  -e RHINO_MCP_AUTH_TOKEN="choose-a-long-random-string" \
   -e ANTHROPIC_API_KEY="sk-ant-..." \
   rhino-mcp
 ```
@@ -1099,13 +1108,18 @@ Replace `/path/to/rhino-mcp` with the absolute path to the cloned repo. Restart 
 
 When the server is running in Docker (or started manually with `--transport http`), AI clients connect to a URL instead of spawning a process. API keys are set on the container at `docker run` time — no `env` block needed in the client config.
 
+Every request (except `GET /health`) must carry `Authorization: Bearer <token>`. Set a stable token with `RHINO_MCP_AUTH_TOKEN` when starting the container/server; otherwise a random one is generated and printed to stderr on each start (`docker logs rhino-mcp`).
+
 **Claude Desktop** — edit `claude_desktop_config.json`:
 
 ```json
 {
   "mcpServers": {
     "rhino": {
-      "url": "http://localhost:8000/"
+      "url": "http://localhost:8000/",
+      "headers": {
+        "Authorization": "Bearer <your RHINO_MCP_AUTH_TOKEN>"
+      }
     }
   }
 }
@@ -1206,13 +1220,14 @@ When debugging connection failures, set `RHINO_MCP_BACKEND=plugin` temporarily. 
 | `RHINO_MCP_ENABLE_CSHARP` | `1` | Execution gate for `execute_rhino_csharp` / `execute_rhinocommon_csharp_code`. Set to `0` to refuse arbitrary C# execution. |
 | `RHINO_MCP_ENABLE_RUN_COMMAND` | `1` | Execution gate for `run_rhino_command` / `run_command`. Set to `0` to refuse command macro execution. |
 | `RHINO_MCP_ALLOW_REMOTE` | `0` | Set to `1` to allow the Python server to connect to a non-loopback Rhino host (required when `RHINO_MCP_HOST` is a remote address or `host.docker.internal`). See [Remote Host Support](#remote-host-support). |
+| `RHINO_MCP_AUTH_TOKEN` | *(unset)* | Fixed bearer token for the HTTP transport. When set, clients authenticate with `Authorization: Bearer <token>` and the token survives restarts — set this for Docker / Cloud Run deployments. Unset = a random token is generated at startup and printed to stderr. |
 
 ### Rhino Plugin (C# side)
 
 | Variable | Default | Description |
 |---|---|---|
 | `RHINO_MCP_BIND_HOST` | `127.0.0.1` | IP address the Rhino plugin binds its TCP listener to. Set to `0.0.0.0` to accept connections from any network interface (required for remote AI clients). Must be set in Rhino's environment before `MCPStart` is run. |
-| `RHINO_MCP_PLUGIN_SECRET` | *(unset)* | Pre-shared key required from the Python server on every connection. Set the same value on both machines when using network (non-loopback) binding. Unset = no authentication (safe for localhost-only). |
+| `RHINO_MCP_PLUGIN_SECRET` | *(unset)* | Pre-shared key required from the Python server on every connection. **Required for network (non-loopback) binding** — since v0.16.0 the plugin refuses to start listening on a non-loopback address without it. Set the same value on both machines. Unset = no authentication (loopback-only binding still works). |
 
 ---
 
@@ -1343,9 +1358,12 @@ Both must be configured for cross-machine or Docker setups. The Python-side guar
 
 The env var must be present in the environment that launches the Rhino process. Setting it in a terminal after Rhino is already open has no effect.
 
+> **Required:** `RHINO_MCP_PLUGIN_SECRET` must be set alongside `RHINO_MCP_BIND_HOST` — the plugin refuses to listen on a non-loopback address without it (it would otherwise expose unauthenticated code execution to the network). Set the same secret on the MCP server machine.
+
 **macOS — temporary (current terminal session only):**
 ```bash
 export RHINO_MCP_BIND_HOST=0.0.0.0
+export RHINO_MCP_PLUGIN_SECRET=your-shared-secret
 open -a "Rhino 8"
 ```
 
@@ -1353,6 +1371,7 @@ open -a "Rhino 8"
 ```bash
 # Write a launchd environment variable
 launchctl setenv RHINO_MCP_BIND_HOST 0.0.0.0
+launchctl setenv RHINO_MCP_PLUGIN_SECRET your-shared-secret
 # Takes effect for new processes — restart Rhino if it's already running.
 # To remove later:
 launchctl unsetenv RHINO_MCP_BIND_HOST
@@ -1361,6 +1380,7 @@ launchctl unsetenv RHINO_MCP_BIND_HOST
 **Windows — temporary (current PowerShell session):**
 ```powershell
 $env:RHINO_MCP_BIND_HOST = "0.0.0.0"
+$env:RHINO_MCP_PLUGIN_SECRET = "your-shared-secret"
 & "C:\Program Files\Rhino 8\System\Rhino.exe"
 ```
 
@@ -1368,6 +1388,8 @@ $env:RHINO_MCP_BIND_HOST = "0.0.0.0"
 ```powershell
 [System.Environment]::SetEnvironmentVariable(
     "RHINO_MCP_BIND_HOST", "0.0.0.0", "User")
+[System.Environment]::SetEnvironmentVariable(
+    "RHINO_MCP_PLUGIN_SECRET", "your-shared-secret", "User")
 # Restart Rhino after setting.
 # To remove:
 [System.Environment]::SetEnvironmentVariable(
@@ -1376,8 +1398,9 @@ $env:RHINO_MCP_BIND_HOST = "0.0.0.0"
 
 Then in Rhino: run `MCPStart`. The confirmation message shows the actual bind address:
 ```
-Rhino MCP server started on 0.0.0.0:1999
+Rhino MCP listening on 0.0.0.0:1999
 ```
+If `RHINO_MCP_PLUGIN_SECRET` is not set, `MCPStart` refuses with a message explaining what to set.
 
 Run `MCPStatus` at any time to confirm:
 ```

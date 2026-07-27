@@ -150,7 +150,9 @@ rm -rf /Users/Shared/rhino_mcp/.venv-arm64 /Users/Shared/rhino_mcp/.venv-x86_64
 # ── 9. Install rhino-mcp into both venvs ──────────────────────────────────────
 echo "[7/14] Installing rhino-mcp into venvs..."
 /Users/Shared/rhino_mcp/.venv-arm64/bin/pip install --quiet "$ROOT"
-/Users/Shared/rhino_mcp/.venv-x86_64/bin/pip install --quiet "$ROOT"
+# cryptography >= 49 ships no macOS x86_64/universal2 wheels — without the pin
+# pip falls back to a source build that needs a Rust x86_64 cross target.
+/Users/Shared/rhino_mcp/.venv-x86_64/bin/pip install --quiet "$ROOT" "cryptography<49"
 
 # ── 10. Write VERSION file ────────────────────────────────────────────────────
 echo "[8/14] Writing VERSION..."
@@ -273,13 +275,39 @@ pkgbuild \
 rm -rf "$BUILDTMP"
 
 echo ""
-echo "=== Done! ==="
+echo "=== Build done ==="
 echo "    Installer:   $FINAL_PKG"
 echo "    Uninstaller: $UNINSTALLER_PKG"
 echo "    Installer size: $(du -sh "$FINAL_PKG" | cut -f1)"
+
+# ── 18. Sign, notarize, staple ───────────────────────────────────────────────
+# Signs with the Developer ID Installer cert detected above. Notarization runs
+# when NOTARY_PROFILE is set (a notarytool keychain profile, e.g. created with
+# `xcrun notarytool store-credentials`); set it in .env to fully automate.
+SIGNED_FINAL="$ROOT/release/rhino-mcp-${VERSION}-universal-signed.pkg"
+SIGNED_UNINSTALL="$ROOT/release/rhino-mcp-${VERSION}-universal-uninstaller-signed.pkg"
+
 echo ""
-echo "    To sign:"
-echo "      productsign --sign \"Developer ID Installer: Jesus Ayala (N859JA9UCJ)\" \\"
-echo "        $FINAL_PKG release/rhino-mcp-${VERSION}-universal-signed.pkg"
-echo "      productsign --sign \"Developer ID Installer: Jesus Ayala (N859JA9UCJ)\" \\"
-echo "        $UNINSTALLER_PKG release/rhino-mcp-${VERSION}-universal-uninstaller-signed.pkg"
+echo "[15] Signing packages with: $INSTALLER_SIGNING_ID"
+productsign --sign "$INSTALLER_SIGNING_ID" "$FINAL_PKG" "$SIGNED_FINAL"
+productsign --sign "$INSTALLER_SIGNING_ID" "$UNINSTALLER_PKG" "$SIGNED_UNINSTALL"
+
+if [ -n "${NOTARY_PROFILE:-}" ]; then
+    echo "[16] Notarizing with keychain profile '$NOTARY_PROFILE' (this can take a few minutes)..."
+    xcrun notarytool submit "$SIGNED_FINAL" --keychain-profile "$NOTARY_PROFILE" --wait
+    xcrun notarytool submit "$SIGNED_UNINSTALL" --keychain-profile "$NOTARY_PROFILE" --wait
+    echo "[17] Stapling notarization tickets..."
+    xcrun stapler staple "$SIGNED_FINAL"
+    xcrun stapler staple "$SIGNED_UNINSTALL"
+    echo "[18] Gatekeeper check:"
+    spctl -a -vv -t install "$SIGNED_FINAL"
+else
+    echo "    NOTARY_PROFILE not set — skipping notarization. To notarize:"
+    echo "      xcrun notarytool submit $SIGNED_FINAL --keychain-profile <profile> --wait"
+    echo "      xcrun stapler staple $SIGNED_FINAL"
+fi
+
+echo ""
+echo "=== Done! ==="
+echo "    Signed installer:   $SIGNED_FINAL"
+echo "    Signed uninstaller: $SIGNED_UNINSTALL"

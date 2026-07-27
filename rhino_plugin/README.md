@@ -251,7 +251,7 @@ The repository also includes `.github/workflows/release-plugin.yml` for automate
 | Rhino versions | Rhino 7 and Rhino 8 | |
 | Target framework | `net8.0` | |
 | `RHINO_MCP_BIND_HOST` | `127.0.0.1` | Bind address. `0.0.0.0` = any interface. |
-| `RHINO_MCP_PLUGIN_SECRET` | *(unset)* | Pre-shared key for authentication. Required when binding to a non-loopback address. |
+| `RHINO_MCP_PLUGIN_SECRET` | *(unset)* | Pre-shared key for authentication. Required when binding to a non-loopback address — the server refuses to start listening without it. |
 
 **Slot Announcement**
 
