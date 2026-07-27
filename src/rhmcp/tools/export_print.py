@@ -86,27 +86,33 @@ if not selected:
     result = {"path": _mcp_path, "format": "STL", "binary": _mcp_binary, "ok": False,
               "error": "No objects selected for export."}
 else:
-    # --- Optionally override mesh tolerance ---------------------------------
-    if _mcp_tolerance is not None:
-        mp = Rhino.Geometry.MeshingParameters.Default
-        mp.RelativeTolerance = 0.0
-        mp.MinimumTolerance = float(_mcp_tolerance)
-        mp.Tolerance = float(_mcp_tolerance)
-        Rhino.ApplicationSettings.MeshingParameters.CurrentParameters = mp
-
     # --- Attempt RhinoCommon FileIO write first, fall back to _-Export ------
     _wrote_ok = False
+    _binary_applied = False
+    _tolerance_applied = False
     try:
         opts = Rhino.FileIO.FileStlWriteOptions()
         opts.ExportOpenObjects = True
-        if hasattr(opts, 'ExportBinaryFile'):
-            opts.ExportBinaryFile = bool(_mcp_binary)
-        _wrote_ok = Rhino.FileIO.RhinoFile.Write(_mcp_path, opts)
+        opts.BinaryFile = bool(_mcp_binary)
+        _binary_applied = True
+        if _mcp_tolerance is not None:
+            mp = Rhino.Geometry.MeshingParameters.Default
+            mp.RelativeTolerance = 0.0
+            mp.MinimumTolerance = float(_mcp_tolerance)
+            mp.Tolerance = float(_mcp_tolerance)
+            opts.MeshingParameters = mp
+            _tolerance_applied = True
+        # ExportSelected honours the selection made above.
+        _wrote_ok = bool(doc.ExportSelected(_mcp_path, opts.ToDictionary()))
     except Exception as _fe:
         pass
 
     if not _wrote_ok:
-        # Fall back: use the interactive Export command on the current selection
+        # Fall back: use the Export command on the current selection.  This
+        # uses Rhino's current STL settings, so binary/tolerance requests
+        # are not applied here.
+        _binary_applied = False
+        _tolerance_applied = False
         _mcp_path_safe = _mcp_path.replace('"', '').replace('\r', '').replace('\n', '').replace('\0', '')
         _cmd = '_-Export "{}" _Enter'.format(_mcp_path_safe)
         rs.Command(_cmd, False)
@@ -117,8 +123,16 @@ else:
         "path": _mcp_path,
         "format": "STL",
         "binary": _mcp_binary,
+        "binary_applied": _binary_applied,
         "ok": bool(_wrote_ok),
     }
+    if _mcp_tolerance is not None:
+        result["tolerance_applied"] = _tolerance_applied
+    if _wrote_ok and not _binary_applied:
+        result["note"] = (
+            "Exported via the _-Export command using Rhino's current STL "
+            "settings; the requested binary/tolerance settings were not applied."
+        )
     if not _wrote_ok:
         result["error"] = "Export produced no output file at: {}".format(_mcp_path)
 '''

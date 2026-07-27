@@ -7,6 +7,9 @@ from mcp.types import ToolAnnotations
 
 from rhmcp.tools_helpers import backend as rhino
 
+# Panel (GH_Panel) type GUID.
+_PANEL_GUID = "59e0b89a-e487-49f8-bab8-b5bab16be14c"
+
 
 def _search(query: str) -> list[dict]:
     return rhino.plugin_result("gh_search_components", {"query": query}).get("result", {}).get("components", [])
@@ -14,7 +17,7 @@ def _search(query: str) -> list[dict]:
 
 def _find_guid(query: str) -> str | None:
     comps = _search(query)
-    return comps[0]["id"] if comps else None
+    return comps[0].get("guid") if comps else None
 
 
 def _check_elefront() -> str | None:
@@ -29,12 +32,53 @@ def _check_human() -> str | None:
     return None
 
 
-def _add(guid: str, x: float, y: float) -> dict:
-    return rhino.plugin_result("gh_add_component", {"component_guid": guid, "x": x, "y": y})
+def _err(resp: dict) -> str | None:
+    """Return the error message from a plugin_result response, or None on success."""
+    if not isinstance(resp, dict):
+        return "Plugin returned an unexpected response."
+    if resp.get("ok") is False:
+        return str(resp.get("error") or resp.get("message") or "Plugin command failed.")
+    inner = resp.get("result")
+    if isinstance(inner, dict) and (inner.get("ok") is False or inner.get("success") is False):
+        return str(inner.get("error") or inner.get("message") or "Plugin command failed.")
+    return None
 
 
-def _wire(src: str, sp: str, tgt: str, tp: str) -> None:
-    rhino.plugin_result("gh_connect_wire", {"source_instance_guid": src, "source_param_name": sp, "target_instance_guid": tgt, "target_param_name": tp})
+def _place(guid: str, x: float, y: float) -> tuple[str, str | None]:
+    """Place a component; return (instance_guid, error). error is None on success."""
+    placed = rhino.plugin_result("gh_add_component", {"component_guid": guid, "x": x, "y": y})
+    err = _err(placed)
+    if err:
+        return "", err
+    iid = placed.get("result", {}).get("instance_guid", "")
+    if not iid:
+        return "", "Component was placed but no instance_guid was returned."
+    return iid, None
+
+
+def _wire(src: str, sp: str, tgt: str, tp: str) -> str | None:
+    """Connect a wire; return an error message on failure, None on success."""
+    resp = rhino.plugin_result("gh_connect_wire", {
+        "from_guid": src,
+        "from_output": sp,
+        "to_guid": tgt,
+        "to_input": tp,
+    })
+    return _err(resp)
+
+
+def _feed_text(target_iid: str, input_name: str, text: str, x: float, y: float) -> dict[str, object]:
+    """Place a Panel, set its text, and wire it into a named input on the target component."""
+    panel_iid, err = _place(_PANEL_GUID, x, y)
+    if err:
+        return {"success": False, "error": f"Could not place Panel for input '{input_name}': {err}"}
+    err = _err(rhino.plugin_result("gh_set_panel", {"instance_guid": panel_iid, "text": text}))
+    if err:
+        return {"success": False, "error": f"Could not set text on Panel for input '{input_name}': {err}"}
+    err = _wire(panel_iid, "out", target_iid, input_name)
+    if err:
+        return {"success": False, "error": f"Could not wire Panel into input '{input_name}': {err}"}
+    return {"success": True, "param_instance_guid": panel_iid}
 
 
 def register(mcp: FastMCP) -> None:
@@ -48,7 +92,10 @@ def register(mcp: FastMCP) -> None:
         canvas_y: float = 0.0,
     ) -> dict[str, object]:
         """
-        Place an Elefront Bake Objects component, connect geometry, and configure layer, name, and user text.
+        Place an Elefront Bake Objects component, connect geometry, and configure
+        layer, name, and user text via wired Panels. Each user_text pair adds one
+        Panel wired into K and one into V (wires merge, so keys and values stay in
+        matching order).
         user_text: dict of key→value pairs to set as object user text.
         """
         err = _check_elefront()
@@ -57,16 +104,29 @@ def register(mcp: FastMCP) -> None:
         guid = _find_guid("Bake Objects")
         if not guid:
             return {"success": False, "message": "Could not find Elefront 'Bake Objects' component."}
-        placed = _add(guid, canvas_x, canvas_y)
-        iid = placed.get("result", {}).get("instance_guid", "")
-        _wire(component_instance_guid, "geometry", iid, "G")
-        rhino.plugin_result("gh_set_panel", {"instance_guid": iid, "param_name": "L", "value": layer})
+        iid, perr = _place(guid, canvas_x, canvas_y)
+        if perr:
+            return {"success": False, "error": perr}
+        werr = _wire(component_instance_guid, "geometry", iid, "G")
+        if werr:
+            return {"success": False, "error": werr, "instance_guid": iid}
+        fed = _feed_text(iid, "L", layer, canvas_x - 200, canvas_y)
+        if not fed.get("success"):
+            return {"success": False, "error": fed.get("error"), "instance_guid": iid}
         if name:
-            rhino.plugin_result("gh_set_panel", {"instance_guid": iid, "param_name": "N", "value": name})
+            fed = _feed_text(iid, "N", name, canvas_x - 200, canvas_y + 60)
+            if not fed.get("success"):
+                return {"success": False, "error": fed.get("error"), "instance_guid": iid}
         if user_text:
+            offset = 0.0
             for k, v in user_text.items():
-                rhino.plugin_result("gh_set_panel", {"instance_guid": iid, "param_name": "K", "value": k})
-                rhino.plugin_result("gh_set_panel", {"instance_guid": iid, "param_name": "V", "value": v})
+                fed = _feed_text(iid, "K", k, canvas_x - 200, canvas_y + 120 + offset)
+                if not fed.get("success"):
+                    return {"success": False, "error": fed.get("error"), "instance_guid": iid}
+                fed = _feed_text(iid, "V", v, canvas_x - 100, canvas_y + 120 + offset)
+                if not fed.get("success"):
+                    return {"success": False, "error": fed.get("error"), "instance_guid": iid}
+                offset += 60.0
         return {"success": True, "instance_guid": iid}
 
     @mcp.tool(annotations=ToolAnnotations(title="Elefront: Reference Objects by Filter", destructiveHint=True))
@@ -77,21 +137,28 @@ def register(mcp: FastMCP) -> None:
         canvas_x: float = 0.0,
         canvas_y: float = 0.0,
     ) -> dict[str, object]:
-        """Place an Elefront Reference by Filter component and configure filter criteria."""
+        """Place an Elefront Reference by Filter component and configure filter criteria via wired Panels."""
         err = _check_elefront()
         if err:
             return {"success": False, "message": err}
         guid = _find_guid("Reference by Filter")
         if not guid:
             return {"success": False, "message": "Could not find 'Reference by Filter' component."}
-        placed = _add(guid, canvas_x, canvas_y)
-        iid = placed.get("result", {}).get("instance_guid", "")
+        iid, perr = _place(guid, canvas_x, canvas_y)
+        if perr:
+            return {"success": False, "error": perr}
         if layer:
-            rhino.plugin_result("gh_set_panel", {"instance_guid": iid, "param_name": "L", "value": layer})
+            fed = _feed_text(iid, "L", layer, canvas_x - 200, canvas_y)
+            if not fed.get("success"):
+                return {"success": False, "error": fed.get("error"), "instance_guid": iid}
         if name_filter:
-            rhino.plugin_result("gh_set_panel", {"instance_guid": iid, "param_name": "N", "value": name_filter})
+            fed = _feed_text(iid, "N", name_filter, canvas_x - 200, canvas_y + 60)
+            if not fed.get("success"):
+                return {"success": False, "error": fed.get("error"), "instance_guid": iid}
         if user_text_key:
-            rhino.plugin_result("gh_set_panel", {"instance_guid": iid, "param_name": "K", "value": user_text_key})
+            fed = _feed_text(iid, "K", user_text_key, canvas_x - 200, canvas_y + 120)
+            if not fed.get("success"):
+                return {"success": False, "error": fed.get("error"), "instance_guid": iid}
         return {"success": True, "instance_guid": iid}
 
     @mcp.tool(annotations=ToolAnnotations(title="Elefront: Set User Text", destructiveHint=True))
@@ -109,11 +176,18 @@ def register(mcp: FastMCP) -> None:
         guid = _find_guid("Set User Text")
         if not guid:
             return {"success": False, "message": "Could not find 'Set User Text' component."}
-        placed = _add(guid, canvas_x, canvas_y)
-        iid = placed.get("result", {}).get("instance_guid", "")
-        _wire(component_instance_guid, "geometry", iid, "G")
-        rhino.plugin_result("gh_set_panel", {"instance_guid": iid, "param_name": "K", "value": key})
-        rhino.plugin_result("gh_set_panel", {"instance_guid": iid, "param_name": "V", "value": value})
+        iid, perr = _place(guid, canvas_x, canvas_y)
+        if perr:
+            return {"success": False, "error": perr}
+        werr = _wire(component_instance_guid, "geometry", iid, "G")
+        if werr:
+            return {"success": False, "error": werr, "instance_guid": iid}
+        fed = _feed_text(iid, "K", key, canvas_x - 200, canvas_y + 60)
+        if not fed.get("success"):
+            return {"success": False, "error": fed.get("error"), "instance_guid": iid}
+        fed = _feed_text(iid, "V", value, canvas_x - 200, canvas_y + 120)
+        if not fed.get("success"):
+            return {"success": False, "error": fed.get("error"), "instance_guid": iid}
         return {"success": True, "instance_guid": iid}
 
     @mcp.tool(annotations=ToolAnnotations(title="Human: Get Object Attributes", destructiveHint=True))
@@ -122,16 +196,19 @@ def register(mcp: FastMCP) -> None:
         canvas_x: float = 0.0,
         canvas_y: float = 0.0,
     ) -> dict[str, object]:
-        """Place a Human Get Object Attributes component and set the object ID."""
+        """Place a Human Get Object Attributes component and feed the object ID via a wired Panel."""
         err = _check_human()
         if err:
             return {"success": False, "message": err}
         guid = _find_guid("Get Object Attributes")
         if not guid:
             return {"success": False, "message": "Could not find Human 'Get Object Attributes' component."}
-        placed = _add(guid, canvas_x, canvas_y)
-        iid = placed.get("result", {}).get("instance_guid", "")
-        rhino.plugin_result("gh_set_panel", {"instance_guid": iid, "param_name": "Object", "value": rhino_object_id})
+        iid, perr = _place(guid, canvas_x, canvas_y)
+        if perr:
+            return {"success": False, "error": perr}
+        fed = _feed_text(iid, "Object", rhino_object_id, canvas_x - 200, canvas_y)
+        if not fed.get("success"):
+            return {"success": False, "error": fed.get("error"), "instance_guid": iid}
         return {"success": True, "instance_guid": iid}
 
     @mcp.tool(annotations=ToolAnnotations(title="Human: Set User Text on Objects", destructiveHint=True))
@@ -149,9 +226,16 @@ def register(mcp: FastMCP) -> None:
         guid = _find_guid("Set User Text")
         if not guid:
             return {"success": False, "message": "Could not find Human 'Set User Text' component."}
-        placed = _add(guid, canvas_x, canvas_y)
-        iid = placed.get("result", {}).get("instance_guid", "")
-        _wire(component_instance_guid, "geometry", iid, "Objects")
-        _wire(value_component_instance_guid, "value", iid, "Value")
-        rhino.plugin_result("gh_set_panel", {"instance_guid": iid, "param_name": "Key", "value": key})
+        iid, perr = _place(guid, canvas_x, canvas_y)
+        if perr:
+            return {"success": False, "error": perr}
+        werr = _wire(component_instance_guid, "geometry", iid, "Objects")
+        if werr:
+            return {"success": False, "error": werr, "instance_guid": iid}
+        werr = _wire(value_component_instance_guid, "value", iid, "Value")
+        if werr:
+            return {"success": False, "error": werr, "instance_guid": iid}
+        fed = _feed_text(iid, "Key", key, canvas_x - 200, canvas_y + 60)
+        if not fed.get("success"):
+            return {"success": False, "error": fed.get("error"), "instance_guid": iid}
         return {"success": True, "instance_guid": iid}

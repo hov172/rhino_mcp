@@ -7,7 +7,7 @@ Rhino 8.11+ includes `rhinocode`, a command line tool that can list running Rhin
 Rhino Python scripts can use `rhinoscriptsyntax` for concise modeling commands and RhinoCommon for lower-level geometry, document, display, file, and viewport APIs. MCP scripts should assign JSON-compatible data to a variable named `result`.
 
 ## Geometry
-Common `rhinoscriptsyntax` constructors include `AddPoint`, `AddLine`, `AddPolyline`, `AddCurve`, `AddCircle`, `AddArc3Pt`, `AddSphere`, `AddEllipsoid`, `AddBox`, `AddCylinder`, `AddCone`, `AddTorus`, `AddPlaneSurface`, `AddMesh`, and `AddText`.
+Common `rhinoscriptsyntax` constructors include `AddPoint`, `AddLine`, `AddPolyline`, `AddCurve`, `AddCircle`, `AddArc3Pt`, `AddSphere`, `AddBox`, `AddCylinder`, `AddCone`, `AddTorus`, `AddPlaneSurface`, `AddMesh`, and `AddText`.
 
 ## Layers
 Use layers to keep generated scenes manageable. Useful functions include `AddLayer`, `DeleteLayer`, `CurrentLayer`, `LayerNames`, `LayerColor`, `LayerVisible`, `LayerLocked`, and `ObjectLayer`.

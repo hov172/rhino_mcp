@@ -277,6 +277,19 @@ def register(mcp: FastMCP) -> None:
         }
         plugin = _try_plugin("capture_viewport", {key: value for key, value in params.items() if value is not None})
         if plugin:
+            # Decode the plugin's base64 image payload into an inline Image
+            # (mirrors urban.py's _capture_view) instead of returning raw text.
+            plugin_result = plugin.get("result") if isinstance(plugin, dict) else None
+            b64_plugin = plugin_result.get("image_data") if isinstance(plugin_result, dict) else None
+            if b64_plugin:
+                meta = {
+                    "path": plugin_result.get("saved_path"),
+                    "saved": bool(plugin_result.get("saved_path")),
+                    "width": plugin_result.get("width", width),
+                    "height": plugin_result.get("height", height),
+                    "viewport_name": plugin_result.get("viewport_name"),
+                }
+                return [meta, Image(data=shrink_png(base64.b64decode(b64_plugin)), format="png")]
             return [plugin]
 
         payload = {"path": path, "width": width, "height": height, "viewport": viewport, "show_grid": show_grid, "show_axes": show_axes, "show_cplane_axes": show_cplane_axes, "zoom_to_fit": zoom_to_fit}
@@ -438,6 +451,14 @@ def _set_color_with_material(doc, oid_str, r_val, g_val, b_val):
         _attr.MaterialIndex = _mat_idx
         doc.Objects.ModifyAttributes(_obj, _attr, True)
 
+def _bbox_center(oid):
+    bbox = rs.BoundingBox(oid)
+    if not bbox:
+        return (0.0, 0.0, 0.0)
+    return ((bbox[0].X + bbox[6].X) / 2.0,
+            (bbox[0].Y + bbox[6].Y) / 2.0,
+            (bbox[0].Z + bbox[6].Z) / 2.0)
+
 data = __mcp_attrs
 _doc = Rhino.RhinoDoc.ActiveDoc
 ids = [oid for oid in data.get("ids", []) if rs.IsObject(oid)]
@@ -458,6 +479,25 @@ for oid in ids:
             current = bbox[0]
             target = data.get("location")
             rs.MoveObject(oid, (target[0] - current.X, target[1] - current.Y, target[2] - current.Z))
+    if data.get("move") is not None:
+        _mv = data.get("move")
+        rs.MoveObject(oid, (float(_mv[0]), float(_mv[1]), float(_mv[2])))
+    if data.get("rotation") is not None:
+        _ctr = _bbox_center(oid)
+        for _angle, _axis in zip(list(data.get("rotation"))[:3], ((1, 0, 0), (0, 1, 0), (0, 0, 1))):
+            if float(_angle):
+                rs.RotateObject(oid, _ctr, float(_angle), _axis)
+    if data.get("scale") is not None:
+        _sc = data.get("scale")
+        if isinstance(_sc, (int, float)):
+            _factors = (float(_sc), float(_sc), float(_sc))
+        else:
+            _factors = tuple(float(v) for v in list(_sc)[:3])
+        rs.ScaleObject(oid, _bbox_center(oid), _factors)
+    if data.get("visible") is True:
+        rs.ShowObject(oid)
+    elif data.get("visible") is False:
+        rs.HideObject(oid)
 rs.Redraw()
 result = {"objects": [str(oid) for oid in ids], "count": len(ids)}
 '''

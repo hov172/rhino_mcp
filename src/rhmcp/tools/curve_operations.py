@@ -344,17 +344,16 @@ elif operation == "split_curve":
     ids = rs.SplitCurve(data["curve_id"], sorted(params), delete_input=bool(data.get("delete_source", True)))
     result = {"result_ids": _name(ids or []), "message": "Curve split"}
 elif operation == "create_rectangle":
-    import math
     c = data["center"]
     w = float(data["width"]) / 2
     h = float(data["height"]) / 2
     n = data.get("plane_normal") or [0, 0, 1]
     plane = rs.PlaneFromNormal(c, n)
     pts = [
-        rs.PlaneClosestPoint(plane, [c[0]-w, c[1]-h, c[2]]) or [c[0]-w, c[1]-h, c[2]],
-        rs.PlaneClosestPoint(plane, [c[0]+w, c[1]-h, c[2]]) or [c[0]+w, c[1]-h, c[2]],
-        rs.PlaneClosestPoint(plane, [c[0]+w, c[1]+h, c[2]]) or [c[0]+w, c[1]+h, c[2]],
-        rs.PlaneClosestPoint(plane, [c[0]-w, c[1]+h, c[2]]) or [c[0]-w, c[1]+h, c[2]],
+        plane.PointAt(-w, -h),
+        plane.PointAt(w, -h),
+        plane.PointAt(w, h),
+        plane.PointAt(-w, h),
     ]
     oid = rs.AddPolyline(pts + [pts[0]])
     result = {"result_ids": _name([oid] if oid else [])}
@@ -376,19 +375,24 @@ elif operation == "create_nurbs_curve":
     result = {"result_ids": _name([oid] if oid else [])}
 
 elif operation == "create_blend_curve":
+    cont = int(data.get("continuity", 1))
+    dom1 = rs.CurveDomain(data["curve1_id"])
+    dom2 = rs.CurveDomain(data["curve2_id"])
     oid = rs.AddBlendCurve(
-        data["curve1_id"], data["curve2_id"],
-        continuity=int(data.get("continuity", 1)))
+        [data["curve1_id"], data["curve2_id"]],
+        [dom1[1], dom2[0]], [False, True], [cont, cont])
     result = {"result_ids": _name([oid] if oid else [])}
 
 elif operation == "fillet_curves":
-    ids = rs.FilletCurves(data["curve1_id"], data["curve2_id"],
-                          float(data["radius"]), trim=bool(data.get("trim", True)))
-    result = {"result_ids": _name(ids or [])}
+    oid = rs.AddFilletCurve(data["curve1_id"], data["curve2_id"],
+                            float(data["radius"]))
+    result = {"result_ids": _name([oid] if oid else [])}
+    if data.get("trim", True):
+        result["note"] = "trim is not supported; the fillet arc was added but the input curves were left untrimmed"
 
 elif operation == "divide_curve":
     pts = rs.DivideCurve(data["curve_id"], int(data["segments"]),
-                         create_points=bool(data.get("create_points", True)),
+                         create_points=False,
                          return_points=True)
     point_ids = []
     if data.get("create_points", True):
@@ -400,7 +404,7 @@ elif operation == "divide_curve":
 
 elif operation == "divide_curve_length":
     pts = rs.DivideCurveLength(data["curve_id"], float(data["length"]),
-                               create_points=bool(data.get("create_points", True)),
+                               create_points=False,
                                return_points=True)
     point_ids = []
     if data.get("create_points", True):

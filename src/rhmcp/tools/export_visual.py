@@ -128,16 +128,17 @@ else:
 # Attempt RhinoCommon FileObjWriteOptions --------------------------------
 _ok = False
 try:
-    opts = Rhino.FileIO.FileObjWriteOptions(Rhino.FileIO.FileWriteOptions())
-    if hasattr(opts, 'ExportMaterialDefinitions'):
-        opts.ExportMaterialDefinitions = _mcp_export_materials
-    if hasattr(opts, 'MapRhinoZToObjY'):
-        opts.MapRhinoZToObjY = True
-    if hasattr(opts, 'WeldAngle'):
-        opts.WeldAngle = _mcp_weld_angle
-    if hasattr(opts, 'ExportTextureCoordinates'):
-        opts.ExportTextureCoordinates = _mcp_export_textures
-    _ok = Rhino.FileIO.FileObj.Write(_mcp_path, doc, opts)
+    _fwo = Rhino.FileIO.FileWriteOptions()
+    _fwo.SuppressDialogBoxes = True
+    _fwo.SuppressAllInput = True
+    if _mcp_object_ids:
+        _fwo.WriteSelectedObjectsOnly = True
+    opts = Rhino.FileIO.FileObjWriteOptions(_fwo)
+    opts.ExportMaterialDefinitions = _mcp_export_materials
+    opts.MapZtoY = True
+    opts.ExportTcs = _mcp_export_textures
+    _rc = Rhino.FileIO.FileObj.Write(_mcp_path, doc, opts)
+    _ok = (_rc == Rhino.PlugIns.WriteFileResult.Success)
 except Exception:
     _ok = False
 
@@ -153,7 +154,10 @@ result = {
     "path": _mcp_path,
     "format": "OBJ",
     "export_materials": _mcp_export_materials,
+    "export_texture_coordinates": _mcp_export_textures,
     "ok": bool(_ok),
+    "requested_not_applied": {"weld_angle": _mcp_weld_angle},
+    "note": "FileObjWriteOptions has no weld-angle option; weld_angle was not applied.",
 }
 '''
 
@@ -177,22 +181,12 @@ else:
 # Attempt RhinoCommon FileFbxWriteOptions --------------------------------
 _ok = False
 try:
-    opts = Rhino.FileIO.FileFbxWriteOptions(Rhino.FileIO.FileWriteOptions())
-    if hasattr(opts, 'FbxVersion'):
-        _version_map = {
-            'FBX201400': Rhino.FileIO.FileFbxWriteOptions.FBXVersion.FBX201400,
-            'FBX201600': Rhino.FileIO.FileFbxWriteOptions.FBXVersion.FBX201600,
-            'FBX201800': Rhino.FileIO.FileFbxWriteOptions.FBXVersion.FBX201800,
-            'FBX202000': Rhino.FileIO.FileFbxWriteOptions.FBXVersion.FBX202000,
-        }
-        _ver = _version_map.get(_mcp_fbx_version)
-        if _ver is not None:
-            opts.FbxVersion = _ver
-    if hasattr(opts, 'EmbedTexturesInFile'):
-        opts.EmbedTexturesInFile = _mcp_embed_textures
-    if hasattr(opts, 'SaveTexturesAsReferences'):
-        opts.SaveTexturesAsReferences = _mcp_save_textures_as_references
-    _ok = Rhino.FileIO.FileFbx.Write(_mcp_path, doc, opts)
+    opts = Rhino.FileIO.FileFbxWriteOptions()
+    if _mcp_object_ids:
+        # ExportSelected honours the selection made above.
+        _ok = bool(doc.ExportSelected(_mcp_path, opts.ToDictionary()))
+    else:
+        _ok = bool(Rhino.FileIO.FileFbx.Write(_mcp_path, doc, opts))
 except Exception:
     _ok = False
 
@@ -207,8 +201,17 @@ rs.UnselectAllObjects()
 result = {
     "path": _mcp_path,
     "format": "FBX",
-    "fbx_version": _mcp_fbx_version,
     "ok": bool(_ok),
+    "requested_not_applied": {
+        "fbx_version": _mcp_fbx_version,
+        "embed_textures": _mcp_embed_textures,
+        "save_textures_as_references": _mcp_save_textures_as_references,
+    },
+    "note": (
+        "FileFbxWriteOptions exposes no FBX version or texture-embedding "
+        "options (only SaveFileAs binary/ascii 6/7, SaveMaterialsAs, "
+        "SaveObjectsAs, etc.); these requested settings were not applied."
+    ),
 }
 '''
 
@@ -237,16 +240,15 @@ _fmt = "GLTF" if _ext == ".gltf" else "GLB"
 # Attempt RhinoCommon FileGltfWriteOptions -------------------------------
 _ok = False
 try:
-    opts = Rhino.FileIO.FileGltfWriteOptions(Rhino.FileIO.FileWriteOptions())
-    if hasattr(opts, 'EmbedTextures'):
-        opts.EmbedTextures = _mcp_embed_textures
-    if hasattr(opts, 'UseDracoCompression'):
-        opts.UseDracoCompression = _mcp_draco_compression
-    if hasattr(opts, 'ExportMaterials'):
-        opts.ExportMaterials = _mcp_export_materials
-    if hasattr(opts, 'ExportTextureCoordinates'):
-        opts.ExportTextureCoordinates = _mcp_export_textures
-    _ok = Rhino.FileIO.FileGltf.Write(_mcp_path, doc, opts)
+    opts = Rhino.FileIO.FileGltfWriteOptions()
+    opts.UseDracoCompression = _mcp_draco_compression
+    opts.ExportMaterials = _mcp_export_materials
+    opts.ExportTextureCoordinates = True
+    if _mcp_object_ids:
+        # ExportSelected honours the selection made above.
+        _ok = bool(doc.ExportSelected(_mcp_path, opts.ToDictionary()))
+    else:
+        _ok = bool(Rhino.FileIO.FileGltf.Write(_mcp_path, doc, opts))
 except Exception:
     _ok = False
 
@@ -260,6 +262,13 @@ rs.UnselectAllObjects()
 result = {
     "path": _mcp_path,
     "format": _fmt,
+    "draco_compression": _mcp_draco_compression,
+    "export_materials": _mcp_export_materials,
     "ok": bool(_ok),
+    "requested_not_applied": {"embed_textures": _mcp_embed_textures},
+    "note": (
+        "FileGltfWriteOptions has no texture-embedding switch; .glb always "
+        "embeds textures and .gltf writes external resources."
+    ),
 }
 '''

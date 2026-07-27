@@ -135,7 +135,16 @@ def _create(spec):
     elif kind == "sphere":
         object_id = rs.AddSphere(_pt(params.get("center")), float(params.get("radius", 1)))
     elif kind == "ellipsoid":
-        object_id = rs.AddEllipsoid(_pt(params.get("center")), params.get("radius_x", 1), params.get("radius_y", 1), params.get("radius_z", 1))
+        # rhinoscriptsyntax has no AddEllipsoid — build a sphere and apply a
+        # per-axis scale about the center instead.
+        center = _pt(params.get("center"))
+        rx = float(params.get("radius_x", 1))
+        ry = float(params.get("radius_y", 1))
+        rz = float(params.get("radius_z", 1))
+        base_r = max(rx, ry, rz)
+        object_id = rs.AddSphere(center, base_r)
+        if object_id and (rx != base_r or ry != base_r or rz != base_r):
+            object_id = rs.ScaleObject(object_id, center, (rx / base_r, ry / base_r, rz / base_r))
     elif kind == "box":
         # Accept width/depth/height as aliases for x_size/y_size/z_size
         def _bv(primary, alias, default=1):
@@ -163,9 +172,13 @@ def _create(spec):
     elif kind == "torus":
         object_id = rs.AddTorus(_pt(params.get("center")), float(params.get("major_radius", 2)), float(params.get("minor_radius", 0.5)))
     elif kind == "plane_surface":
-        object_id = rs.AddPlaneSurface(rs.WorldXYPlane(), float(params.get("width", 1)), float(params.get("height", 1)))
-        if params.get("center"):
-            rs.MoveObject(object_id, _pt(params.get("center")))
+        # AddPlaneSurface grows from the plane origin — offset the origin by
+        # half the extents so the surface is centered on ``center``.
+        ps_width = float(params.get("width", 1))
+        ps_height = float(params.get("height", 1))
+        cx, cy, cz = _pt(params.get("center"))
+        ps_plane = rs.MovePlane(rs.WorldXYPlane(), (cx - ps_width / 2.0, cy - ps_height / 2.0, cz))
+        object_id = rs.AddPlaneSurface(ps_plane, ps_width, ps_height)
     elif kind in {"plane", "plane_surface_oriented"}:
         center = _pt(params.get("center", [0, 0, 0]))
         width = float(params.get("width", 1.0))
@@ -483,11 +496,21 @@ def _create(spec):
     return _apply_common(object_id, spec)
 
 created = []
+errors = []
 for item in __mcp_scene_items:
-    created.append(_create(item))
+    # Catch per-item failures so one bad spec doesn't abort the whole scene —
+    # earlier items stay created and are reported instead of re-created by the
+    # command fallback.
+    try:
+        created.append(_create(item))
+    except Exception as exc:
+        created.append(None)
+        errors.append("{}: {}".format(item.get("type"), exc))
 
 rs.Redraw()
 result = {"created": created, "count": len([item for item in created if item])}
+if errors:
+    result["errors"] = errors
 '''
 
 
@@ -536,6 +559,12 @@ def _run_scene(items: list[dict[str, Any]], rhino_id: str | None, snap_to_grid: 
     code = "__mcp_scene_items = {!r}\n__mcp_snap_grid = {!r}\n{}".format(items, snap_to_grid, _GEOMETRY_SCRIPT)
     result = rhino.execute_python(code, rhino_id=rhino_id)
     if result.get("ok"):
+        return result
+
+    # If the Python attempt partially succeeded, do not fall back to commands —
+    # re-running every item would duplicate the already-created geometry.
+    script_result = result.get("script_result")
+    if isinstance(script_result, dict) and script_result.get("count", 0):
         return result
 
     command_results = []

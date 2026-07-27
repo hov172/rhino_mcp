@@ -119,28 +119,36 @@ else:
 
 _ok = False
 _error = None
+_used_fallback = False
+_schema_applied = False
 
 try:
-    opts = Rhino.FileIO.FileStepWriteOptions()
-    # Map schema string to the enum when the attribute exists
+    opts = Rhino.FileIO.FileStpWriteOptions()
+    # Map schema string to the real StepSchema enum names
     _schema_map = {
-        "AP203": "Ap203",
-        "AP214": "Ap214",
-        "AP242": "Ap242",
+        "AP203": "SF_203",
+        "AP214": "SF_214",
+        "AP242": "SF_242",
     }
     _attr = _schema_map.get(_mcp_schema.upper())
-    if _attr and hasattr(opts, "Schema"):
-        _schema_enum = getattr(Rhino.FileIO.FileStepWriteOptions.StepSchema, _attr, None)
+    if _attr:
+        _schema_enum = getattr(Rhino.FileIO.FileStpWriteOptions.StepSchema, _attr, None)
         if _schema_enum is not None:
             opts.Schema = _schema_enum
-    if hasattr(opts, "Tolerance"):
-        opts.Tolerance = _mcp_tolerance
-    _ok = bool(Rhino.FileIO.RhinoFile.Write(_mcp_path, opts))
+            _schema_applied = True
+    if _mcp_object_ids:
+        # ExportSelected honours the selection made above.
+        _ok = bool(doc.ExportSelected(_mcp_path, opts.ToDictionary()))
+    else:
+        _ok = bool(Rhino.FileIO.FileStp.Write(_mcp_path, doc, opts))
 except Exception as _ex:
     _error = str(_ex)
+
+if not _ok:
     try:
         _mcp_path_safe = _mcp_path.replace('"', '').replace('\r', '').replace('\n', '')
         _ok = bool(rs.Command('_-Export "{}" _Enter'.format(_mcp_path_safe), False))
+        _used_fallback = _ok
     except Exception as _ex2:
         _error = "{} | fallback: {}".format(_error, _ex2)
         _ok = False
@@ -150,10 +158,16 @@ rs.UnselectAllObjects()
 result = {
     "path": _mcp_path,
     "format": "STEP",
-    "schema": _mcp_schema,
-    "tolerance": _mcp_tolerance,
     "ok": _ok,
+    "requested": {"schema": _mcp_schema, "tolerance": _mcp_tolerance},
+    "applied": {"schema": _mcp_schema} if (_schema_applied and not _used_fallback) else {},
+    "note": "FileStpWriteOptions has no tolerance option; tolerance was not applied.",
 }
+if _used_fallback:
+    result["note"] = (
+        "Exported via the _-Export command using Rhino's current STEP "
+        "settings; the requested schema and tolerance were not applied."
+    )
 if _error and not _ok:
     result["error"] = _error
 '''
@@ -178,22 +192,28 @@ else:
 
 _ok = False
 _error = None
+_used_fallback = False
+_tolerance_applied = False
 
 try:
-    opts = Rhino.FileIO.FileIgesWriteOptions()
-    if hasattr(opts, "Tolerance"):
-        opts.Tolerance = _mcp_tolerance
-    # trim_type: "parametric" -> parametric (default), "3d" -> 3-D curves
-    if _mcp_trim_type.lower() == "3d" and hasattr(opts, "TrimCurveType"):
-        _tc = getattr(Rhino.FileIO.FileIgesWriteOptions.IgesTrimCurveType, "Curve3d", None)
-        if _tc is not None:
-            opts.TrimCurveType = _tc
-    _ok = bool(Rhino.FileIO.RhinoFile.Write(_mcp_path, opts))
+    opts = Rhino.FileIO.FileIgsWriteOptions()
+    opts.Tolerance = float(_mcp_tolerance)
+    _tolerance_applied = True
+    if _mcp_object_ids:
+        # ExportSelected honours the selection made above.
+        _ok = bool(doc.ExportSelected(_mcp_path, opts.ToDictionary()))
+    else:
+        _ok = bool(Rhino.FileIO.FileIgs.Write(_mcp_path, doc, opts))
 except Exception as _ex:
     _error = str(_ex)
+    _tolerance_applied = False
+
+if not _ok:
+    _tolerance_applied = False
     try:
         _mcp_path_safe = _mcp_path.replace('"', '').replace('\r', '').replace('\n', '')
         _ok = bool(rs.Command('_-Export "{}" _Enter'.format(_mcp_path_safe), False))
+        _used_fallback = _ok
     except Exception as _ex2:
         _error = "{} | fallback: {}".format(_error, _ex2)
         _ok = False
@@ -203,10 +223,16 @@ rs.UnselectAllObjects()
 result = {
     "path": _mcp_path,
     "format": "IGES",
-    "tolerance": _mcp_tolerance,
-    "trim_type": _mcp_trim_type,
     "ok": _ok,
+    "requested": {"tolerance": _mcp_tolerance, "trim_type": _mcp_trim_type},
+    "applied": {"tolerance": _mcp_tolerance} if _tolerance_applied else {},
+    "note": "FileIgsWriteOptions has no trim-curve-type option; trim_type was not applied.",
 }
+if _used_fallback:
+    result["note"] = (
+        "Exported via the _-Export command using Rhino's current IGES "
+        "settings; the requested tolerance and trim_type were not applied."
+    )
 if _error and not _ok:
     result["error"] = _error
 '''
@@ -240,22 +266,31 @@ else:
 
 _ok = False
 _error = None
+_used_fallback = False
+_version_applied = False
 
 try:
-    opts = Rhino.FileIO.FileAcadWriteOptions()
+    opts = Rhino.FileIO.FileDwgWriteOptions()
     _enum_name = _VERSION_MAP.get(str(_mcp_autocad_version), "Acad2018")
-    if hasattr(opts, "AcadVersion"):
-        _version_enum = getattr(Rhino.FileIO.FileAcadWriteOptions.AcadFileVersion, _enum_name, None)
-        if _version_enum is not None:
-            opts.AcadVersion = _version_enum
-    if hasattr(opts, "ExportLayout"):
-        opts.ExportLayout = bool(_mcp_export_layout)
-    _ok = bool(Rhino.FileIO.RhinoFile.Write(_mcp_path, opts))
+    _version_enum = getattr(Rhino.FileIO.FileDwgWriteOptions.AutocadVersion, _enum_name, None)
+    if _version_enum is not None:
+        opts.Version = _version_enum
+        _version_applied = True
+    if _mcp_object_ids:
+        # ExportSelected honours the selection made above.
+        _ok = bool(doc.ExportSelected(_mcp_path, opts.ToDictionary()))
+    else:
+        _ok = bool(Rhino.FileIO.FileDwg.Write(_mcp_path, doc, opts))
 except Exception as _ex:
     _error = str(_ex)
+    _version_applied = False
+
+if not _ok:
+    _version_applied = False
     try:
         _mcp_path_safe = _mcp_path.replace('"', '').replace('\r', '').replace('\n', '')
         _ok = bool(rs.Command('_-Export "{}" _Enter'.format(_mcp_path_safe), False))
+        _used_fallback = _ok
     except Exception as _ex2:
         _error = "{} | fallback: {}".format(_error, _ex2)
         _ok = False
@@ -265,9 +300,16 @@ rs.UnselectAllObjects()
 result = {
     "path": _mcp_path,
     "format": "DWG" if _mcp_path.lower().endswith(".dwg") else "DXF",
-    "autocad_version": _mcp_autocad_version,
     "ok": _ok,
+    "requested": {"autocad_version": _mcp_autocad_version, "export_layout": _mcp_export_layout},
+    "applied": {"autocad_version": _mcp_autocad_version} if _version_applied else {},
+    "note": "FileDwgWriteOptions has no layout-export option; export_layout was not applied.",
 }
+if _used_fallback:
+    result["note"] = (
+        "Exported via the _-Export command using Rhino's current DWG/DXF "
+        "settings; the requested autocad_version and export_layout were not applied."
+    )
 if _error and not _ok:
     result["error"] = _error
 '''

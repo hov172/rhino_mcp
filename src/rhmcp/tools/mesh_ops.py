@@ -205,41 +205,44 @@ if op == "create":
     result = {"id": _s(oid), "vertex_count": len(data["vertices"]), "face_count": len(data["faces"])}
 
 elif op == "planar":
-    srf_ids = rs.AddPlanarSrf([data["curve_id"]])
-    if srf_ids:
-        oid = rs.MeshBrep(srf_ids[0])
-        rs.DeleteObject(srf_ids[0])
+    oid = rs.AddPlanarMesh(data["curve_id"])
+    if oid:
         rs.Redraw()
-        result = {"id": _s(oid[0] if oid else None)}
+        result = {"id": _s(oid)}
     else:
-        result = {"ok": False, "error": "Could not create planar surface from curve"}
+        result = {"ok": False, "error": "Could not create planar mesh from curve"}
 
 elif op == "from_srf":
     ids = []
+    mp = Rhino.Geometry.MeshingParameters.Default
     for sid in data["object_ids"]:
-        meshes = rs.MeshBrep(sid)
-        ids.extend(meshes or [])
+        brep = rs.coercebrep(sid)
+        if not brep: continue
+        meshes = Rhino.Geometry.Mesh.CreateFromBrep(brep, mp)
+        if not meshes: continue
+        joined = Rhino.Geometry.Mesh()
+        for m in meshes:
+            joined.Append(m)
+        oid = Rhino.RhinoDoc.ActiveDoc.Objects.AddMesh(joined)
+        if oid: ids.append(oid)
     rs.Redraw()
     result = {"ids": _n(ids), "count": len(ids)}
 
 elif op == "bool_union":
-    ids = rs.MeshBooleanUnion(data["mesh_ids"])
-    if data.get("delete_input"):
-        for mid in data["mesh_ids"]: rs.DeleteObject(mid)
+    ids = rs.MeshBooleanUnion(data["mesh_ids"],
+                              delete_input=data.get("delete_input", True))
     rs.Redraw()
     result = {"ids": _n(ids or [])}
 
 elif op == "bool_diff":
-    ids = rs.MeshBooleanDifference(data["input_ids"], data["subtract_ids"])
-    if data.get("delete_input"):
-        for mid in data["input_ids"] + data["subtract_ids"]: rs.DeleteObject(mid)
+    ids = rs.MeshBooleanDifference(data["input_ids"], data["subtract_ids"],
+                                   delete_input=data.get("delete_input", True))
     rs.Redraw()
     result = {"ids": _n(ids or [])}
 
 elif op == "bool_intersect":
-    ids = rs.MeshBooleanIntersection(data["mesh_ids1"], data["mesh_ids2"])
-    if data.get("delete_input"):
-        for mid in data["mesh_ids1"] + data["mesh_ids2"]: rs.DeleteObject(mid)
+    ids = rs.MeshBooleanIntersection(data["mesh_ids1"], data["mesh_ids2"],
+                                     delete_input=data.get("delete_input", True))
     rs.Redraw()
     result = {"ids": _n(ids or [])}
 
@@ -256,7 +259,7 @@ elif op == "to_nurbs":
     result = {"id": _s(oid)}
 
 elif op == "offset":
-    oid = rs.OffsetMesh(data["mesh_id"], float(data["distance"]))
+    oid = rs.MeshOffset(data["mesh_id"], float(data["distance"]))
     if data.get("delete_input"): rs.DeleteObject(data["mesh_id"])
     rs.Redraw()
     result = {"id": _s(oid)}

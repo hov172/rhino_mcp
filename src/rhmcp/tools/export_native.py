@@ -61,60 +61,51 @@ if _mcp_notes is not None:
     except Exception:
         pass
 
-# Build write options
-options = None
-try:
-    options = Rhino.FileIO.File3dmWriteOptions()
-    if hasattr(options, 'Version'):
-        options.Version = _mcp_rhino_version
-    if hasattr(options, 'SaveRenderMeshes'):
-        options.SaveRenderMeshes = _mcp_render_meshes
-    if hasattr(options, 'SavePreviewImage'):
-        options.SavePreviewImage = _mcp_preview_image
-except Exception:
-    options = None
-
 ok = False
 
 if _mcp_object_ids is None:
     # Save the full document
     try:
-        if options is not None:
-            ok = bool(doc.Write(_mcp_path, options))
-        else:
-            ok = bool(doc.WriteFile(_mcp_path, Rhino.FileIO.FileWriteOptions()))
+        options = Rhino.FileIO.FileWriteOptions()
+        options.SuppressDialogBoxes = True
+        options.SuppressAllInput = True
+        options.FileVersion = int(_mcp_rhino_version)
+        options.IncludeRenderMeshes = _mcp_render_meshes
+        options.IncludePreviewImage = _mcp_preview_image
+        ok = bool(doc.WriteFile(_mcp_path, options))
     except Exception:
         ok = False
     if not ok:
         try:
             _mcp_path_safe = _mcp_path.replace('"', '').replace('\r', '').replace('\n', '')
-            ok = bool(rs.Command('_SaveAs "{}" _Enter'.format(_mcp_path_safe), False))
+            ok = bool(rs.Command(
+                '_-SaveAs _Version={} "{}" _Enter'.format(int(_mcp_rhino_version), _mcp_path_safe),
+                False,
+            ))
         except Exception:
             ok = False
 else:
     # Save only the listed objects into a new File3dm archive
     try:
+        import System
         archive = Rhino.FileIO.File3dm()
-        if options is not None and hasattr(archive, 'Polish'):
-            pass  # version is baked into options at Write time
         for id_str in _mcp_object_ids:
             try:
                 guid = System.Guid(id_str)
             except Exception:
-                import System
-                guid = System.Guid(id_str)
+                continue
             obj = doc.Objects.FindId(guid)
             if obj is not None:
                 archive.Objects.AddObject(obj.Geometry, obj.Attributes)
-        if options is not None:
-            ok = bool(archive.Write(_mcp_path, _mcp_rhino_version))
-        else:
-            ok = bool(archive.Write(_mcp_path, _mcp_rhino_version))
+        ok = bool(archive.Write(_mcp_path, int(_mcp_rhino_version)))
     except Exception as _e:
         ok = False
         try:
             _mcp_path_safe = _mcp_path.replace('"', '').replace('\r', '').replace('\n', '')
-            ok = bool(rs.Command('_SaveAs "{}" _Enter'.format(_mcp_path_safe), False))
+            ok = bool(rs.Command(
+                '_-SaveAs _Version={} "{}" _Enter'.format(int(_mcp_rhino_version), _mcp_path_safe),
+                False,
+            ))
         except Exception:
             ok = False
 

@@ -42,12 +42,28 @@ def connection_settings(
 _MAX_RAW_DISPLAY = 200  # chars of raw response shown in error messages
 
 
-def _decode_chunks(chunks: list[bytes]) -> str:
-    """Decode accumulated chunks as UTF-8, raising ValueError on binary/non-UTF-8 data."""
+class PluginResponseTimeout(OSError):
+    """
+    Timed out waiting for a response *after* the request was delivered.
+
+    The command may still be executing inside Rhino, so this must never be
+    retried — a retry would execute the command a second time.
+    """
+
+
+def _decode_chunks(chunks: list[bytes]) -> str | None:
+    """
+    Decode accumulated chunks as UTF-8.
+
+    Returns None when the buffer ends mid-way through a multi-byte character
+    (more data is needed); raises ValueError on genuinely non-UTF-8 data.
+    """
     raw = b"".join(chunks)
     try:
         return raw.decode("utf-8")
     except UnicodeDecodeError as ex:
+        if ex.end == len(raw) and ex.start >= len(raw) - 4:
+            return None  # multi-byte char split across recv() boundary
         raise ValueError(
             f"Plugin response contains non-UTF-8 bytes at position {ex.start} — "
             f"this usually means a binary protocol mismatch or corrupted data. "
@@ -65,6 +81,8 @@ def _recv_one(sock: socket.socket) -> dict[str, Any]:
             raise OSError("Connection closed by plugin before response was received")
         chunks.append(chunk)
         text = _decode_chunks(chunks)
+        if text is None:
+            continue
         try:
             parsed, _end = decoder.raw_decode(text)
         except json.JSONDecodeError:
@@ -87,6 +105,15 @@ def _build_payload(command_type: str, params: dict[str, Any]) -> bytes:
     return json.dumps(payload).encode("utf-8")
 
 
+def _response_timeout_error(timeout: float) -> PluginResponseTimeout:
+    return PluginResponseTimeout(
+        f"Timed out after {timeout}s waiting for the Rhino plugin to respond. "
+        "The command may still be running inside Rhino — it was NOT retried to avoid "
+        "duplicate execution. Increase RHINO_MCP_SOCKET_TIMEOUT (or pass a larger "
+        "timeout) for long-running operations."
+    )
+
+
 def _attempt(
     command_type: str,
     params: dict[str, Any],
@@ -99,7 +126,10 @@ def _attempt(
     with socket.create_connection((target_host, target_port), timeout=target_timeout) as sock:
         sock.settimeout(target_timeout)
         sock.sendall(request)
-        return _recv_one(sock)
+        try:
+            return _recv_one(sock)
+        except TimeoutError as ex:
+            raise _response_timeout_error(target_timeout) from ex
 
 
 # ---------------------------------------------------------------------------
@@ -135,15 +165,39 @@ class _KeepAliveConnection:
         with self._lock:
             # Attempt once on the existing connection, then once on a fresh one.
             for attempt in range(2):
+                reused = self._sock is not None
                 try:
                     if self._sock is None:
                         self._sock = socket.create_connection((host, port), timeout=timeout)
-                        self._sock.settimeout(timeout)
+                    # Apply the caller's timeout on every call — the cached
+                    # socket may have been created with a different one.
+                    self._sock.settimeout(timeout)
                     self._sock.sendall(request)
-                    return _recv_one(self._sock)
                 except OSError:
                     self._close()
-                    if attempt == 1:
+                    if not reused or attempt == 1:
+                        raise
+                    continue  # stale cached connection — retry once on a fresh one
+                try:
+                    return _recv_one(self._sock)
+                except TimeoutError as ex:
+                    # The request was delivered; Rhino may still be executing
+                    # it. Never re-send — that would run the command twice.
+                    self._close()
+                    raise _response_timeout_error(timeout) from ex
+                except ValueError:
+                    # Undecodable/foreign bytes: the stream is desynchronized;
+                    # drop the connection so leftovers can't corrupt later calls.
+                    self._close()
+                    raise
+                except OSError:
+                    self._close()
+                    # A reused connection may have been closed while idle
+                    # (Rhino restart, MCPStop) before reading our request —
+                    # one transparent retry on a fresh connection is safe.
+                    # On a fresh connection the plugin may have started work,
+                    # so do not retry.
+                    if not reused or attempt == 1:
                         raise
             raise OSError("unreachable")  # pragma: no cover
 
@@ -202,6 +256,10 @@ def send_command(
             if _keepalive_enabled():
                 return _keepalive.send(command_type, payload, target_host, target_port, target_timeout)
             return _attempt(command_type, payload, target_host, target_port, target_timeout)
+        except PluginResponseTimeout:
+            # The command was delivered and may still be running in Rhino —
+            # retrying would execute it again.
+            raise
         except OSError as exc:
             last_exc = exc
             if attempt < max_retries:

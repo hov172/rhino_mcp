@@ -188,6 +188,8 @@ public static class GHParamHandlers
                 var guid   = ParseGuid(p.String("instance_guid"), "instance_guid");
                 var values = p.DoubleArray("values")
                     ?? throw new ArgumentException("values (list of floats) is required");
+                if (values.Length == 0)
+                    throw new ArgumentException("values must be a non-empty list of floats — an empty list would wipe the parameter");
 
                 var obj = doc.FindObject(guid, false)
                     ?? throw new ArgumentException($"Component {guid} not found");

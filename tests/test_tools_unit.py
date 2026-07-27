@@ -629,7 +629,7 @@ class TestGHDocumentTools(unittest.TestCase):
         fn = self.tools["gh_open_definition"]
         with patch("rhmcp.tools_helpers.backend.plugin_result", return_value={"ok": True}) as mock_plugin:
             fn(path="/tmp/test.gh")
-        mock_plugin.assert_called_once_with("gh_open_document", {"path": "/tmp/test.gh"})
+        mock_plugin.assert_called_once_with("gh_open_document", {"path": "/tmp/test.gh"}, rhino_id=None)
 
     def test_oserror_returns_structured_error(self) -> None:
         """Any GH tool must return ok=False (not raise) when the plugin socket is unavailable."""
@@ -644,14 +644,14 @@ class TestGHDocumentTools(unittest.TestCase):
         fn = self.tools["gh_new_definition"]
         with patch("rhmcp.tools_helpers.backend.plugin_result", return_value={"ok": True}) as mock_plugin:
             fn(name="MyDef")
-        mock_plugin.assert_called_once_with("gh_new_document", {"name": "MyDef"})
+        mock_plugin.assert_called_once_with("gh_new_document", {"name": "MyDef"}, rhino_id=None)
 
     def test_new_definition_omits_name_when_none(self) -> None:
         """gh_new_definition sends empty params when name is None."""
         fn = self.tools["gh_new_definition"]
         with patch("rhmcp.tools_helpers.backend.plugin_result", return_value={"ok": True}) as mock_plugin:
             fn()
-        mock_plugin.assert_called_once_with("gh_new_document", {})
+        mock_plugin.assert_called_once_with("gh_new_document", {}, rhino_id=None)
 
 
 class TestGHCanvasTools(unittest.TestCase):
@@ -667,7 +667,7 @@ class TestGHCanvasTools(unittest.TestCase):
         with patch("rhmcp.tools_helpers.backend.plugin_result", return_value={"ok": True}) as mock_plugin:
             fn(component_guid=guid, x=100.0, y=200.0)
         mock_plugin.assert_called_once_with(
-            "gh_add_component", {"component_guid": guid, "x": 100.0, "y": 200.0}
+            "gh_add_component", {"component_guid": guid, "x": 100.0, "y": 200.0}, rhino_id=None
         )
 
     def test_connect_params_sends_wire_fields(self) -> None:
@@ -865,8 +865,15 @@ class TestLadybugTools(unittest.TestCase):
 
     def test_honeybee_create_room_success(self) -> None:
         fn = self.tools["gh_honeybee_create_room"]
-        with patch("rhmcp.tools_helpers.backend.plugin_result") as mock:
-            mock.return_value = {"result": {"components": [{"id": "hb-guid", "name": "HB Room from Solid"}], "instance_guid": "inst-123"}}
+
+        def mock_plugin(command, params, rhino_id=None):
+            if command == "gh_search_components":
+                return {"ok": True, "result": {"components": [{"guid": "hb-guid", "name": "HB Room from Solid"}]}}
+            if command == "gh_add_component":
+                return {"ok": True, "result": {"instance_guid": "inst-123"}}
+            return {"ok": True, "result": {"ok": True}}
+
+        with patch("rhmcp.tools_helpers.backend.plugin_result", side_effect=mock_plugin):
             result = fn(geometry_component_id="geom-123", room_name="TestRoom")
         self.assertTrue(result["success"])
 

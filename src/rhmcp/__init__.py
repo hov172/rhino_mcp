@@ -83,7 +83,7 @@ def main() -> int:
     parser.add_argument(
         "--compact",
         action=argparse.BooleanOptionalAction,
-        default=os.environ.get("RHMCP_COMPACT", "1") not in ("0", "false", "no"),
+        default=os.environ.get("RHMCP_COMPACT", "1").strip().lower() not in ("0", "false", "no"),
         help=(
             "Compact mode: 3 meta-tools instead of full schemas (default: on). "
             "Use --no-compact or RHMCP_COMPACT=0 to load all schemas upfront."
@@ -217,9 +217,17 @@ def main() -> int:
         mcp.settings.streamable_http_path = "/"
         mcp.settings.stateless_http = True
 
-        _AUTH_TOKEN = secrets.token_hex(32)
-        print(f"Rhino MCP auth token: {_AUTH_TOKEN}", file=sys.stderr)
-        print("Pass this as: Authorization: Bearer <token>", file=sys.stderr)
+        _AUTH_TOKEN = os.environ.get("RHINO_MCP_AUTH_TOKEN") or ""
+        if _AUTH_TOKEN:
+            print("Rhino MCP: using auth token from RHINO_MCP_AUTH_TOKEN", file=sys.stderr)
+        else:
+            _AUTH_TOKEN = secrets.token_hex(32)
+            print(f"Rhino MCP auth token: {_AUTH_TOKEN}", file=sys.stderr)
+            print(
+                "Pass this as: Authorization: Bearer <token> "
+                "(set RHINO_MCP_AUTH_TOKEN for a stable token across restarts)",
+                file=sys.stderr,
+            )
 
         from starlette.requests import Request
         from starlette.responses import JSONResponse
@@ -256,7 +264,10 @@ def main() -> int:
                     if request.url.path == "/health" or request.method == "OPTIONS":
                         return await call_next(request)
                     auth = request.headers.get("Authorization", "")
-                    if not secrets.compare_digest(auth, f"Bearer {_AUTH_TOKEN}"):
+                    # Compare as bytes: compare_digest raises TypeError on
+                    # non-ASCII str input (→ 500 instead of 401).
+                    expected = f"Bearer {_AUTH_TOKEN}".encode()
+                    if not secrets.compare_digest(auth.encode("utf-8", "replace"), expected):
                         return StarletteResponse(
                             '{"error":"Unauthorized"}',
                             status_code=401,
@@ -274,7 +285,11 @@ def main() -> int:
                 async def dispatch(self, request, call_next):
                     if request.url.path == "/health" or request.method == "OPTIONS":
                         return await call_next(request)
-                    token = request.headers.get("Authorization", "anonymous")
+                    # Key by client address, not the raw Authorization header:
+                    # header-keyed windows let an unauthenticated client mint
+                    # unlimited keys and flush legitimate tokens via eviction.
+                    client = request.client
+                    token = client.host if client else "unknown"
                     now = time.time()
                     window_start = now - 60.0
                     with self._lock:
@@ -301,10 +316,17 @@ def main() -> int:
                                     del self._windows[k]
                     return await call_next(request)
 
-            app = Starlette(routes=[
-                Route("/health", health),
-                Mount("/", app=mcp_app),
-            ])
+            app = Starlette(
+                routes=[
+                    Route("/health", health),
+                    Mount("/", app=mcp_app),
+                ],
+                # Starlette does not run mounted sub-app lifespans; without
+                # forwarding it, FastMCP's streamable-http session manager
+                # never starts and every MCP request fails with
+                # "Task group is not initialized".
+                lifespan=lambda _app: mcp_app.router.lifespan_context(mcp_app),
+            )
             app.add_middleware(_TokenAuth)
             app.add_middleware(_RateLimiter)
             return app

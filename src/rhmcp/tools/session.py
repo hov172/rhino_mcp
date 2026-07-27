@@ -34,7 +34,9 @@ def register(mcp: FastMCP) -> None:
 import Rhino
 names = []
 try:
-    names = list(Rhino.Commands.Command.GetCommandNames(__mcp_loaded_only, True))
+    # Signature is GetCommandNames(english, loaded): keep English names and
+    # put loaded_only in the second slot.
+    names = list(Rhino.Commands.Command.GetCommandNames(True, __mcp_loaded_only))
 except Exception:
     try:
         names = list(Rhino.Commands.Command.GetCommandNames())
@@ -112,9 +114,15 @@ result = {"plugins": plugins, "count": len(plugins)}
 from System import Guid
 from Rhino.PlugIns import PlugIn
 if __mcp_plugin.get("path"):
-    loaded_id = Guid.Empty
-    status = PlugIn.LoadPlugIn(__mcp_plugin["path"], loaded_id)
-    result = {"success": str(loaded_id) != str(Guid.Empty), "id": str(loaded_id), "status": str(status)}
+    # LoadPlugIn(string path, out Guid pluginId): the .NET out param cannot be
+    # received through a pre-bound local — both IronPython and Python.NET
+    # return it alongside the bool result.
+    rc = PlugIn.LoadPlugIn(__mcp_plugin["path"])
+    if isinstance(rc, tuple):
+        loaded, loaded_id = rc[0], rc[1]
+    else:
+        loaded, loaded_id = bool(rc), Guid.Empty
+    result = {"success": bool(loaded), "id": str(loaded_id)}
 else:
     plugin_id = Guid(__mcp_plugin["id"])
     result = {"success": bool(PlugIn.LoadPlugIn(plugin_id, True, True)), "id": str(plugin_id)}

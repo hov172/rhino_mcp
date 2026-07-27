@@ -5,7 +5,9 @@ from __future__ import annotations
 from mcp.server.fastmcp import FastMCP
 from mcp.types import ToolAnnotations
 
+from rhmcp.tools_helpers import backend
 from rhmcp.tools_helpers import plugin_client
+from rhmcp.tools_helpers.security import sanitise_rhino_path
 
 
 def _check() -> str | None:
@@ -17,11 +19,69 @@ def _check() -> str | None:
 
 
 def _run(command: str) -> dict:
-    return plugin_client.send_command("run_command", {"command": command})
+    return backend.run_command(command)
 
 
 def _py(code: str) -> dict:
-    return plugin_client.send_command("execute_rhinoscript_python_code", {"code": code})
+    return backend.execute_python(code)
+
+
+def _outcome(res: dict) -> tuple[bool, str | None]:
+    """Extract (ok, error) from a backend response so failures propagate."""
+    ok = bool(res.get("ok"))
+    if ok:
+        return True, None
+    return False, str(res.get("error") or res.get("message") or "Rhino command failed")
+
+
+# Guarded probe for a VisualARQ Python scripting module. VisualARQ does not
+# document a Python API, so we only ever *look* for one (no blind imports) and
+# fail honestly when none is found. Works in both IronPython 2 (imp) and
+# CPython 3 (importlib.util.find_spec).
+_VA_PROBE = r'''
+def _find_va_module():
+    names = ("VisualARQ", "visualarq")
+    try:
+        from importlib.util import find_spec
+    except ImportError:
+        find_spec = None
+    for _name in names:
+        if find_spec is not None:
+            try:
+                if find_spec(_name) is not None:
+                    return _name
+            except (ImportError, ValueError):
+                continue
+        else:
+            try:
+                import imp
+                imp.find_module(_name)
+                return _name
+            except ImportError:
+                continue
+    return None
+
+_VA_UNAVAILABLE = (
+    "VisualARQ does not expose a documented Python scripting module in this "
+    "Rhino Python environment (checked: VisualARQ, visualarq). Use VisualARQ's "
+    "interactive commands or its Grasshopper components instead."
+)
+'''
+
+
+def _va_script_result(operation: str) -> dict:
+    """Run the probe inside Rhino and return an honest ok:False response."""
+    code = _VA_PROBE + f"""
+_mod = _find_va_module()
+if _mod is None:
+    result = {{"ok": False, "error": _VA_UNAVAILABLE}}
+else:
+    result = {{"ok": False, "error": (
+        "Python module '%s' is present, but rhino_mcp has no verified "
+        "VisualARQ scripting API for {operation}; refusing to guess at an "
+        "undocumented API." % _mod)}}
+"""
+    return _py(code)
 
 
 def register(mcp: FastMCP) -> None:
@@ -40,19 +100,16 @@ def register(mcp: FastMCP) -> None:
         err = _check()
         if err:
             return {"success": False, "message": err}
-        sx, sy, sz = start_pt[:3]
-        ex, ey, ez = end_pt[:3]
-        code = f"""
-import visualarq.py as va
-import Rhino.Geometry as rg
-start = rg.Point3d({sx}, {sy}, {sz})
-end = rg.Point3d({ex}, {ey}, {ez})
-style_id = va.vaWallStyles.FindByName({style_name!r})
-wall_id = va.vaWall.Add(start, end, {height}, style_id)
-result = {{"wall_id": str(wall_id)}}
-"""
-        res = _py(code)
-        return {"success": True, "start_pt": start_pt, "end_pt": end_pt, "height": height, "style": style_name, "result": res}
+        res = _va_script_result("creating walls")
+        ok, error = _outcome(res)
+        out: dict[str, object] = {
+            "success": ok,
+            "requested": {"start_pt": start_pt, "end_pt": end_pt, "height": height, "style": style_name},
+            "result": res,
+        }
+        if error:
+            out["error"] = error
+        return out
 
     @mcp.tool(annotations=ToolAnnotations(title="VisualARQ: Add Opening (Window/Door)", destructiveHint=True))
     def varq_add_opening(
@@ -73,7 +130,20 @@ result = {{"wall_id": str(wall_id)}}
             return {"success": False, "message": err}
         cmd = "vaWindow" if opening_type.lower() == "window" else "vaDoor"
         result = _run(f"_{cmd}")
-        return {"success": True, "wall_id": wall_id, "opening_type": opening_type, "width": width, "height": height, "result": result}
+        ok, error = _outcome(result)
+        out: dict[str, object] = {
+            "success": ok,
+            "opening_type": opening_type,
+            "note": (
+                f"_{cmd} is an interactive VisualARQ command that expects mouse "
+                "input; wall_id, position_along_wall, width, height, and "
+                "style_name could not be applied programmatically."
+            ),
+            "result": result,
+        }
+        if error:
+            out["error"] = error
+        return out
 
     @mcp.tool(annotations=ToolAnnotations(title="VisualARQ: Create Slab", destructiveHint=True))
     def varq_create_slab(
@@ -87,7 +157,19 @@ result = {{"wall_id": str(wall_id)}}
         if err:
             return {"success": False, "message": err}
         result = _run("_vaSlab")
-        return {"success": True, "boundary_count": len(boundary_curve_ids), "thickness": thickness, "style": style_name, "result": result}
+        ok, error = _outcome(result)
+        out: dict[str, object] = {
+            "success": ok,
+            "note": (
+                "_vaSlab is an interactive VisualARQ command that expects mouse "
+                "input; boundary_curve_ids, thickness, and style_name could not "
+                "be applied programmatically."
+            ),
+            "result": result,
+        }
+        if error:
+            out["error"] = error
+        return out
 
     @mcp.tool(annotations=ToolAnnotations(title="VisualARQ: Create Column", destructiveHint=True))
     def varq_create_column(
@@ -101,7 +183,19 @@ result = {{"wall_id": str(wall_id)}}
         if err:
             return {"success": False, "message": err}
         result = _run("_vaColumn")
-        return {"success": True, "position": position, "height": height, "style": style_name, "result": result}
+        ok, error = _outcome(result)
+        out: dict[str, object] = {
+            "success": ok,
+            "note": (
+                "_vaColumn is an interactive VisualARQ command that expects mouse "
+                "input; position, height, and style_name could not be applied "
+                "programmatically."
+            ),
+            "result": result,
+        }
+        if error:
+            out["error"] = error
+        return out
 
     @mcp.tool(annotations=ToolAnnotations(title="VisualARQ: Create Stair", destructiveHint=True))
     def varq_create_stair(
@@ -118,7 +212,19 @@ result = {{"wall_id": str(wall_id)}}
         if err:
             return {"success": False, "message": err}
         result = _run("_vaStair")
-        return {"success": True, "start_pt": start_pt, "width": width, "rise": rise, "run": run, "style": style_name, "result": result}
+        ok, error = _outcome(result)
+        out: dict[str, object] = {
+            "success": ok,
+            "note": (
+                "_vaStair is an interactive VisualARQ command that expects mouse "
+                "input; start_pt, direction, width, rise, run, story_count, and "
+                "style_name could not be applied programmatically."
+            ),
+            "result": result,
+        }
+        if error:
+            out["error"] = error
+        return out
 
     @mcp.tool(annotations=ToolAnnotations(title="VisualARQ: Create Railing", destructiveHint=True))
     def varq_create_railing(
@@ -131,7 +237,19 @@ result = {{"wall_id": str(wall_id)}}
         if err:
             return {"success": False, "message": err}
         result = _run("_vaRailing")
-        return {"success": True, "path_curve_id": path_curve_id, "height": height, "style": style_name, "result": result}
+        ok, error = _outcome(result)
+        out: dict[str, object] = {
+            "success": ok,
+            "note": (
+                "_vaRailing is an interactive VisualARQ command that expects mouse "
+                "input; path_curve_id, height, and style_name could not be "
+                "applied programmatically."
+            ),
+            "result": result,
+        }
+        if error:
+            out["error"] = error
+        return out
 
     @mcp.tool(annotations=ToolAnnotations(title="VisualARQ: Set Level", destructiveHint=True))
     def varq_set_level(name: str, elevation: float = 0.0) -> dict[str, object]:
@@ -140,7 +258,18 @@ result = {{"wall_id": str(wall_id)}}
         if err:
             return {"success": False, "message": err}
         result = _run("_vaLevels")
-        return {"success": True, "name": name, "elevation": elevation, "result": result}
+        ok, error = _outcome(result)
+        out: dict[str, object] = {
+            "success": ok,
+            "note": (
+                "_vaLevels opens the interactive Levels dialog; name and elevation "
+                "could not be applied programmatically."
+            ),
+            "result": result,
+        }
+        if error:
+            out["error"] = error
+        return out
 
     @mcp.tool(annotations=ToolAnnotations(title="VisualARQ: Export IFC", destructiveHint=True))
     def varq_export_ifc(
@@ -154,8 +283,18 @@ result = {{"wall_id": str(wall_id)}}
         err = _check()
         if err:
             return {"success": False, "message": err}
-        result = _run(f"_vaExportIFC {output_path!r}")
-        return {"success": True, "output_path": output_path, "ifc_version": ifc_version, "result": result}
+        safe_path = sanitise_rhino_path(output_path)
+        result = _run('_vaExportIFC "' + safe_path + '"')
+        ok, error = _outcome(result)
+        out: dict[str, object] = {
+            "success": ok,
+            "output_path": output_path,
+            "ifc_version": ifc_version,
+            "result": result,
+        }
+        if error:
+            out["error"] = error
+        return out
 
     @mcp.tool(annotations=ToolAnnotations(title="VisualARQ: Get Object Properties", readOnlyHint=True))
     def varq_get_object_properties(object_id: str) -> dict[str, object]:
@@ -163,18 +302,12 @@ result = {{"wall_id": str(wall_id)}}
         err = _check()
         if err:
             return {"success": False, "message": err}
-        code = f"""
-import visualarq.py as va
-import System
-obj_id = System.Guid({object_id!r})
-va_obj = va.vaObject.GetObject(obj_id)
-if va_obj:
-    result = {{"type": str(va_obj.ObjectType), "style": str(va_obj.StyleId), "level": str(va_obj.LevelId)}}
-else:
-    result = {{"error": "Not a VisualARQ object"}}
-"""
-        res = _py(code)
-        return {"success": True, "object_id": object_id, "result": res}
+        res = _va_script_result("reading object properties")
+        ok, error = _outcome(res)
+        out: dict[str, object] = {"success": ok, "object_id": object_id, "result": res}
+        if error:
+            out["error"] = error
+        return out
 
     @mcp.tool(annotations=ToolAnnotations(title="VisualARQ: List Styles", readOnlyHint=True))
     def varq_list_styles(object_type: str = "wall") -> dict[str, object]:
@@ -185,23 +318,12 @@ else:
         err = _check()
         if err:
             return {"success": False, "message": err}
-        style_map = {
-            "wall": "vaWallStyles",
-            "door": "vaDoorStyles",
-            "window": "vaWindowStyles",
-            "slab": "vaSlabStyles",
-            "column": "vaColumnStyles",
-            "stair": "vaStairStyles",
-            "railing": "vaRailingStyles",
-        }
-        style_cls = style_map.get(object_type.lower())
-        if not style_cls:
-            return {"success": False, "message": f"Unknown object_type '{object_type}'. Valid: {', '.join(style_map)}"}
-        code = f"""
-import visualarq.py as va
-styles = [{style_cls}]
-names = [s.Name for s in styles] if hasattr(styles, '__iter__') else []
-result = {{"object_type": {object_type!r}, "styles": names}}
-"""
-        res = _py(code)
-        return {"success": True, "object_type": object_type, "result": res}
+        valid = ("wall", "door", "window", "slab", "column", "stair", "railing")
+        if object_type.lower() not in valid:
+            return {"success": False, "message": f"Unknown object_type '{object_type}'. Valid: {', '.join(valid)}"}
+        res = _va_script_result(f"listing {object_type.lower()} styles")
+        ok, error = _outcome(res)
+        out: dict[str, object] = {"success": ok, "object_type": object_type, "result": res}
+        if error:
+            out["error"] = error
+        return out

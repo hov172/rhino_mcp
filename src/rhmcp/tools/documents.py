@@ -772,6 +772,15 @@ def register(mcp: FastMCP) -> None:
             if sheet is None:
                 ws = wb.active
             elif isinstance(sheet, int):
+                # Documented as a 1-based index — reject 0 and out-of-range
+                # values instead of silently wrapping around.
+                if sheet < 1 or sheet > len(sheet_names):
+                    wb.close()
+                    return {
+                        "ok": False,
+                        "error": f"Sheet index {sheet} out of range — expected a 1-based index "
+                                 f"between 1 and {len(sheet_names)}. Available sheets: {sheet_names}",
+                    }
                 ws = wb[sheet_names[sheet - 1]]
             else:
                 if sheet not in sheet_names:
@@ -834,7 +843,12 @@ def register(mcp: FastMCP) -> None:
             return {"ok": False, "error": f"Not an SVG file: {path}"}
 
         try:
-            svg_text = p.read_text(encoding="utf-8", errors="replace")
+            raw_bytes = p.read_bytes()
+            # .svgz is gzip-compressed SVG — decompress before decoding.
+            if p.suffix.lower() == ".svgz" or raw_bytes[:2] == b"\x1f\x8b":
+                import gzip
+                raw_bytes = gzip.decompress(raw_bytes)
+            svg_text = raw_bytes.decode("utf-8", errors="replace")
         except Exception as exc:
             return {"ok": False, "error": str(exc)}
 

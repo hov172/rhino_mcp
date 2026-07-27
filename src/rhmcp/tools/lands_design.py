@@ -5,7 +5,9 @@ from __future__ import annotations
 from mcp.server.fastmcp import FastMCP
 from mcp.types import ToolAnnotations
 
+from rhmcp.tools_helpers import backend
 from rhmcp.tools_helpers import plugin_client
+from rhmcp.tools_helpers.security import sanitise_rhino_path
 
 
 def _check() -> str | None:
@@ -17,11 +19,15 @@ def _check() -> str | None:
 
 
 def _run(command: str) -> dict:
-    return plugin_client.send_command("run_command", {"command": command})
+    return backend.run_command(command)
 
 
-def _py(code: str) -> dict:
-    return plugin_client.send_command("execute_rhinoscript_python_code", {"code": code})
+def _outcome(res: dict) -> tuple[bool, str | None]:
+    """Extract (ok, error) from a backend response so failures propagate."""
+    ok = bool(res.get("ok"))
+    if ok:
+        return True, None
+    return False, str(res.get("error") or res.get("message") or "Rhino command failed")
 
 
 def register(mcp: FastMCP) -> None:
@@ -37,7 +43,19 @@ def register(mcp: FastMCP) -> None:
         if err:
             return {"success": False, "message": err}
         result = _run("_laPlant")
-        return {"success": True, "plant_name": plant_name, "position": position, "rotation_degrees": rotation_degrees, "scale": scale, "result": result}
+        ok, error = _outcome(result)
+        out: dict[str, object] = {
+            "success": ok,
+            "note": (
+                "_laPlant is an interactive Lands Design command that expects "
+                "mouse input; plant_name, position, rotation_degrees, and scale "
+                "could not be applied programmatically."
+            ),
+            "result": result,
+        }
+        if error:
+            out["error"] = error
+        return out
 
     @mcp.tool(annotations=ToolAnnotations(title="Lands: Place Tree", destructiveHint=True))
     def lands_place_tree(
@@ -51,7 +69,19 @@ def register(mcp: FastMCP) -> None:
         if err:
             return {"success": False, "message": err}
         result = _run("_laPlant")
-        return {"success": True, "species_name": species_name, "position": position, "trunk_height": trunk_height, "canopy_radius": canopy_radius, "result": result}
+        ok, error = _outcome(result)
+        out: dict[str, object] = {
+            "success": ok,
+            "note": (
+                "_laPlant is an interactive Lands Design command that expects "
+                "mouse input; species_name, position, trunk_height, and "
+                "canopy_radius could not be applied programmatically."
+            ),
+            "result": result,
+        }
+        if error:
+            out["error"] = error
+        return out
 
     @mcp.tool(annotations=ToolAnnotations(title="Lands: Create Terrain", destructiveHint=True))
     def lands_create_terrain(
@@ -68,7 +98,19 @@ def register(mcp: FastMCP) -> None:
         if err:
             return {"success": False, "message": err}
         result = _run("_laTerrain")
-        return {"success": True, "boundary_curve_id": boundary_curve_id, "source_type": source_type, "result": result}
+        ok, error = _outcome(result)
+        out: dict[str, object] = {
+            "success": ok,
+            "note": (
+                "_laTerrain is an interactive Lands Design command; "
+                "boundary_curve_id, source_type, and source_id could not be "
+                "applied programmatically."
+            ),
+            "result": result,
+        }
+        if error:
+            out["error"] = error
+        return out
 
     @mcp.tool(annotations=ToolAnnotations(title="Lands: Create Path", destructiveHint=True))
     def lands_create_path(
@@ -81,7 +123,19 @@ def register(mcp: FastMCP) -> None:
         if err:
             return {"success": False, "message": err}
         result = _run("_laPath")
-        return {"success": True, "centerline_curve_id": centerline_curve_id, "width": width, "surface_type": surface_type, "result": result}
+        ok, error = _outcome(result)
+        out: dict[str, object] = {
+            "success": ok,
+            "note": (
+                "_laPath is an interactive Lands Design command; "
+                "centerline_curve_id, width, and surface_type could not be "
+                "applied programmatically."
+            ),
+            "result": result,
+        }
+        if error:
+            out["error"] = error
+        return out
 
     @mcp.tool(annotations=ToolAnnotations(title="Lands: Create Water Feature", destructiveHint=True))
     def lands_create_water(
@@ -93,7 +147,19 @@ def register(mcp: FastMCP) -> None:
         if err:
             return {"success": False, "message": err}
         result = _run("_laWater")
-        return {"success": True, "boundary_curve_id": boundary_curve_id, "water_level_z": water_level_z, "result": result}
+        ok, error = _outcome(result)
+        out: dict[str, object] = {
+            "success": ok,
+            "note": (
+                "_laWater is an interactive Lands Design command; "
+                "boundary_curve_id and water_level_z could not be applied "
+                "programmatically."
+            ),
+            "result": result,
+        }
+        if error:
+            out["error"] = error
+        return out
 
     @mcp.tool(annotations=ToolAnnotations(title="Lands: Get Plant Database", readOnlyHint=True))
     def lands_get_plant_database(
@@ -105,7 +171,19 @@ def register(mcp: FastMCP) -> None:
         if err:
             return {"success": False, "message": err}
         result = _run("_laPlantDatabase")
-        return {"success": True, "search_query": search_query, "category": category, "result": result}
+        ok, error = _outcome(result)
+        out: dict[str, object] = {
+            "success": ok,
+            "note": (
+                "_laPlantDatabase opens the interactive plant database window; "
+                "search_query and category could not be applied programmatically "
+                "and no plant list is returned."
+            ),
+            "result": result,
+        }
+        if error:
+            out["error"] = error
+        return out
 
     @mcp.tool(annotations=ToolAnnotations(title="Lands: Set Season", destructiveHint=True))
     def lands_set_season(season: str = "summer") -> dict[str, object]:
@@ -120,7 +198,11 @@ def register(mcp: FastMCP) -> None:
         if season.lower() not in valid:
             return {"success": False, "message": f"Invalid season '{season}'. Valid: {', '.join(sorted(valid))}"}
         result = _run(f"_laSeason {season}")
-        return {"success": True, "season": season, "result": result}
+        ok, error = _outcome(result)
+        out: dict[str, object] = {"success": ok, "season": season, "result": result}
+        if error:
+            out["error"] = error
+        return out
 
     @mcp.tool(annotations=ToolAnnotations(title="Lands: Export Plant List", destructiveHint=True))
     def lands_export_plant_list(
@@ -134,5 +216,15 @@ def register(mcp: FastMCP) -> None:
         err = _check()
         if err:
             return {"success": False, "message": err}
-        result = _run(f"_laExportPlantList {output_path!r}")
-        return {"success": True, "output_path": output_path, "format": format, "result": result}
+        safe_path = sanitise_rhino_path(output_path)
+        result = _run('_laExportPlantList "' + safe_path + '"')
+        ok, error = _outcome(result)
+        out: dict[str, object] = {
+            "success": ok,
+            "output_path": output_path,
+            "format": format,
+            "result": result,
+        }
+        if error:
+            out["error"] = error
+        return out

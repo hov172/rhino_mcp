@@ -360,7 +360,9 @@ public static class RhinoHandlers
             ? (int?)ctEl.GetInt32()
             : null;
 
-        doc.Objects.UnselectAll();
+        // In deselect mode, keep the current selection and only remove matches.
+        if (!deselect)
+            doc.Objects.UnselectAll();
         var matchedCount = 0;
 
         foreach (var obj in doc.Objects.Where(o => !o.IsDeleted && !o.IsHidden))
@@ -1891,6 +1893,9 @@ public static class RhinoHandlers
         var startAngleDeg = p.Double("start_angle", 0);
         var endAngleDeg = p.Double("end_angle", 360);
         var plane = new Plane(center, Vector3d.ZAxis);
+        // Arc(plane, radius, angle) starts at the plane X axis — rotate the
+        // plane so the arc actually begins at start_angle.
+        plane.Rotate(RhinoMath.ToRadians(startAngleDeg), plane.ZAxis);
         var arc = new Arc(plane, radius, RhinoMath.ToRadians(endAngleDeg - startAngleDeg));
         return RhinoDoc.ActiveDoc.Objects.AddArc(arc);
     }
@@ -2697,6 +2702,7 @@ public static class RhinoHandlers
     private static readonly Dictionary<(uint docSerialNumber, int layerIndex), string> _layerNameCache = new();
     private static uint _layerNameCacheDocSerial = 0;
     private static readonly object _layerCacheLock = new();
+    private static bool _layerEventHooked;
 
     private static string? LayerName(RhinoObject obj)
     {
@@ -2709,6 +2715,17 @@ public static class RhinoHandlers
 
         lock (_layerCacheLock)
         {
+            if (!_layerEventHooked)
+            {
+                // Invalidate on any layer table change (rename, re-parent,
+                // delete) — cached FullPath strings go stale otherwise.
+                RhinoDoc.LayerTableEvent += (_, _) =>
+                {
+                    lock (_layerCacheLock)
+                        _layerNameCache.Clear();
+                };
+                _layerEventHooked = true;
+            }
             if (serial != _layerNameCacheDocSerial)
             {
                 _layerNameCache.Clear();

@@ -167,7 +167,7 @@ if op == "mirror":
 
 elif op == "copy":
     t = data["translation"]
-    new_ids = rs.CopyObjects(objs, [t]*len(objs)) or []
+    new_ids = rs.CopyObjects(objs, t) or []
     rs.Redraw()
     result = {"ids": [str(o) for o in new_ids], "count": len(new_ids)}
 
@@ -186,7 +186,7 @@ elif op == "array_linear":
     new_ids = []
     for i in range(1, int(data["count"])):
         t = [unit[j] * spacing * i for j in range(3)]
-        copies = rs.CopyObjects(objs, [t]*len(objs)) or []
+        copies = rs.CopyObjects(objs, t) or []
         new_ids.extend(copies)
     rs.Redraw()
     result = {"ids": [str(o) for o in new_ids], "count": len(new_ids)}
@@ -208,6 +208,8 @@ elif op == "array_polar":
     result = {"ids": [str(o) for o in new_ids], "count": len(new_ids)}
 
 elif op == "orient":
+    ref1 = Rhino.Geometry.Point3d(*data["ref1"])
+    tgt1 = Rhino.Geometry.Point3d(*data["tgt1"])
     ref_vec = Rhino.Geometry.Vector3d(
         data["ref2"][0]-data["ref1"][0],
         data["ref2"][1]-data["ref1"][1],
@@ -216,7 +218,9 @@ elif op == "orient":
         data["tgt2"][0]-data["tgt1"][0],
         data["tgt2"][1]-data["tgt1"][1],
         data["tgt2"][2]-data["tgt1"][2])
-    xf = Rhino.Geometry.Transform.Rotation(ref_vec, tgt_vec, Rhino.Geometry.Point3d(*data["ref1"]))
+    move = Rhino.Geometry.Transform.Translation(tgt1 - ref1)
+    rot  = Rhino.Geometry.Transform.Rotation(ref_vec, tgt_vec, tgt1)
+    xf = rot * move
     if data.get("copy"):
         work = [rs.CopyObject(o, [0,0,0]) for o in objs]
     else:

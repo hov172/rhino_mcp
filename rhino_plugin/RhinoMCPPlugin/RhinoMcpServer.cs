@@ -49,11 +49,33 @@ public sealed class RhinoMcpServer
     {
         if (_listener is not null)
             return;
-        _cts = new CancellationTokenSource();
-        _listener = new TcpListener(BindAddress, Port);
-        _listener.Start();
+        if (!IPAddress.IsLoopback(BindAddress) &&
+            string.IsNullOrEmpty(Environment.GetEnvironmentVariable("RHINO_MCP_PLUGIN_SECRET")))
+        {
+            throw new InvalidOperationException(
+                $"Refusing to listen on non-loopback address {BindAddress} without " +
+                "RHINO_MCP_PLUGIN_SECRET set — that would expose unauthenticated code " +
+                "execution to the network. Set RHINO_MCP_PLUGIN_SECRET on both the Rhino " +
+                "machine and the MCP server machine, or unset RHINO_MCP_BIND_HOST to " +
+                "listen on loopback only.");
+        }
+        var cts = new CancellationTokenSource();
+        var listener = new TcpListener(BindAddress, Port);
+        try
+        {
+            listener.Start();
+        }
+        catch
+        {
+            // Leave _listener null so IsRunning stays false and a later
+            // MCPStart can retry instead of claiming "already listening".
+            cts.Dispose();
+            throw;
+        }
+        _cts = cts;
+        _listener = listener;
         SlotAnnouncer.Announce(BindAddress.ToString(), Port);
-        _acceptTask = Task.Run(() => AcceptLoop(_cts.Token));
+        _acceptTask = Task.Run(() => AcceptLoop(cts.Token));
     }
 
     public void Stop()
@@ -102,7 +124,10 @@ public sealed class RhinoMcpServer
             // the client closes it or the server is cancelled.
             while (!token.IsCancellationRequested)
             {
-                var accumulated = new StringBuilder();
+                // Accumulate raw bytes and decode the whole buffer each pass —
+                // decoding per-chunk corrupts multi-byte UTF-8 characters that
+                // straddle a read boundary.
+                using var accumulated = new System.IO.MemoryStream();
 
                 // Read one complete JSON object.
                 while (true)
@@ -117,14 +142,14 @@ public sealed class RhinoMcpServer
 
                     if (read <= 0) return; // client closed connection cleanly
 
-                    accumulated.Append(Encoding.UTF8.GetString(buffer, 0, read));
+                    accumulated.Write(buffer, 0, read);
                     if (accumulated.Length > maxBytes)
                     {
                         RhinoApp.WriteLine("Rhino MCP: request exceeded 10 MB limit — closing connection.");
                         return;
                     }
 
-                    var text = accumulated.ToString().Trim();
+                    var text = Encoding.UTF8.GetString(accumulated.GetBuffer(), 0, (int)accumulated.Length).Trim();
                     if (text.Length == 0) continue;
                     try
                     {
@@ -140,7 +165,7 @@ public sealed class RhinoMcpServer
                 McpResponse response;
                 try
                 {
-                    var text = accumulated.ToString().Trim();
+                    var text = Encoding.UTF8.GetString(accumulated.GetBuffer(), 0, (int)accumulated.Length).Trim();
                     var request = JsonSerializer.Deserialize<McpRequest>(text, JsonHelpers.Options);
                     if (request is null || string.IsNullOrWhiteSpace(request.Type))
                     {

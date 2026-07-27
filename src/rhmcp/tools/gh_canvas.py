@@ -27,7 +27,7 @@ def register(mcp: FastMCP) -> None:
         params: dict[str, object] = {"query": query}
         if limit is not None:
             params["limit"] = limit
-        return _gh("gh_search_components", params)
+        return _gh("gh_search_components", params, rhino_id=rhino_id)
 
     @mcp.tool(annotations=ToolAnnotations(title="List Canvas Components", readOnlyHint=True))
     def gh_list_components(rhino_id: str | None = None) -> dict[str, object]:
@@ -37,7 +37,7 @@ def register(mcp: FastMCP) -> None:
         Returns list of {instance_guid, name, type, x, y}.
         Use gh_get_canvas for full detail including wires.
         """
-        return _gh("gh_list_components", {})
+        return _gh("gh_list_components", {}, rhino_id=rhino_id)
 
     @mcp.tool(annotations=ToolAnnotations(title="Get Canvas State", readOnlyHint=True))
     def gh_get_canvas(
@@ -51,7 +51,7 @@ def register(mcp: FastMCP) -> None:
         params: dict[str, object] = {}
         if include_wires is not None:
             params["include_wires"] = include_wires
-        return _gh("gh_get_canvas", params)
+        return _gh("gh_get_canvas", params, rhino_id=rhino_id)
 
     @mcp.tool(annotations=ToolAnnotations(title="Get Component Info", readOnlyHint=True))
     def gh_get_component_info(
@@ -62,7 +62,7 @@ def register(mcp: FastMCP) -> None:
 
         instance_guid: The instance GUID of the component (from gh_list_components).
         Returns name, nick_name, type,..."""
-        return _gh("gh_get_component_info", {"instance_guid": instance_guid})
+        return _gh("gh_get_component_info", {"instance_guid": instance_guid}, rhino_id=rhino_id)
 
     @mcp.tool(annotations=ToolAnnotations(title="Add Component to Canvas", destructiveHint=True))
     def gh_add_component(
@@ -75,7 +75,7 @@ def register(mcp: FastMCP) -> None:
 
         component_guid: The component type GUID from gh_search_components.
         x, y: Canvas coordinates for placement...."""
-        return _gh("gh_add_component", {"component_guid": component_guid, "x": x, "y": y})
+        return _gh("gh_add_component", {"component_guid": component_guid, "x": x, "y": y}, rhino_id=rhino_id)
 
     @mcp.tool(annotations=ToolAnnotations(title="Remove Component from Canvas", destructiveHint=True))
     def gh_remove_component(
@@ -87,7 +87,7 @@ def register(mcp: FastMCP) -> None:
 
         instance_guid: The instance GUID of the component to remove.
         """
-        return _gh("gh_remove_component", {"instance_guid": instance_guid})
+        return _gh("gh_remove_component", {"instance_guid": instance_guid}, rhino_id=rhino_id)
 
     @mcp.tool(annotations=ToolAnnotations(title="Move Component on Canvas", destructiveHint=True))
     def gh_move_component(
@@ -102,7 +102,7 @@ def register(mcp: FastMCP) -> None:
         instance_guid: The instance GUID of the component.
         x, y: New canvas position (absolute coordinates, not delta).
         """
-        return _gh("gh_move_component", {"instance_guid": instance_guid, "x": x, "y": y})
+        return _gh("gh_move_component", {"instance_guid": instance_guid, "x": x, "y": y}, rhino_id=rhino_id)
 
     @mcp.tool(annotations=ToolAnnotations(title="Rename Component", destructiveHint=True))
     def gh_rename_component(
@@ -116,7 +116,7 @@ def register(mcp: FastMCP) -> None:
         instance_guid: The instance GUID of the component.
         new_name: The new display name.
         """
-        return _gh("gh_rename_component", {"instance_guid": instance_guid, "new_name": new_name})
+        return _gh("gh_rename_component", {"instance_guid": instance_guid, "new_name": new_name}, rhino_id=rhino_id)
 
     @mcp.tool(annotations=ToolAnnotations(title="Set Component Comment", destructiveHint=True))
     def gh_set_component_comment(
@@ -130,7 +130,7 @@ def register(mcp: FastMCP) -> None:
         instance_guid: The instance GUID of the component.
         comment: The description text to attach to the component.
         """
-        return _gh("gh_set_component_comment", {"instance_guid": instance_guid, "comment": comment})
+        return _gh("gh_set_component_comment", {"instance_guid": instance_guid, "comment": comment}, rhino_id=rhino_id)
 
     @mcp.tool(annotations=ToolAnnotations(title="Connect Component Parameters", destructiveHint=True))
     def gh_connect_params(
@@ -149,7 +149,7 @@ def register(mcp: FastMCP) -> None:
             "from_output": from_output,
             "to_guid": to_guid,
             "to_input": to_input,
-        })
+        }, rhino_id=rhino_id)
 
     @mcp.tool(annotations=ToolAnnotations(title="Disconnect Component Parameters", destructiveHint=True))
     def gh_disconnect_params(
@@ -168,7 +168,7 @@ def register(mcp: FastMCP) -> None:
             "from_output": from_output,
             "to_guid": to_guid,
             "to_input": to_input,
-        })
+        }, rhino_id=rhino_id)
 
     @mcp.tool(annotations=ToolAnnotations(title="Add Component Group", destructiveHint=True))
     def gh_add_group(
@@ -186,12 +186,12 @@ def register(mcp: FastMCP) -> None:
             params["label"] = label
         if color is not None:
             params["color"] = color
-        return _gh("gh_add_group", params)
+        return _gh("gh_add_group", params, rhino_id=rhino_id)
 
 
-def _gh(command: str, params: dict[str, object]) -> dict[str, object]:
+def _gh(command: str, params: dict[str, object], rhino_id: str | None = None) -> dict[str, object]:
     """Plugin-only dispatch — GH has no rhinocode fallback."""
     try:
-        return rhino.plugin_result(command, params)
+        return rhino.plugin_result(command, params, rhino_id=rhino_id)
     except OSError:
         return {"ok": False, "error": "Grasshopper plugin is not connected. Ensure Rhino is running with the RhinoMCP plugin loaded."}

@@ -121,18 +121,18 @@ elif op == "del_obj":
     result = {"ok": True}
 
 elif op == "set_doc":
-    rs.SetDocumentData(data["key"], data["value"])
+    rs.SetDocumentUserText(data["key"], data["value"])
     result = {"ok": True, "key": data["key"]}
 
 elif op == "get_doc":
     key = data.get("key")
     if key:
-        val = rs.GetDocumentData(key)
+        val = rs.GetDocumentUserText(key)
         result = {"value": val, "key": key}
     else:
-        sections = rs.GetDocumentData() or []
+        keys = rs.GetDocumentUserText() or []
         kv = {}
-        for s in sections:
-            kv[s] = rs.GetDocumentData(s)
+        for k in keys:
+            kv[k] = rs.GetDocumentUserText(k)
         result = {"user_text": kv}
 '''

@@ -205,7 +205,12 @@ def register(mcp: FastMCP) -> None:  # noqa: C901 – register is intentionally 
                 }
             url = poll.get("download_url")
             if not url:
-                return {"ok": False, "error": "Job is done but no download URL is available in the poll response."}
+                # Hunyuan3D jobs report the finished file as a local path
+                # (download_url stays None) — import it directly.
+                local_path = poll.get("local_path")
+                if isinstance(local_path, str) and os.path.isfile(local_path):
+                    return _import_file_into_rhino(local_path, scale=scale, position=position)
+                return {"ok": False, "error": "Job is done but no download URL or local file is available in the poll response."}
 
         # ---- Download file -----------------------------------------------
         download_result = _download_file(url, api_key=api_key, output_dir=output_dir, service=resolved_service)

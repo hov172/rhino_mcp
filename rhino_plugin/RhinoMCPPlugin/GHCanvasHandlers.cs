@@ -406,17 +406,29 @@ public static class GHCanvasHandlers
                 var fromName  = p.String("from_output") ?? throw new ArgumentException("from_output is required");
                 var toName    = p.String("to_input")    ?? throw new ArgumentException("to_input is required");
 
-                var fromObj = doc.FindObject(fromGuid, false) as IGH_Component
-                    ?? throw new ArgumentException($"Source component {fromGuid} not found or not a component");
-                var toObj   = doc.FindObject(toGuid, false) as IGH_Component
-                    ?? throw new ArgumentException($"Target component {toGuid} not found or not a component");
+                var fromObj = doc.FindObject(fromGuid, false)
+                    ?? throw new ArgumentException($"Source object {fromGuid} not found");
+                var toObj   = doc.FindObject(toGuid, false)
+                    ?? throw new ArgumentException($"Target object {toGuid} not found");
 
-                var outParam = fromObj.Params.Output.FirstOrDefault(o =>
-                    string.Equals(o.NickName, fromName, StringComparison.OrdinalIgnoreCase))
-                    ?? throw new ArgumentException($"Output '{fromName}' not found on {fromGuid}");
-                var inParam  = toObj.Params.Input.FirstOrDefault(i =>
-                    string.Equals(i.NickName, toName, StringComparison.OrdinalIgnoreCase))
-                    ?? throw new ArgumentException($"Input '{toName}' not found on {toGuid}");
+                // Standalone params (panels, sliders, Param_Number, ...) are
+                // valid wire endpoints too — they act as their own output/input.
+                IGH_Param outParam = fromObj switch
+                {
+                    IGH_Component fc => fc.Params.Output.FirstOrDefault(o =>
+                        string.Equals(o.NickName, fromName, StringComparison.OrdinalIgnoreCase))
+                        ?? throw new ArgumentException($"Output '{fromName}' not found on {fromGuid}"),
+                    IGH_Param fp => fp,
+                    _ => throw new ArgumentException($"Source {fromGuid} is not a component or parameter"),
+                };
+                IGH_Param inParam = toObj switch
+                {
+                    IGH_Component tc => tc.Params.Input.FirstOrDefault(i =>
+                        string.Equals(i.NickName, toName, StringComparison.OrdinalIgnoreCase))
+                        ?? throw new ArgumentException($"Input '{toName}' not found on {toGuid}"),
+                    IGH_Param tp => tp,
+                    _ => throw new ArgumentException($"Target {toGuid} is not a component or parameter"),
+                };
 
                 inParam.AddSource(outParam);
                 inParam.ExpireSolution(false);
@@ -443,11 +455,16 @@ public static class GHCanvasHandlers
                 var fromName = p.String("from_output") ?? throw new ArgumentException("from_output is required");
                 var toName   = p.String("to_input")    ?? throw new ArgumentException("to_input is required");
 
-                var toObj = doc.FindObject(toGuid, false) as IGH_Component
-                    ?? throw new ArgumentException($"Target component {toGuid} not found or not a component");
-                var inParam = toObj.Params.Input.FirstOrDefault(i =>
-                    string.Equals(i.NickName, toName, StringComparison.OrdinalIgnoreCase))
-                    ?? throw new ArgumentException($"Input '{toName}' not found on {toGuid}");
+                var toObj = doc.FindObject(toGuid, false)
+                    ?? throw new ArgumentException($"Target object {toGuid} not found");
+                IGH_Param inParam = toObj switch
+                {
+                    IGH_Component tc => tc.Params.Input.FirstOrDefault(i =>
+                        string.Equals(i.NickName, toName, StringComparison.OrdinalIgnoreCase))
+                        ?? throw new ArgumentException($"Input '{toName}' not found on {toGuid}"),
+                    IGH_Param tp => tp,
+                    _ => throw new ArgumentException($"Target {toGuid} is not a component or parameter"),
+                };
 
                 var src = inParam.Sources.FirstOrDefault(s =>
                     s.Attributes.GetTopLevel.DocObject.InstanceGuid == fromGuid &&

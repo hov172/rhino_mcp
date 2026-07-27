@@ -25,6 +25,7 @@ def sanitise_rhino_path(path: str) -> str:
 
 # Private/link-local IPv4 and IPv6 ranges that must never be fetched.
 _BLOCKED_NETWORKS = [
+    ipaddress.ip_network("0.0.0.0/8"),  # "this network" — 0.0.0.0 reaches loopback
     ipaddress.ip_network("10.0.0.0/8"),
     ipaddress.ip_network("172.16.0.0/12"),
     ipaddress.ip_network("192.168.0.0/16"),
@@ -36,12 +37,28 @@ _BLOCKED_NETWORKS = [
 
 
 def _is_private(host: str) -> bool:
+    """
+    True if *host* resolves to any blocked (private/link-local) address.
+
+    Checks every resolved address (A and AAAA) — checking only the first
+    record lets an attacker hide a private address behind a public one.
+    Callers should validate immediately before fetching to keep the
+    validate-to-fetch window minimal.
+    """
     try:
-        addr = ipaddress.ip_address(socket.gethostbyname(host))
-        return any(addr in net for net in _BLOCKED_NETWORKS)
-    except (socket.gaierror, ValueError):
-        # Unresolvable or malformed — treat as private to be safe.
+        infos = socket.getaddrinfo(host, None)
+    except (socket.gaierror, OSError):
+        # Unresolvable — treat as private to be safe.
         return True
+    addrs = []
+    for _family, _type, _proto, _canonname, sockaddr in infos:
+        try:
+            addrs.append(ipaddress.ip_address(sockaddr[0]))
+        except ValueError:
+            return True
+    if not addrs:
+        return True
+    return any(addr in net for addr in addrs for net in _BLOCKED_NETWORKS)
 
 
 def validate_download_url(url: str) -> None:

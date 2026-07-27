@@ -183,26 +183,31 @@ def register(mcp: FastMCP) -> None:  # noqa: PLR0915 – many tools, acceptable 
             return {"ok": False, "error": f"Failed to fetch file list: {exc}"}
 
         # Navigate the nested file structure to find the download URL.
-        # Structure varies by type but generally:
-        #   hdris:    files_data[resolution][format]["url"]
-        #   textures: files_data["diffuse"][resolution][format]["url"]  (per channel)
-        #   models:   files_data[format][resolution]["url"]
+        # Structure varies by type (verified against the live API):
+        #   hdris:    files_data["hdri"][resolution][format]["url"]
+        #   textures: files_data["Diffuse"][resolution][format]["url"]  (per channel,
+        #             channel keys are capitalized except "nor_gl")
+        #   models:   files_data[format][resolution][format]["url"]
         download_url: str | None = None
         filename: str | None = None
 
         if asset_type == "hdris":
             try:
-                entry = files_data[resolution][resolved_format]
+                hdri_files = files_data.get("hdri") or files_data
+                entry = hdri_files[resolution][resolved_format]
                 download_url = entry["url"]
                 filename = entry.get("filename") or f"{asset_id}_{resolution}.{resolved_format}"
             except (KeyError, TypeError):
-                available = list(files_data.keys())
+                available = list((files_data.get("hdri") or files_data).keys())
                 return {"ok": False, "error": f"Resolution/format not available. Available resolutions: {available}"}
 
         elif asset_type == "textures":
             # For textures we download the diffuse (colour) map by default.
+            # Channel keys are capitalized ("Diffuse", "Rough", ...) — match
+            # case-insensitively.
             try:
-                channel_data = files_data.get("diffuse") or files_data.get("nor_gl") or next(iter(files_data.values()))
+                files_lower = {str(k).lower(): v for k, v in files_data.items()}
+                channel_data = files_lower.get("diffuse") or files_lower.get("nor_gl") or next(iter(files_data.values()))
                 entry = channel_data[resolution][resolved_format]
                 download_url = entry["url"]
                 filename = entry.get("filename") or f"{asset_id}_{resolution}.{resolved_format}"
@@ -211,7 +216,7 @@ def register(mcp: FastMCP) -> None:  # noqa: PLR0915 – many tools, acceptable 
 
         elif asset_type == "models":
             try:
-                entry = files_data[resolved_format][resolution]
+                entry = files_data[resolved_format][resolution][resolved_format]
                 download_url = entry["url"]
                 filename = entry.get("filename") or f"{asset_id}_{resolution}.{resolved_format}"
             except (KeyError, TypeError):
@@ -316,6 +321,7 @@ try
     doc.Views.Redraw();
     sb.AppendLine("HDRI applied: " + hdriPath);
     output.AppendLine(sb.ToString());
+    output.AppendLine("MCP_HDRI_OK");
 }}
 catch (Exception ex)
 {{
@@ -332,6 +338,17 @@ catch (Exception ex)
         status = result.get("status", "")
         if status == "error":
             return {"ok": False, "error": result.get("message", "Unknown error"), "filepath": filepath}
+
+        # The C# snippet swallows exceptions into the output text — check for
+        # the error line / success sentinel instead of trusting status alone.
+        out_text = str(result.get("result", "") or result.get("output", "") or "")
+        if "Error applying HDRI" in out_text or ("MCP_HDRI_OK" not in out_text and out_text.strip()):
+            return {
+                "ok": False,
+                "error": out_text.strip() or "HDRI apply script did not report success.",
+                "filepath": filepath,
+                "rhino_response": result,
+            }
 
         return {
             "ok": True,
@@ -377,7 +394,9 @@ catch (Exception ex)
         except Exception as exc:  # noqa: BLE001
             return {"ok": False, "error": f"Failed to fetch texture manifest: {exc}"}
 
-        # Map Poly Haven channel names → our channel labels.
+        # Map Poly Haven channel names → our channel labels.  Manifest channel
+        # keys are capitalized ("Diffuse", "Rough", "AO", "Displacement";
+        # "nor_gl" stays lowercase) — match case-insensitively.
         ph_channel_map = {
             "diffuse": ["diffuse", "col"],
             "roughness": ["rough", "roughness"],
@@ -390,14 +409,15 @@ catch (Exception ex)
         textures_applied: list[str] = []
         channel_paths: dict[str, str] = {}
 
+        files_lower = {str(k).lower(): v for k, v in files_data.items()}
         with httpx.Client(timeout=_DOWNLOAD_TIMEOUT, follow_redirects=True) as client:
             for ch_label in selected_channels:
                 ph_names = ph_channel_map[ch_label]
-                # Find the first matching key in the manifest.
+                # Find the first matching key in the manifest (case-insensitive).
                 ch_data: dict[str, Any] | None = None
                 for ph_name in ph_names:
-                    if ph_name in files_data:
-                        ch_data = files_data[ph_name]
+                    if ph_name in files_lower:
+                        ch_data = files_lower[ph_name]
                         break
                 if ch_data is None:
                     continue  # channel not available for this asset
@@ -505,6 +525,7 @@ try
         obj.Attributes.MaterialSource = Rhino.DocObjects.ObjectMaterialSource.MaterialFromObject;
         obj.CommitChanges();
         output.AppendLine("Material assigned: " + matName + " -> index " + matIndex);
+        output.AppendLine("MCP_PBR_OK");
     }}
     else
     {{
@@ -535,6 +556,18 @@ catch (Exception ex)
                 "ok": False,
                 "error": result.get("message", "Unknown Rhino error"),
                 "textures_applied": textures_applied,
+            }
+
+        # The C# snippet swallows exceptions into the output text — check for
+        # the error line / success sentinel instead of trusting status alone.
+        out_text = str(result.get("result", "") or result.get("output", "") or "")
+        if "MCP_PBR_OK" not in out_text and out_text.strip():
+            return {
+                "ok": False,
+                "error": out_text.strip() or "PBR material script did not report success.",
+                "textures_applied": textures_applied,
+                "channel_paths": channel_paths,
+                "rhino_response": result,
             }
 
         return {
@@ -819,7 +852,9 @@ catch (Exception ex)
         import_result: dict[str, Any] = {}
         if import_to_rhino:
             import_result = _import_file_to_rhino(primary_file, scale=scale)
-            imported = import_result.get("ok", False) or import_result.get("status") == "ok"
+            # _import_file_to_rhino sets "ok" from the script output — the
+            # plugin's transport-level status "ok" is not proof of import.
+            imported = bool(import_result.get("ok"))
 
         return {
             "ok": True,
@@ -848,26 +883,50 @@ def _import_file_to_rhino(filepath: str, scale: float = 1.0) -> dict[str, Any]:
     scale_str = repr(float(scale))
     csharp_code = f"""
 var filePath = @"{safe_path}";
+var beforeIds = new System.Collections.Generic.HashSet<System.Guid>();
+foreach (var obj in RhinoDoc.ActiveDoc.Objects)
+    beforeIds.Add(obj.Id);
 var opts = new Rhino.FileIO.FileReadOptions {{ ImportMode = true }};
 bool ok = RhinoDoc.ActiveDoc.Import(filePath, opts);
+
+// Materialize the new-object list before transforming so we never mutate
+// the object table while enumerating it, and only touch imported objects.
+var importedIds = new System.Collections.Generic.List<System.Guid>();
+foreach (var obj in RhinoDoc.ActiveDoc.Objects)
+    if (!beforeIds.Contains(obj.Id))
+        importedIds.Add(obj.Id);
 
 if (ok && {scale_str} != 1.0)
 {{
     var xf = Rhino.Geometry.Transform.Scale(Rhino.Geometry.Point3d.Origin, {scale_str});
-    foreach (var obj in RhinoDoc.ActiveDoc.Objects)
-        RhinoDoc.ActiveDoc.Objects.Transform(obj.Id, xf, true);
+    foreach (var id in importedIds)
+        RhinoDoc.ActiveDoc.Objects.Transform(id, xf, true);
 }}
 
 RhinoDoc.ActiveDoc.Views.Redraw();
 output.AppendLine(ok ? "Imported: " + filePath : "Failed: " + filePath);
+output.AppendLine("IMPORT_OK=" + ok.ToString());
+output.AppendLine("OBJECT_COUNT=" + importedIds.Count.ToString());
 """
     try:
         result = plugin_client.send_command(
             "execute_rhinocommon_csharp_code", {"code": csharp_code}
         )
-        result.setdefault("ok", result.get("status") not in {"error"})
     except OSError as exc:
         return {"ok": False, "error": f"Plugin socket unavailable: {exc}"}
+
+    # Determine success from the script output — doc.Import() returning false
+    # only prints "Failed: <path>", it does not set status="error".
+    out_text = str(result.get("result", "") or result.get("output", "") or "")
+    if result.get("status") == "error":
+        result["ok"] = False
+    elif out_text.strip():
+        result["ok"] = "IMPORT_OK=True" in out_text
+    else:
+        # Older plugins may not echo output — fall back to status only.
+        result["ok"] = True
+    if not result["ok"]:
+        result.setdefault("error", f"Rhino failed to import {filepath}: {out_text.strip() or result.get('message', 'unknown error')}")
 
     # Normalize import-baked materials so ObjectColor and material changes
     # work correctly after this import.  3DS/FBX/OBJ importers stamp every

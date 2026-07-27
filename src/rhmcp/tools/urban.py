@@ -434,12 +434,14 @@ print(json.dumps(nick_to_guid))
         return {}
     result = raw.get("result", {})
     if isinstance(result, dict):
-        nested = result.get("result", {})
-        if isinstance(nested, dict):
+        nested = result.get("result")
+        if isinstance(nested, dict) and nested:
             return {str(k): str(v) for k, v in nested.items()}
-        output = result.get("output")
-        if isinstance(output, str):
-            for line in reversed(output.strip().splitlines()):
+        # Parse the printed JSON from whichever output stream the backend used.
+        for text in (result.get("output"), raw.get("stdout"), raw.get("output")):
+            if not isinstance(text, str):
+                continue
+            for line in reversed(text.strip().splitlines()):
                 try:
                     parsed = json.loads(line)
                 except json.JSONDecodeError:
@@ -544,19 +546,21 @@ def _urban_get_metrics() -> dict[str, object]:
     _zero: dict[str, object] = {
         "gfa_m2": 0.0, "far": 0.0, "unit_count_est": 0, "open_space_pct": 0.0,
     }
+    # Prefer the live GH Metrics panel; fall back to the heuristic estimates
+    # cached by urban_generate_massing (labelled as estimated).
+    if _current_metrics_guid:
+        result = _gh("gh_get_output", {"instance_guid": _current_metrics_guid})
+        if result.get("ok"):
+            raw = result.get("result", {})
+            outputs = raw.get("outputs", []) if isinstance(raw, dict) else []
+            for out in outputs:
+                values = out.get("values", [])
+                if values:
+                    return _parse_metrics_panel(str(values[0]))
     if _current_metrics_cache is not None:
-        return dict(_current_metrics_cache)
-    if not _current_metrics_guid:
-        return _zero
-    result = _gh("gh_get_output", {"instance_guid": _current_metrics_guid})
-    if not result.get("ok"):
-        return _zero
-    raw = result.get("result", {})
-    outputs = raw.get("outputs", []) if isinstance(raw, dict) else []
-    for out in outputs:
-        values = out.get("values", [])
-        if values:
-            return _parse_metrics_panel(str(values[0]))
+        cached = dict(_current_metrics_cache)
+        cached["estimated"] = True
+        return cached
     return _zero
 
 
@@ -688,6 +692,13 @@ def register(mcp: FastMCP) -> None:
             return {"ok": False, "error": f"Failed to open {gh_path}: {open_result.get('error')}"}
 
         slider_guids, metrics_guid, bake_guid = _resolve_slider_guids(typology)
+        if not slider_guids:
+            return {
+                "ok": False,
+                "error": f"Could not discover slider NickNames for '{typology}' in the open "
+                         "Grasshopper definition. Ensure the .gh file's sliders use the expected "
+                         f"NickNames: {_SLIDER_MAPS.get(typology, [])}",
+            }
         _current_typology = typology
         _current_slider_guids = slider_guids
         _current_metrics_guid = metrics_guid
@@ -826,6 +837,7 @@ def register(mcp: FastMCP) -> None:
         generated massing layers while keeping..."""
         global _current_typology, _current_slider_guids, _current_metrics_guid, _current_bake_guid
         global _current_params, _current_site_width, _current_site_depth, _current_metrics_cache
+        global _current_solar
 
         code = (
             "import Rhino\n"
@@ -1090,8 +1102,19 @@ def register(mcp: FastMCP) -> None:
         else:
             macro = f'_-Export "{sanitise_rhino_path(export_path)}" _Enter'
             code = f"import Rhino\nok = Rhino.RhinoApp.RunScript({macro!r}, False)\nprint({export_path!r} if ok else 'FAILED')\n"
+        # Have the script verify the file actually landed on disk and report a
+        # structured flag rather than inferring success from the raw text.
+        code += (
+            "import os\n"
+            f"result = {{'export_ok': os.path.exists({export_path!r}), 'path': {export_path!r}}}\n"
+        )
         raw = rhino.execute_python(code, rhino_id=rhino_id)
-        ok = isinstance(raw, dict) and "FAILED" not in str(raw)
+        file_exists = False
+        if isinstance(raw, dict):
+            script_result = raw.get("script_result")
+            if isinstance(script_result, dict):
+                file_exists = bool(script_result.get("export_ok"))
+        ok = isinstance(raw, dict) and bool(raw.get("ok")) and file_exists
         return {"ok": ok, "format": fmt, "path": export_path, "raw": raw}
 
     @mcp.tool(annotations=ToolAnnotations(title="Save Urban Project Version", destructiveHint=True))
@@ -1167,7 +1190,9 @@ def register(mcp: FastMCP) -> None:
             rhino_id=rhino_id,
         )
         scheme_params = optimized.get("recommended_params") if isinstance(optimized.get("recommended_params"), dict) else parsed.get("params")
-        layout = generate_site_layout(site_width, site_depth, bake=(typology == "street_grid"), rhino_id=rhino_id)
+        # bake=False: generate_massing below already bakes the geometry (for
+        # street_grid too) — baking here as well would create duplicates.
+        layout = generate_site_layout(site_width, site_depth, bake=False, rhino_id=rhino_id)
         massing = generate_massing(
             typology=typology,
             site_width=site_width,

@@ -349,7 +349,7 @@ class TestGhMigrateToGh2(unittest.TestCase):
         self.assertIsInstance(result["unmapped"], list)
 
     def test_close_gh1_calls_close_definition(self):
-        """close_gh1=True must call gh_close_definition."""
+        """close_gh1=True must call gh_close_document."""
         fn = self.tools["gh_migrate_to_gh2"]
 
         def mock_plugin(command, params, rhino_id=None):
@@ -357,7 +357,7 @@ class TestGhMigrateToGh2(unittest.TestCase):
                 return {"ok": True, "count": 0, "components": []}
             if command in ("gh2_start", "gh2_apply_graph"):
                 return {"ok": True, "placed": {}, "wired": 0, "errors": []}
-            if command == "gh_close_definition":
+            if command == "gh_close_document":
                 return {"ok": True}
             return {"ok": False, "error": f"unexpected: {command}"}
 
@@ -365,7 +365,7 @@ class TestGhMigrateToGh2(unittest.TestCase):
             result = fn(confirm=True, close_gh1=True)
 
         self.assertTrue(result.get("gh1_closed"))
-        close_calls = [c for c in mock_pr.call_args_list if c.args[0] == "gh_close_definition"]
+        close_calls = [c for c in mock_pr.call_args_list if c.args[0] == "gh_close_document"]
         self.assertEqual(len(close_calls), 1)
 
 

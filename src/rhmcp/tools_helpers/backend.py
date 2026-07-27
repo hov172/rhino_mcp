@@ -82,10 +82,19 @@ def plugin_result(
         return normalize({"ok": False, "backend": BACKEND_PLUGIN, "error": msg, **response})
     if "result" in response:
         out = {"ok": True, "backend": BACKEND_PLUGIN, "result": response.get("result"), "raw": response}
-        # Promote script_result from nested result when present.
         inner = response.get("result") or {}
-        if isinstance(inner, dict) and "script_result" in response:
-            out["script_result"] = response["script_result"]
+        if isinstance(inner, dict):
+            # The plugin wraps handler results in status="ok" even when the
+            # handler itself failed (e.g. a script error) — surface that.
+            if inner.get("success") is False or inner.get("ok") is False:
+                out["ok"] = False
+                out["error"] = (
+                    inner.get("error") or inner.get("message")
+                    or "Plugin command reported failure"
+                )
+            # Promote script_result from nested result when present.
+            if "script_result" in response:
+                out["script_result"] = response["script_result"]
         return normalize(out)
     return normalize({"ok": True, "backend": BACKEND_PLUGIN, "result": response, "raw": response})
 
@@ -128,6 +137,24 @@ def execute_python(code: str, rhino_id: str | None = None, backend_name: str | N
                     l for l in output.splitlines() if not l.startswith(_RESULT_SENTINEL)
                 )
                 break
+    if "script_result" not in resp:
+        # rhinocode fallback: the sentinel print lands in captured stdout, and
+        # the wrapper also reports the ``result`` variable directly.
+        stdout = resp.get("stdout") or ""
+        if _RESULT_SENTINEL in stdout:
+            for line in stdout.splitlines():
+                if line.startswith(_RESULT_SENTINEL):
+                    payload = line[len(_RESULT_SENTINEL):]
+                    try:
+                        resp["script_result"] = json.loads(payload)
+                    except Exception:
+                        resp["script_result"] = payload
+                    break
+            resp["stdout"] = "\n".join(
+                l for l in stdout.splitlines() if not l.startswith(_RESULT_SENTINEL)
+            )
+        elif resp.get("backend") == BACKEND_RHINOCODE and resp.get("status") == "ok":
+            resp["script_result"] = resp.get("result")
     sr = resp.get("script_result")
     if isinstance(sr, dict) and sr.get("ok") is False:
         resp["ok"] = False
@@ -177,7 +204,17 @@ def run_plugin_or_python(
     _plugin_error: str | None = None
     if mode in {BACKEND_AUTO, BACKEND_PLUGIN}:
         try:
-            return plugin_result(command_type, params, rhino_id=rhino_id)
+            resp = plugin_result(command_type, params, rhino_id=rhino_id)
+            # In auto mode, a plugin that doesn't implement this command is not
+            # a failure — run the supplied Python fallback instead.
+            unsupported = (
+                mode == BACKEND_AUTO
+                and resp.get("ok") is False
+                and "Unsupported command type" in str(resp.get("error", ""))
+            )
+            if not unsupported:
+                return resp
+            _plugin_error = str(resp.get("error"))
         except OSError as ex:
             if mode == BACKEND_PLUGIN:
                 host, port, _ = plugin_client.connection_settings()

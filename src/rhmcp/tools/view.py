@@ -310,7 +310,9 @@ doc.Views.ActiveView = view
 viewport = view.ActiveViewport
 name = str(__mcp_view.get("view") or "")
 if name.lower() in {"top", "front", "right", "back", "left", "bottom", "perspective"}:
-    viewport.SetToPlanView(name, True)
+    _proj = getattr(Rhino.Display.DefinedViewportProjection, name.capitalize(), None)
+    if _proj is not None:
+        viewport.SetProjection(_proj, None, True)
 camera = __mcp_view.get("camera")
 target = __mcp_view.get("target")
 if camera and target:

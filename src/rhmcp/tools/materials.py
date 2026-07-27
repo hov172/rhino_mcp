@@ -20,7 +20,7 @@ def register(mcp: FastMCP) -> None:
         Each material entry includes: index, name, diffuse, specular, emission,
         shininess (0-255), and transparency (0.0-1.0).
         """
-        plugin = _try_plugin("get_materials", {})
+        plugin = _try_plugin("get_materials", {}, rhino_id=rhino_id)
         if plugin:
             return plugin
         return rhino.execute_python(_GET_MATERIALS_SCRIPT, rhino_id=rhino_id)
@@ -64,7 +64,7 @@ def register(mcp: FastMCP) -> None:
         if emission is not None:
             params["emission"] = [max(0, min(255, int(v))) for v in emission]
 
-        plugin = _try_plugin("create_material", params)
+        plugin = _try_plugin("create_material", params, rhino_id=rhino_id)
         if plugin:
             return plugin
 
@@ -93,7 +93,7 @@ def register(mcp: FastMCP) -> None:
         if material_name is not None:
             params["material_name"] = material_name
 
-        plugin = _try_plugin("set_object_material", params)
+        plugin = _try_plugin("set_object_material", params, rhino_id=rhino_id)
         if plugin:
             return plugin
 
@@ -121,7 +121,7 @@ def register(mcp: FastMCP) -> None:
         if material_name is not None:
             params["material_name"] = material_name
 
-        plugin = _try_plugin("delete_material", params)
+        plugin = _try_plugin("delete_material", params, rhino_id=rhino_id)
         if plugin:
             return plugin
 
@@ -195,11 +195,15 @@ def register(mcp: FastMCP) -> None:
         return rhino.execute_python(code, rhino_id=rhino_id)
 
 
-def _try_plugin(command_type: str, params: dict[str, object]) -> dict[str, object] | None:
+def _try_plugin(
+    command_type: str,
+    params: dict[str, object],
+    rhino_id: str | None = None,
+) -> dict[str, object] | None:
     if rhino.preferred_backend() not in {"auto", "plugin"}:
         return None
     try:
-        return rhino.plugin_result(command_type, params)
+        return rhino.plugin_result(command_type, params, rhino_id=rhino_id)
     except OSError:
         return None
 
@@ -308,7 +312,7 @@ if mat_index is None:
         raise ValueError("Material not found: {}".format(name))
 
 mat_index = int(mat_index)
-ok = doc.Materials.Delete(mat_index, True)
+ok = doc.Materials.DeleteAt(mat_index)
 result = {"deleted": bool(ok), "material_index": mat_index}
 '''
 

@@ -10,7 +10,6 @@ import shlex
 import shutil
 import subprocess
 import tempfile
-import textwrap
 import time
 from collections.abc import Sequence
 from typing import Any
@@ -197,27 +196,36 @@ def execute_python(code: str, rhino_id: str | None = None) -> dict[str, Any]:
 
 def _read_result_when_ready(result_path: str, wait_seconds: float) -> dict[str, Any] | None:
     deadline = time.monotonic() + wait_seconds
+    last_error: str | None = None
     while time.monotonic() <= deadline:
         if os.path.exists(result_path):
             with open(result_path, encoding="utf-8") as fh:
                 try:
                     loaded = json.load(fh)
                 except json.JSONDecodeError as ex:
-                    return {"status": "error", "message": "Invalid result JSON: {:s}".format(str(ex))}
+                    # File may be mid-write — keep polling until the deadline.
+                    last_error = str(ex)
+                    time.sleep(_POLL_INTERVAL)
+                    continue
                 if isinstance(loaded, dict):
                     return loaded
                 return {"status": "error", "message": "Result payload was not a JSON object."}
         time.sleep(_POLL_INTERVAL)
+    if last_error is not None:
+        return {"status": "error", "message": "Invalid result JSON: {:s}".format(last_error)}
     return None
 
 
 def _script_wrapper(code: str, result_path: str) -> str:
-    indented = textwrap.indent(code, "    ")
+    # The user code is embedded as a string literal and exec'd unmodified —
+    # indenting it into the try-block would corrupt multi-line string literals.
+    code_literal = repr(code)
     result_path_literal = repr(result_path)
     return """\
 import contextlib
 import io
 import json
+import os
 import traceback
 
 __mcp_stdout = io.StringIO()
@@ -233,7 +241,7 @@ def __mcp_json_default(value):
 try:
     with contextlib.redirect_stdout(__mcp_stdout), contextlib.redirect_stderr(__mcp_stderr):
         result = None
-{code}
+        exec(compile({code}, "<rhino_mcp_script>", "exec"))
         __mcp_payload = {{
             "status": "ok",
             "result": result,
@@ -249,6 +257,8 @@ except Exception as ex:
         "stderr": __mcp_stderr.getvalue(),
     }}
 
-with open({result_path}, "w", encoding="utf-8") as __mcp_fh:
+__mcp_tmp = {result_path} + ".tmp"
+with open(__mcp_tmp, "w", encoding="utf-8") as __mcp_fh:
     json.dump(__mcp_payload, __mcp_fh, default=__mcp_json_default)
-""".format(code=indented, result_path=result_path_literal)
+os.replace(__mcp_tmp, {result_path})
+""".format(code=code_literal, result_path=result_path_literal)

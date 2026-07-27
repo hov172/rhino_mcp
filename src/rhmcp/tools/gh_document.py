@@ -21,7 +21,7 @@ def register(mcp: FastMCP) -> None:
         Returns name, file path, component_count, group_count, solution_state
         (idle/computing/blank), and error_count.
         """
-        return _gh("gh_get_definition_info", {})
+        return _gh("gh_get_definition_info", {}, rhino_id=rhino_id)
 
     @mcp.tool(annotations=ToolAnnotations(title="Open Grasshopper Definition", readOnlyHint=True))
     def gh_open_definition(path: str, rhino_id: str | None = None) -> dict[str, object]:
@@ -33,7 +33,7 @@ def register(mcp: FastMCP) -> None:
         """
         if not path:
             return {"ok": False, "error": "path is required"}
-        return _gh("gh_open_document", {"path": path})
+        return _gh("gh_open_document", {"path": path}, rhino_id=rhino_id)
 
     @mcp.tool(annotations=ToolAnnotations(title="New Grasshopper Definition", destructiveHint=True))
     def gh_new_definition(name: str | None = None, rhino_id: str | None = None) -> dict[str, object]:
@@ -46,7 +46,7 @@ def register(mcp: FastMCP) -> None:
         params: dict[str, object] = {}
         if name:
             params["name"] = name
-        return _gh("gh_new_document", params)
+        return _gh("gh_new_document", params, rhino_id=rhino_id)
 
     @mcp.tool(annotations=ToolAnnotations(title="Save Grasshopper Definition", destructiveHint=True))
     def gh_save_definition(path: str | None = None, rhino_id: str | None = None) -> dict[str, object]:
@@ -59,19 +59,19 @@ def register(mcp: FastMCP) -> None:
         params: dict[str, object] = {}
         if path:
             params["path"] = path
-        return _gh("gh_save_document", params)
+        return _gh("gh_save_document", params, rhino_id=rhino_id)
 
     @mcp.tool(annotations=ToolAnnotations(title="Close Grasshopper Definition", destructiveHint=True))
     def gh_close_definition(rhino_id: str | None = None) -> dict[str, object]:
         """
         Close the active Grasshopper definition.
         """
-        return _gh("gh_close_document", {})
+        return _gh("gh_close_document", {}, rhino_id=rhino_id)
 
 
-def _gh(command: str, params: dict[str, object]) -> dict[str, object]:
+def _gh(command: str, params: dict[str, object], rhino_id: str | None = None) -> dict[str, object]:
     """Plugin-only dispatch — GH has no rhinocode fallback."""
     try:
-        return rhino.plugin_result(command, params)
+        return rhino.plugin_result(command, params, rhino_id=rhino_id)
     except OSError:
         return {"ok": False, "error": "Grasshopper plugin is not connected. Ensure Rhino is running with the RhinoMCP plugin loaded."}

@@ -5,7 +5,9 @@ from __future__ import annotations
 from mcp.server.fastmcp import FastMCP
 from mcp.types import ToolAnnotations
 
+from rhmcp.tools_helpers import backend
 from rhmcp.tools_helpers import plugin_client
+from rhmcp.tools_helpers.security import sanitise_rhino_path
 
 
 def _check() -> str | None:
@@ -17,11 +19,19 @@ def _check() -> str | None:
 
 
 def _run(command: str) -> dict:
-    return plugin_client.send_command("run_command", {"command": command})
+    return backend.run_command(command)
 
 
 def _py(code: str) -> dict:
-    return plugin_client.send_command("execute_rhinoscript_python_code", {"code": code})
+    return backend.execute_python(code)
+
+
+def _outcome(res: dict) -> tuple[bool, str | None]:
+    """Extract (ok, error) from a backend response so failures propagate."""
+    ok = bool(res.get("ok"))
+    if ok:
+        return True, None
+    return False, str(res.get("error") or res.get("message") or "Rhino command failed")
 
 
 def register(mcp: FastMCP) -> None:
@@ -32,7 +42,11 @@ def register(mcp: FastMCP) -> None:
         if err:
             return {"success": False, "message": err}
         result = _run("_VRayIPR")
-        return {"success": True, "result": result}
+        ok, error = _outcome(result)
+        out: dict[str, object] = {"success": ok, "result": result}
+        if error:
+            out["error"] = error
+        return out
 
     @mcp.tool(annotations=ToolAnnotations(title="V-Ray: Stop IPR", destructiveHint=True))
     def vray_stop_ipr() -> dict[str, object]:
@@ -41,7 +55,11 @@ def register(mcp: FastMCP) -> None:
         if err:
             return {"success": False, "message": err}
         result = _run("_VRayIPRStop")
-        return {"success": True, "result": result}
+        ok, error = _outcome(result)
+        out: dict[str, object] = {"success": ok, "result": result}
+        if error:
+            out["error"] = error
+        return out
 
     @mcp.tool(annotations=ToolAnnotations(title="V-Ray: Render", destructiveHint=True))
     def vray_render(
@@ -57,13 +75,48 @@ def register(mcp: FastMCP) -> None:
         err = _check()
         if err:
             return {"success": False, "message": err}
-        code = """
+        safe_path = sanitise_rhino_path(output_path)
+        code = f"""
+import os
 import rhinoscriptsyntax as rs
 import Rhino
-Rhino.RhinoApp.RunScript("_-Render", False)
+rs.RenderResolution(({width}, {height}))
+rendered = Rhino.RhinoApp.RunScript("_-Render", False)
+save_cmd = '_-SaveRenderWindowAs "' + {safe_path!r} + '"'
+saved = Rhino.RhinoApp.RunScript(save_cmd, False)
+exists = os.path.exists({safe_path!r})
+result = {{
+    "ok": bool(rendered),
+    "rendered": bool(rendered),
+    "saved": bool(saved) and exists,
+}}
 """
-        result = _py(code)
-        return {"success": True, "output_path": output_path, "result": result}
+        res = _py(code)
+        script = res.get("script_result")
+        script = script if isinstance(script, dict) else {}
+        saved = bool(script.get("saved"))
+        ok = bool(res.get("ok")) and saved
+        out: dict[str, object] = {
+            "success": ok,
+            "rendered": bool(script.get("rendered")),
+            "saved": saved,
+            "output_path": output_path if saved else None,
+            "width": width,
+            "height": height,
+            "note": (
+                "quality_preset is not scriptable for V-Ray from the Rhino command "
+                "line and was not applied; render size was set via the document "
+                "render settings before rendering."
+            ),
+            "result": res,
+        }
+        if not ok:
+            out["error"] = str(
+                res.get("error")
+                or "Render window was not saved to output_path — the render may "
+                   "have failed or still be in progress."
+            )
+        return out
 
     @mcp.tool(annotations=ToolAnnotations(title="V-Ray: Create Material", destructiveHint=True))
     def vray_create_material(
@@ -84,15 +137,18 @@ Rhino.RhinoApp.RunScript("_-Render", False)
         r, g, b = (diffuse_color or [200, 200, 200])[:3]
         code = f"""
 import Rhino
-import System.Drawing
 mat = Rhino.DocObjects.Material()
 mat.Name = {name!r}
-mat.DiffuseColor = System.Drawing.Color.FromArgb({r}, {g}, {b})
-Rhino.RhinoDoc.ActiveDoc.Materials.Add(mat)
-result = {{"name": {name!r}, "created": True}}
+mat.DiffuseColor = Rhino.Display.Color4f({r} / 255.0, {g} / 255.0, {b} / 255.0, 1.0).AsSystemColor()
+index = Rhino.RhinoDoc.ActiveDoc.Materials.Add(mat)
+result = {{"ok": index >= 0, "name": {name!r}, "material_index": index}}
 """
         res = _py(code)
-        return {"success": True, "name": name, "result": res}
+        ok, error = _outcome(res)
+        out: dict[str, object] = {"success": ok, "name": name, "result": res}
+        if error:
+            out["error"] = error
+        return out
 
     @mcp.tool(annotations=ToolAnnotations(title="V-Ray: Apply Material", destructiveHint=True))
     def vray_apply_material(
@@ -109,16 +165,30 @@ import rhinoscriptsyntax as rs
 import Rhino
 doc = Rhino.RhinoDoc.ActiveDoc
 mat_index = doc.Materials.Find({material_name!r}, True)
-for oid in {ids_repr}:
-    obj = doc.Objects.FindId(System.Guid(oid))
-    if obj:
-        obj.Attributes.MaterialIndex = mat_index
-        obj.Attributes.MaterialSource = Rhino.DocObjects.ObjectMaterialSource.MaterialFromObject
-        obj.CommitChanges()
-result = {{"applied": len({ids_repr}), "material": {material_name!r}}}
+if mat_index < 0:
+    result = {{"ok": False, "error": "Material not found: " + {material_name!r}}}
+else:
+    applied = 0
+    for oid in {ids_repr}:
+        obj = doc.Objects.FindId(rs.coerceguid(oid))
+        if obj:
+            obj.Attributes.MaterialIndex = mat_index
+            obj.Attributes.MaterialSource = Rhino.DocObjects.ObjectMaterialSource.MaterialFromObject
+            obj.CommitChanges()
+            applied += 1
+    result = {{"ok": True, "applied": applied, "material": {material_name!r}}}
 """
         res = _py(code)
-        return {"success": True, "material_name": material_name, "object_count": len(object_ids), "result": res}
+        ok, error = _outcome(res)
+        out: dict[str, object] = {
+            "success": ok,
+            "material_name": material_name,
+            "object_count": len(object_ids),
+            "result": res,
+        }
+        if error:
+            out["error"] = error
+        return out
 
     @mcp.tool(annotations=ToolAnnotations(title="V-Ray: Add Light", destructiveHint=True))
     def vray_add_light(
@@ -137,7 +207,6 @@ result = {{"applied": len({ids_repr}), "material": {material_name!r}}}
         err = _check()
         if err:
             return {"success": False, "message": err}
-        pos = position or [0, 0, 5]
         cmd_map = {
             "Rectangle": "_VRayLightRect",
             "Sphere": "_VRayLightSphere",
@@ -147,7 +216,20 @@ result = {{"applied": len({ids_repr}), "material": {material_name!r}}}
         }
         cmd = cmd_map.get(light_type, "_VRayLightRect")
         result = _run(cmd)
-        return {"success": True, "light_type": light_type, "position": pos, "result": result}
+        ok, error = _outcome(result)
+        out: dict[str, object] = {
+            "success": ok,
+            "light_type": light_type,
+            "note": (
+                f"{cmd} is an interactive Rhino command that expects mouse input; "
+                "position, target, intensity, and color could not be applied "
+                "programmatically. Adjust the light in the V-Ray Asset Editor."
+            ),
+            "result": result,
+        }
+        if error:
+            out["error"] = error
+        return out
 
     @mcp.tool(annotations=ToolAnnotations(title="V-Ray: Set Environment (HDRI)", destructiveHint=True))
     def vray_set_environment(
@@ -160,7 +242,19 @@ result = {{"applied": len({ids_repr}), "material": {material_name!r}}}
         if err:
             return {"success": False, "message": err}
         result = _run("_VRayOptions")
-        return {"success": True, "hdri_path": hdri_path, "intensity": intensity, "rotation_degrees": rotation_degrees, "result": result}
+        ok, error = _outcome(result)
+        out: dict[str, object] = {
+            "success": ok,
+            "note": (
+                "_VRayOptions opens the interactive V-Ray Asset Editor; hdri_path, "
+                "intensity, and rotation_degrees could not be applied programmatically. "
+                "Set the environment HDRI manually in the editor."
+            ),
+            "result": result,
+        }
+        if error:
+            out["error"] = error
+        return out
 
     @mcp.tool(annotations=ToolAnnotations(title="V-Ray: Set Render Settings", destructiveHint=True))
     def vray_set_render_settings(
@@ -179,13 +273,26 @@ result = {{"applied": len({ids_repr}), "material": {material_name!r}}}
         if err:
             return {"success": False, "message": err}
         code = f"""
-import Rhino
-doc = Rhino.RhinoDoc.ActiveDoc
-doc.RenderSettings.ImageSize = System.Drawing.Size({width}, {height})
-result = {{"width": {width}, "height": {height}, "aa_subdivs": {aa_subdivs}, "gi_preset": {gi_preset!r}}}
+import rhinoscriptsyntax as rs
+previous = rs.RenderResolution(({width}, {height}))
+result = {{"ok": True, "width": {width}, "height": {height}, "previous": list(previous) if previous else None}}
 """
         res = _py(code)
-        return {"success": True, "width": width, "height": height, "aa_subdivs": aa_subdivs, "gi_preset": gi_preset, "result": res}
+        ok, error = _outcome(res)
+        out: dict[str, object] = {
+            "success": ok,
+            "width": width,
+            "height": height,
+            "note": (
+                "Only the render resolution is scriptable here; aa_subdivs, "
+                "gi_preset, and time_limit_seconds are V-Ray Asset Editor settings "
+                "and were not applied programmatically."
+            ),
+            "result": res,
+        }
+        if error:
+            out["error"] = error
+        return out
 
     @mcp.tool(annotations=ToolAnnotations(title="V-Ray: Export VRScene", destructiveHint=True))
     def vray_export_vrscene(
@@ -196,5 +303,15 @@ result = {{"width": {width}, "height": {height}, "aa_subdivs": {aa_subdivs}, "gi
         err = _check()
         if err:
             return {"success": False, "message": err}
-        result = _run(f"_VRayExportScene {output_path!r}")
-        return {"success": True, "output_path": output_path, "compressed": compressed, "result": result}
+        safe_path = sanitise_rhino_path(output_path)
+        result = _run('_VRayExportScene "' + safe_path + '"')
+        ok, error = _outcome(result)
+        out: dict[str, object] = {
+            "success": ok,
+            "output_path": output_path,
+            "compressed": compressed,
+            "result": result,
+        }
+        if error:
+            out["error"] = error
+        return out

@@ -80,7 +80,13 @@ public static class GHSolutionHandlers
                     doc.NewSolution(true);
                 }));
 
-                bool completed = done.Wait(waitMs);
+                // NewSolution runs synchronously when dispatched on the UI
+                // thread, so SolutionEnd has already fired by now if it ever
+                // will. Blocking here would freeze the very thread the event
+                // needs — only wait when we are NOT on the UI thread.
+                bool completed = done.Wait(0);
+                if (!completed && RhinoApp.InvokeRequired)
+                    completed = done.Wait(waitMs);
                 return new
                 {
                     ok          = true,

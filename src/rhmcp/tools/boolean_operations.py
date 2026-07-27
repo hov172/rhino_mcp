@@ -80,7 +80,10 @@ elif operation == "intersection":
     current_results = rs.BooleanIntersection([obj_list[0]], [obj_list[1]], delete_input=delete_sources)
     for next_obj in obj_list[2:]:
         if current_results:
-            current_results = rs.BooleanIntersection(current_results, [next_obj], delete_input=True)
+            # Intermediate results are always disposable, but only consume the
+            # source operand when delete_sources is requested.
+            operand = next_obj if delete_sources else rs.CopyObject(next_obj)
+            current_results = rs.BooleanIntersection(current_results, [operand], delete_input=True)
     ids = current_results
 else:
     raise ValueError("Unsupported boolean operation: {}".format(operation))

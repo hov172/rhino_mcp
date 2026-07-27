@@ -30,16 +30,17 @@ public sealed class RhinoMcpPlugin : PlugIn
             RhinoApp.WriteLine($"Rhino MCP already listening on {Server.BindAddress}:{Server.Port}");
             return true;
         }
-        Server.Start();
-        RhinoApp.WriteLine($"Rhino MCP listening on {Server.BindAddress}:{Server.Port}");
-        // Warn if listening on a non-loopback address without a secret.
-        if (!Server.BindAddress.Equals(System.Net.IPAddress.Loopback) &&
-            !Server.BindAddress.Equals(System.Net.IPAddress.IPv6Loopback) &&
-            Environment.GetEnvironmentVariable("RHINO_MCP_PLUGIN_SECRET") is null)
+        try
         {
-            RhinoApp.WriteLine("⚠ Rhino MCP: listening on a network interface without RHINO_MCP_PLUGIN_SECRET set.");
-            RhinoApp.WriteLine("  Set RHINO_MCP_PLUGIN_SECRET on both the Rhino machine and the MCP server machine.");
+            Server.Start();
         }
+        catch (InvalidOperationException ex)
+        {
+            // e.g. non-loopback bind refused without RHINO_MCP_PLUGIN_SECRET.
+            RhinoApp.WriteLine($"⚠ Rhino MCP: {ex.Message}");
+            return false;
+        }
+        RhinoApp.WriteLine($"Rhino MCP listening on {Server.BindAddress}:{Server.Port}");
         return true;
     }
 

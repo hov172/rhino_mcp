@@ -103,11 +103,7 @@ if "font_height" in data:
     pt = data["point"]
     dot = rs.AddTextDot(data["text"], pt)
     if dot and data.get("font_height"):
-        obj = Rhino.RhinoDoc.ActiveDoc.Objects.FindId(System.Guid(str(dot)))
-        if obj:
-            td = obj.Geometry
-            td.FontHeight = int(data["font_height"])
-            obj.CommitChanges()
+        rs.TextDotHeight(dot, float(data["font_height"]))
     result = {"id": _apply(dot), "type": "text_dot"}
 
 elif "points" in data:

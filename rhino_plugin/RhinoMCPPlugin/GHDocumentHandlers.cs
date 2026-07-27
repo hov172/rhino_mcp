@@ -178,6 +178,13 @@ public static class GHDocumentHandlers
                         ok    = io.SaveQuiet(savePath);
                         saved = savePath;
                     }
+                    else if (string.IsNullOrWhiteSpace(doc.FilePath))
+                    {
+                        // io.Save() on a never-saved document opens a modal
+                        // save dialog, freezing Rhino for a headless client.
+                        result = new { ok = false, error = "Document has never been saved — pass an explicit 'path'." };
+                        return;
+                    }
                     else
                     {
                         ok    = io.Save();

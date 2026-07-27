@@ -342,17 +342,15 @@ def _s(oid):
     return str(oid) if oid else None
 
 if op == "revolve":
-    import math
     p1  = Rhino.Geometry.Point3d(*data["axis_start"])
     p2  = Rhino.Geometry.Point3d(*data["axis_end"])
-    ang = math.radians(float(data.get("angle", 360)))
-    oid = rs.AddRevSrf(data["curve_id"], (p1, p2), ang, 0)
+    oid = rs.AddRevSrf(data["curve_id"], (p1, p2), 0.0, float(data.get("angle", 360)))
     if data.get("delete_input"): rs.DeleteObject(data["curve_id"])
     rs.Redraw()
     result = {"id": _s(oid)}
 
 elif op == "sweep2":
-    ids = rs.AddSweep2(data["rail1_id"], data["rail2_id"],
+    ids = rs.AddSweep2([data["rail1_id"], data["rail2_id"]],
                        data["profile_ids"], data.get("closed", False))
     if data.get("delete_input"):
         for oid in [data["rail1_id"], data["rail2_id"]] + list(data["profile_ids"]):
@@ -376,7 +374,7 @@ elif op == "network_srf":
     result = {"id": _s(oid)}
 
 elif op == "patch":
-    oid = rs.AddPatch(data["object_ids"], data.get("u_spans", 10), data.get("v_spans", 10))
+    oid = rs.AddPatch(data["object_ids"], (data.get("u_spans", 10), data.get("v_spans", 10)))
     rs.Redraw()
     result = {"id": _s(oid)}
 
@@ -395,18 +393,22 @@ elif op == "split_brep":
     result = {"ids": _n(ids or [])}
 
 elif op == "fillet_srf":
-    ids = rs.FilletSurface(data["surface1_id"], data["surface2_id"],
-                           float(data["radius"]), trim=data.get("trim", True))
+    ids = rs.FilletSurfaces(data["surface1_id"], data["surface2_id"],
+                            float(data["radius"]))
     rs.Redraw()
     result = {"ids": _n(ids or [])}
+    if data.get("trim", True):
+        result["note"] = "trim is not supported; fillet surfaces were added but the input surfaces were left untrimmed"
 
 elif op == "cap_holes":
-    oid = rs.CapPlanarHoles(data["brep_id"])
+    oid = data["brep_id"]
+    capped = rs.CapPlanarHoles(oid)
     rs.Redraw()
-    result = {"id": _s(oid), "is_solid": bool(oid and rs.IsPolysurfaceClosed(oid))}
+    result = {"id": _s(oid), "capped": bool(capped),
+              "is_solid": bool(rs.IsPolysurfaceClosed(oid))}
 
 elif op == "extrude_along":
-    oid = rs.ExtrudeCurveAlongCurve(data["curve_id"], data["path_id"])
+    oid = rs.ExtrudeCurve(data["curve_id"], data["path_id"])
     if data.get("delete_input"):
         rs.DeleteObject(data["curve_id"]); rs.DeleteObject(data["path_id"])
     rs.Redraw()

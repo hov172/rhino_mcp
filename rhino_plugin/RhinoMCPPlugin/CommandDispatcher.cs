@@ -11,6 +11,7 @@ public static class CommandDispatcher
 
         // Read-only commands bypass undo recording
         var readOnly = request.Type is
+            "ping" or
             "get_document_summary" or
             "get_objects" or
             "get_object_info" or
@@ -40,9 +41,11 @@ public static class CommandDispatcher
             "gh_get_graph_data" or
             "gh1_export_migration_data";
 
+        // ActiveDoc can be null (all document windows closed on Mac, or during
+        // startup) — GH-only and ping commands must still work.
         var doc = Rhino.RhinoDoc.ActiveDoc;
         uint undoRecord = uint.MaxValue;
-        if (!readOnly)
+        if (!readOnly && doc is not null)
             undoRecord = doc.BeginUndoRecord($"MCP: {request.Type}");
 
         try
@@ -158,7 +161,7 @@ public static class CommandDispatcher
         }
         finally
         {
-            if (undoRecord != uint.MaxValue)
+            if (undoRecord != uint.MaxValue && doc is not null)
                 doc.EndUndoRecord(undoRecord);
         }
     }

@@ -114,23 +114,33 @@ elif operation == "extrude_curve":
     oid = rs.ExtrudeCurveStraight(data["curve_id"], start, end)
     capped_ok = False
     if oid and data.get("cap") and rs.IsCurveClosed(data["curve_id"]):
-        capped = rs.CapPlanarHoles(oid)
-        if capped:
-            oid = capped
-            capped_ok = True
+        # CapPlanarHoles returns a bool; the capped object keeps its id.
+        capped_ok = bool(rs.CapPlanarHoles(oid))
     result = {"result_id": _name([oid], data.get("name"))[0] if oid else None, "capped": capped_ok, "message": "Curve extruded"}
 elif operation == "sweep1":
     ids = rs.AddSweep1(data["rail_id"], data["profile_ids"], closed=bool(data.get("closed", False)))
     result = {"result_ids": _name(ids or [], data.get("name")), "message": "Sweep created"}
 elif operation == "offset_curve":
     normal = data.get("plane_normal") or [0, 0, 1]
-    plane = rs.PlaneFromNormal((0, 0, 0), normal)
-    ids = rs.OffsetCurve(data["curve_id"], plane, float(data["distance"]), normal=normal, style=int(data.get("corner_style", 1)))
+    nvec = Vector3d(float(normal[0]), float(normal[1]), float(normal[2]))
+    if not nvec.Unitize():
+        nvec = Vector3d.ZAxis
+    # OffsetCurve's second argument is a point on the side to offset towards.
+    mid = rs.CurveMidPoint(data["curve_id"])
+    dom = rs.CurveDomain(data["curve_id"])
+    tan = rs.CurveTangent(data["curve_id"], (dom[0] + dom[1]) / 2.0)
+    side = Vector3d.CrossProduct(nvec, tan) if tan else Vector3d(0, 0, 0)
+    if not side.Unitize():
+        side = Vector3d.XAxis
+    direction = mid + side
+    ids = rs.OffsetCurve(data["curve_id"], direction, float(data["distance"]), normal=normal, style=int(data.get("corner_style", 1)))
     if ids and not isinstance(ids, (list, tuple)):
         ids = [ids]
     result = {"result_ids": _name(ids or [], data.get("name")), "message": "Curve offset"}
 elif operation == "pipe":
-    ids = rs.AddPipe(data["curve_id"], 0, float(data["radius"]), cap=int(bool(data.get("cap", True))) + 1)
+    ids = rs.AddPipe(data["curve_id"], 0, float(data["radius"]),
+                     cap=1 if data.get("cap", True) else 0,
+                     fit=bool(data.get("fit_rail", False)))
     if ids and not isinstance(ids, (list, tuple)):
         ids = [ids]
     result = {"result_ids": _name(ids or [], data.get("name")), "message": "Pipe created"}

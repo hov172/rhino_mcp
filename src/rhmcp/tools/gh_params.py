@@ -27,7 +27,7 @@ def register(mcp: FastMCP) -> None:
         params: dict[str, object] = {"instance_guid": instance_guid}
         if output_name is not None:
             params["output_name"] = output_name
-        return _gh("gh_get_output", params)
+        return _gh("gh_get_output", params, rhino_id=rhino_id)
 
     @mcp.tool(annotations=ToolAnnotations(title="Get Solution Errors", readOnlyHint=True))
     def gh_get_errors(
@@ -41,7 +41,7 @@ def register(mcp: FastMCP) -> None:
         params: dict[str, object] = {}
         if instance_guid is not None:
             params["instance_guid"] = instance_guid
-        return _gh("gh_get_solution_errors", params)
+        return _gh("gh_get_solution_errors", params, rhino_id=rhino_id)
 
     @mcp.tool(annotations=ToolAnnotations(title="Set Slider Value", destructiveHint=True))
     def gh_set_slider(
@@ -53,7 +53,7 @@ def register(mcp: FastMCP) -> None:
 
         instance_guid: Instance GUID of the slider component.
         value: New slider value (will be clamped to the slider's..."""
-        return _gh("gh_set_slider", {"instance_guid": instance_guid, "value": value})
+        return _gh("gh_set_slider", {"instance_guid": instance_guid, "value": value}, rhino_id=rhino_id)
 
     @mcp.tool(annotations=ToolAnnotations(title="Set Panel Text", destructiveHint=True))
     def gh_set_panel(
@@ -67,7 +67,7 @@ def register(mcp: FastMCP) -> None:
         instance_guid: Instance GUID of the panel component.
         text: The text to display in the panel.
         """
-        return _gh("gh_set_panel", {"instance_guid": instance_guid, "text": text})
+        return _gh("gh_set_panel", {"instance_guid": instance_guid, "text": text}, rhino_id=rhino_id)
 
     @mcp.tool(annotations=ToolAnnotations(title="Set Number Parameter Values", destructiveHint=True))
     def gh_set_number_param(
@@ -79,7 +79,7 @@ def register(mcp: FastMCP) -> None:
 
         instance_guid: Instance GUID of the Number param.
         values: One or more numeric values as a list (e.g. [1.0,..."""
-        return _gh("gh_set_number_param", {"instance_guid": instance_guid, "values": values})
+        return _gh("gh_set_number_param", {"instance_guid": instance_guid, "values": values}, rhino_id=rhino_id)
 
     @mcp.tool(annotations=ToolAnnotations(title="Set Point Parameter Values", destructiveHint=True))
     def gh_set_point_param(
@@ -93,12 +93,17 @@ def register(mcp: FastMCP) -> None:
         points: List of points, each as [x, y, z] (e.g. [[0,0,0],..."""
         # Flatten [[x,y,z],...] to [x,y,z,x,y,z,...] for C# handler
         flat: list[float] = []
-        for pt in points:
+        for i, pt in enumerate(points):
+            if not isinstance(pt, (list, tuple)) or len(pt) < 2:
+                return {
+                    "ok": False,
+                    "error": f"points[{i}] is malformed: {pt!r}. Each point must be [x, y] or [x, y, z].",
+                }
             if len(pt) == 2:
                 flat.extend([pt[0], pt[1], 0.0])
-            elif len(pt) >= 3:
+            else:
                 flat.extend([pt[0], pt[1], pt[2]])
-        return _gh("gh_set_point_param", {"instance_guid": instance_guid, "points": flat})
+        return _gh("gh_set_point_param", {"instance_guid": instance_guid, "points": flat}, rhino_id=rhino_id)
 
     @mcp.tool(annotations=ToolAnnotations(title="Add Script Component", destructiveHint=True))
     def gh_add_script_component(
@@ -123,7 +128,7 @@ def register(mcp: FastMCP) -> None:
             "outputs": outputs,
             "x": x,
             "y": y,
-        })
+        }, rhino_id=rhino_id)
 
     @mcp.tool(annotations=ToolAnnotations(title="Set Script Component Code", destructiveHint=True))
     def gh_set_script_code(
@@ -135,12 +140,12 @@ def register(mcp: FastMCP) -> None:
 
         instance_guid: Instance GUID of the script component.
         code: New source code string...."""
-        return _gh("gh_set_script_code", {"instance_guid": instance_guid, "code": code})
+        return _gh("gh_set_script_code", {"instance_guid": instance_guid, "code": code}, rhino_id=rhino_id)
 
 
-def _gh(command: str, params: dict[str, object]) -> dict[str, object]:
+def _gh(command: str, params: dict[str, object], rhino_id: str | None = None) -> dict[str, object]:
     """Plugin-only dispatch — GH has no rhinocode fallback."""
     try:
-        return rhino.plugin_result(command, params)
+        return rhino.plugin_result(command, params, rhino_id=rhino_id)
     except OSError:
         return {"ok": False, "error": "Grasshopper plugin is not connected. Ensure Rhino is running with the RhinoMCP plugin loaded."}

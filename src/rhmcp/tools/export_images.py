@@ -166,7 +166,7 @@ else:
                 enc_params = _Imaging.EncoderParameters(1)
                 enc_params.Param[0] = _Imaging.EncoderParameter(
                     _Imaging.Encoder.Quality,
-                    long(max(1, min(100, int(_mcp_quality))))
+                    int(max(1, min(100, int(_mcp_quality))))
                 )
                 bitmap.Save(_mcp_output, jpeg_codec, enc_params)
             else:
@@ -240,7 +240,7 @@ else:
             capture.TransparentBackground = bool(_mcp_transparent) and dst_ext == ".png"
             capture.ScaleScreenItems = False
 
-            bitmap = view.CaptureToBitmap(capture)
+            bitmap = capture.CaptureToBitmap(view)
 
             if bitmap is None:
                 result = {"ok": False, "error": "CaptureToBitmap returned None — check display mode compatibility."}
@@ -263,7 +263,7 @@ else:
                         enc_params = _Imaging.EncoderParameters(1)
                         enc_params.Param[0] = _Imaging.EncoderParameter(
                             _Imaging.Encoder.Quality,
-                            long(max(1, min(100, int(_mcp_quality))))
+                            int(max(1, min(100, int(_mcp_quality))))
                         )
                         bitmap.Save(_mcp_path, jpeg_codec, enc_params)
                     else:

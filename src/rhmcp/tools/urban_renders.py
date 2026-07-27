@@ -42,7 +42,16 @@ _DEFAULT_NEGATIVE = "cartoon, sketch, low quality, blurry, distorted, interior"
 
 def _capture_named_view(view_name: str) -> str:
     """Activate the named Rhino viewport and return a base64 PNG string."""
-    rhino.plugin_result("set_active_view", {"view_name": view_name})
+    # Switch views via script — the plugin has no set_active_view command and
+    # capture_viewport always captures the active viewport.
+    code = "__mcp_view = {!r}\n".format(view_name) + (
+        "import rhinoscriptsyntax as rs\n"
+        "previous = rs.CurrentView(__mcp_view)\n"
+        'result = {"ok": previous is not None, "view": __mcp_view}\n'
+    )
+    switch = rhino.execute_python(code)
+    if not switch.get("ok"):
+        return ""
     result = rhino.plugin_result("capture_viewport", {"path": None, "width": 1200, "height": 900})
     if result.get("ok"):
         b64 = result.get("result", {}).get("image_data", "")

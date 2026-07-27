@@ -133,11 +133,25 @@ elif op == "area":
     result = {"area": area, "object_id": oid}
 
 elif op == "volume":
-    props = rs.SurfaceVolume(data["object_id"])
-    result = {"volume": props[0] if props else None, "object_id": data["object_id"]}
+    oid = data["object_id"]
+    if rs.IsMesh(oid):
+        # MeshVolume returns (mesh_count, volume, error_estimate)
+        props = rs.MeshVolume(oid)
+        volume = props[1] if props else None
+    else:
+        # SurfaceVolume returns (volume, error_estimate)
+        props = rs.SurfaceVolume(oid)
+        volume = props[0] if props else None
+    result = {"volume": volume, "object_id": oid}
 
 elif op == "bbox":
-    box = rs.BoundingBox(data["object_ids"])
+    if data.get("world", True):
+        box = rs.BoundingBox(data["object_ids"])
+        coord_system = "world"
+    else:
+        cplane = rs.ViewCPlane()
+        box = rs.BoundingBox(data["object_ids"], cplane, in_world_coords=False)
+        coord_system = "cplane"
     if box:
         mn = [box[0].X, box[0].Y, box[0].Z]
         mx = [box[6].X, box[6].Y, box[6].Z]
@@ -147,6 +161,7 @@ elif op == "bbox":
             "width":  mx[0] - mn[0],
             "depth":  mx[1] - mn[1],
             "height": mx[2] - mn[2],
+            "coordinate_system": coord_system,
         }
     else:
         result = {"ok": False, "error": "Could not compute bounding box", "error_code": "COMPUTATION_FAILED"}

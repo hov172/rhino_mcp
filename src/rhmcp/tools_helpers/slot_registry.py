@@ -25,6 +25,27 @@ def _slots_dir() -> Path:
 
 
 def _is_alive(pid: int) -> bool:
+    if os.name == "nt":
+        # os.kill(pid, 0) is NOT an existence check on Windows — sig 0 is
+        # CTRL_C_EVENT, which fails for GUI processes like Rhino (and would
+        # actually deliver Ctrl+C if it shared our console). Query the
+        # process handle instead.
+        import ctypes
+        import ctypes.wintypes
+        PROCESS_QUERY_LIMITED_INFORMATION = 0x1000
+        STILL_ACTIVE = 259
+        ERROR_ACCESS_DENIED = 5
+        kernel32 = ctypes.windll.kernel32  # type: ignore[attr-defined]
+        handle = kernel32.OpenProcess(PROCESS_QUERY_LIMITED_INFORMATION, False, pid)
+        if not handle:
+            return kernel32.GetLastError() == ERROR_ACCESS_DENIED
+        try:
+            exit_code = ctypes.wintypes.DWORD()
+            if kernel32.GetExitCodeProcess(handle, ctypes.byref(exit_code)):
+                return exit_code.value == STILL_ACTIVE
+            return True
+        finally:
+            kernel32.CloseHandle(handle)
     try:
         os.kill(pid, 0)   # signal 0 = existence check
         return True

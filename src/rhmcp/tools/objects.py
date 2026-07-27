@@ -369,7 +369,7 @@ elif op == "last_created":
     doc  = Rhino.RhinoDoc.ActiveDoc
     objs = [o for o in doc.Objects if not o.IsDeleted]
     if objs:
-        latest = max(objs, key=lambda o: o.Id.ToString())
+        latest = max(objs, key=lambda o: o.RuntimeSerialNumber)
         result = {"ids": [str(latest.Id)]}
     else:
         result = {"ids": []}
@@ -627,19 +627,27 @@ objects = _objects(data.get("ids"), bool(data.get("selected", True)))
 copy = bool(data.get("copy", False))
 current = objects
 
+# copy applies to the first operation only: it creates the copies, and the
+# remaining operations transform those copies in place (so the returned ids
+# are the new copies, transformed once each).
+op_copy = copy
 if data.get("move") is not None and current:
-    moved = rs.CopyObjects(current, _pt(data.get("move"))) if copy else rs.MoveObjects(current, _pt(data.get("move")))
+    moved = rs.CopyObjects(current, _pt(data.get("move"))) if op_copy else rs.MoveObjects(current, _pt(data.get("move")))
+    if op_copy and moved:
+        op_copy = False
     current = moved or current
 if data.get("rotate_degrees") is not None and current:
     axis = _pt(data.get("rotate_axis"), (0, 0, 1))
     center = _pt(data.get("rotate_center"), (0, 0, 0))
-    rotated = rs.RotateObjects(current, center, float(data.get("rotate_degrees")), axis, copy=False)
+    rotated = rs.RotateObjects(current, center, float(data.get("rotate_degrees")), axis, copy=op_copy)
+    if op_copy and rotated:
+        op_copy = False
     current = rotated or current
 if data.get("scale") is not None and current:
     value = data.get("scale")
     factors = (float(value), float(value), float(value)) if isinstance(value, (int, float)) else tuple(float(v) for v in value[:3])
     origin = _pt(data.get("scale_origin"), (0, 0, 0))
-    scaled = rs.ScaleObjects(current, origin, factors, copy=False)
+    scaled = rs.ScaleObjects(current, origin, factors, copy=op_copy)
     current = scaled or current
 
 rs.Redraw()
