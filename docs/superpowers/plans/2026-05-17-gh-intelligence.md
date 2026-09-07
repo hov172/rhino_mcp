@@ -1,5 +1,7 @@
 # GH Intelligence Implementation Plan
 
+> Historical design/implementation record. Its macOS installation paths are superseded by the [0.17.1 upgrade guide](../../upgrade-0.17.1.md); use version-specific `MacPlugIns` bundles and quit Rhino before installation.
+
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
 **Goal:** Add GH canvas analysis, GH1/GH2 de-spaghettify, and GH1→GH2 migration tools to rhino_mcp (v0.12.0), matching and exceeding mcneel/RhinoMCP using direct tool execution instead of script generation.

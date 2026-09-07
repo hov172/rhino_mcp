@@ -178,49 +178,13 @@ All command handlers that touch Rhino or Grasshopper state run on the Rhino main
 
 The 0.17.1 macOS installer fixes discovery by using `8.0/MacPlugIns/rhino-mcp.rhp/rhino-mcp.rhp` (or `9.0`) and repairing cached paths while Rhino is closed. See the [0.17.1 upgrade guide](../docs/upgrade-0.17.1.md).
 
-Follow the [0.17.0 upgrade guide](../docs/upgrade-0.17.0.md) for matching Python, plugin, and Docker versions. Quit Rhino completely before replacing an installed plugin.
+Quit Rhino completely before replacing plugin files. On macOS, use the signed installer linked in the upgrade guide; it installs the full bundle, backs up conflicting legacy copies, and repairs cached registration. To repair an existing package installation, run `/usr/local/bin/rhino-mcp-configure` with Rhino closed, then restart Rhino.
 
-Having two copies of the plugin installed simultaneously causes a **port conflict** — both attempt to bind port 1999 on load, the second one fails silently, and all MCP calls go to the wrong version or return `connection refused`. Rhino does not warn you.
+For manual installation, follow the main [installation instructions](../README.md#installation) and copy the assembly plus its DLL/JSON dependencies into the version-specific bundle. Avoid duplicate manual and Yak installations; back up and retire the previous copy before switching installation methods. On Windows, use the matching Yak package or Rhino’s plugin manager.
 
-### Step 1 — Remove ALL old copies
+After restarting Rhino, run `MCPStatus` and complete a read-only `get_document_summary` request from the AI client. If the command is missing, check the bundle location and cached registration using the upgrade guide.
 
-There are two possible install locations. Check both — you may have installed once via `.rhp` copy and once via Yak or PackageManager.
-
-**macOS:**
-
-```bash
-# Manual .rhp install
-rm -f "$HOME/Library/Application Support/McNeel/Rhinoceros/8.0/Plug-ins/rhino-mcp.rhp"
-
-# Yak / PackageManager install
-rm -rf "$HOME/Library/Application Support/McNeel/Rhinoceros/packages/8.0/rhino-mcp"
-```
-
-> If `rm` fails with "Operation not permitted" (macOS sandbox), use Finder: press `⌘⇧G`, paste the path, and delete manually.
-
-**Windows:**
-
-```powershell
-# Manual .rhp install
-Remove-Item "$env:APPDATA\McNeel\Rhinoceros\8.0\Plug-ins\rhino-mcp.rhp" -ErrorAction SilentlyContinue
-
-# Yak / PackageManager install
-Remove-Item "$env:APPDATA\McNeel\Rhinoceros\packages\8.0\rhino-mcp" -Recurse -ErrorAction SilentlyContinue
-```
-
-Not sure which method you used? Remove both — if neither exists, nothing happens.
-
-### Step 2 — Quit Rhino completely
-
-Close all Rhino windows and confirm the process is gone (Task Manager on Windows, Activity Monitor on macOS). Rhino holds plugins in memory until the process exits — closing the window is not enough.
-
-### Step 3 — Install the new version
-
-Copy the new `.rhp` to the plug-ins folder or run the Yak installer. See the main [README.md](../README.md#upgrading-from-a-previous-version) for full instructions.
-
-### Step 4 — Verify
-
-Restart Rhino. You should see `Rhino MCP listening on 127.0.0.1:1999` in the command history. Run `MCPStatus` to confirm. If a port error appears, go to **Tools → Options → Plug-ins**, search "rhino-mcp", and check whether an old path is still registered.
+On 2026-09-07, live `ping` confirmed plugin **0.17.1** on Rhino **8.34.26223.11002**, and the installed MCP server **0.17.1** completed a read-only document query. See the [validation record](../release/validation-0.17.1.md) for details and limits.
 
 ---
 

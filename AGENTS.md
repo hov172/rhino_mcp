@@ -201,3 +201,7 @@ Common error codes: `INVALID_GUID`, `INVALID_COLOR`, `INVALID_COORDINATE`, `INVA
 The `E701` ignore is intentional — `if err: return err` is the project's validation pattern.
 
 Review hardening and deployment changes: see `docs/secure-operation.md`. All underlying runtime tools accept `project_id` and `rhino_id`; workflow state belongs in `tools_helpers/workflow_state.py`, never module globals.
+
+## Latest installed verification
+
+On 2026-09-07, installed plugin and MCP server **0.17.1** passed a live ping and an end-to-end read-only document query on Rhino **8.34.26223.11002**. See the [validation record](release/validation-0.17.1.md) for artifact checks and remaining validation limits. Recheck runtime status when needed; this is a dated observation.

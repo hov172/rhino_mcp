@@ -1,6 +1,6 @@
-# Operating rhino-mcp 0.17.0
+# Operating rhino-mcp 0.17.1
 
-For package builds and installation, see the [upgrade guide](upgrade-0.17.0.md).
+For package builds and installation, see the [upgrade guide](upgrade-0.17.1.md). The security behavior introduced in 0.17.0 remains in effect. See the [validation record](../release/validation-0.17.1.md) for the checks performed; a local read-only check does not validate remote TLS or mutation recovery.
 
 ## Execution and recovery
 

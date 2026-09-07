@@ -48,3 +48,9 @@ Inspect the exact packaged version before publication, then verify MCP initializ
 Build the matching Python wheel first, then run `bash scripts/build-installer.sh` on macOS with Rhino 8, .NET 8, uv-managed Python 3.13 runtimes, and Developer ID signing certificates. Set `NOTARY_PROFILE` to the existing notarytool Keychain profile to submit and staple both packages.
 
 The builder stages runtimes and virtual environments in a temporary directory, rewrites their paths for `/Users/Shared/rhino_mcp`, and includes the Rhino plugin dependencies. Building does not overwrite the live shared installation. It outputs `release/rhino-mcp-0.17.1-universal-signed.pkg` and `release/rhino-mcp-0.17.1-universal-uninstaller-signed.pkg`. Verify signatures, stapled tickets, and both bundled Python versions before distribution.
+
+## Published 0.17.1 and documentation updates
+
+The [v0.17.1 GitHub release](https://github.com/hov172/rhino_mcp/releases/tag/v0.17.1) contains nine assets. Both macOS packages are signed, notarized, and stapled. The installed plugin/server passed a local read-only end-to-end check; see the [validation record](../release/validation-0.17.1.md).
+
+Keep published binary tags fixed at their build commit. Documentation-only follow-ups go to `main`; update the release’s validation attachment and notes when verification evidence changes. Do not rebuild or relabel unchanged binaries. `release/SHA256SUMS-0.17.1` covers seven binary assets; when changing a documentation attachment, verify its uploaded digest separately.

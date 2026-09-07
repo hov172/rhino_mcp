@@ -16,3 +16,11 @@ Python, C#, Yak, Docker metadata, and macOS packages use 0.17.1; the tool count 
 The bundle location follows [McNeel's macOS installation guidance](https://developer.rhino3d.com/guides/rhinocommon/plugin-installers-mac/).
 
 Regression coverage includes bundle discovery, cached-path migration with unrelated settings preserved, missing dependency repair, and failure before mutation when the source assembly is absent. The full non-integration suite contains 476 tests plus five subtests.
+
+## Verified installation
+
+On 2026-09-07, the installed plugin and all dependencies matched the release, and Rhino’s cached registration pointed to the correct bundle. Live `ping` returned plugin **0.17.1** on Rhino **8.34.26223.11002**. The installed Python server initialized as **0.17.1** and completed a read-only `get_document_summary` call through MCP with `ok: true` and `backend: plugin`. See the [full validation record](../release/validation-0.17.1.md).
+
+To check your installation, run `MCPStatus` in Rhino, then ask your AI client to call `get_rhino_backend_status` and `get_document_summary`. For compact mode, invoke the latter through `call_rhino_tool`. Listener status alone does not establish that the AI client can complete a request.
+
+The [GitHub release](https://github.com/hov172/rhino_mcp/releases/tag/v0.17.1) includes signed and notarized universal installer/uninstaller packages, the plugin ZIP, `.rhp`, `.yak`, Python wheel and source distribution, checksums, and validation notes. Both package tickets passed stapler and Gatekeeper checks. GitHub publication does not publish to PyPI, the McNeel package server, or a Docker registry; rebuilding an image does not replace a running container.

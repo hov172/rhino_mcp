@@ -105,7 +105,7 @@ Control Rhino 3D from Claude, Cursor, Codex, and any other MCP-capable AI tool. 
 
 ## Quick Start
 
-**Version 0.17.1:** fixes macOS plugin discovery and stale registration. See the [0.17.1 upgrade guide](docs/upgrade-0.17.1.md). Since 0.17.0, remote HTTP/plugin connections now require TLS. See [secure operation and migration notes](docs/secure-operation.md) for certificates, HTTP identities, execution gates, project state, and changed error/export behavior. Follow the [0.17.0 upgrade guide](docs/upgrade-0.17.0.md) to rebuild and install matching packages.
+**Version 0.17.1:** fixes macOS plugin discovery and stale registration. See the [0.17.1 upgrade guide](docs/upgrade-0.17.1.md). Since 0.17.0, remote HTTP/plugin connections now require TLS. See [secure operation and migration notes](docs/secure-operation.md) for certificates, HTTP identities, execution gates, project state, and changed error/export behavior. Installed plugin and MCP server 0.17.1 passed a live read-only check on Rhino 8.34.26223.11002 on 2026-09-07; see the [validation record](release/validation-0.17.1.md).
 
 > **Two separate pieces — both are required:**
 >
@@ -355,16 +355,16 @@ The `.pkg` installer is the fastest way to get up and running on macOS. It requi
 
 **What it installs:**
 - A self-contained Python 3.13 runtime and virtual environment under `/Users/Shared/rhino_mcp/` (shared across all users on the machine)
-- The `rhino-mcp.rhp` plugin into every Rhino version detected on the machine (7, 8, 9)
+- The `rhino-mcp.rhp` plugin and dependencies into version-specific `MacPlugIns` bundles for detected Rhino 8 and 9 installations
 - The `rhino` MCP server entry into Claude Desktop and Claude Code automatically
 
 **Steps:**
 1. Download the [signed and notarized 0.17.1 installer](https://github.com/hov172/rhino_mcp/releases/download/v0.17.1/rhino-mcp-0.17.1-universal-signed.pkg)
-2. Double-click the `.pkg` and follow the installer prompts
+2. Quit Rhino completely, then double-click the `.pkg` and follow the installer prompts
 3. Launch Rhino — the plugin loads automatically
 4. Launch your AI client — the MCP server is already configured
 
-> The installer removes previous per-user manual and Yak copies. If you previously installed into the Rhino application bundle, check that location for a duplicate before installing.
+> The installer backs up conflicting legacy copies and repairs cached plugin paths. If no GUI user is logged in during installation, run `/usr/local/bin/rhino-mcp-configure` after login with Rhino closed. See the [upgrade guide](docs/upgrade-0.17.1.md) for backup locations and verification.
 
 The [signed 0.17.1 uninstaller](https://github.com/hov172/rhino_mcp/releases/download/v0.17.1/rhino-mcp-0.17.1-universal-uninstaller-signed.pkg) is available in the same release.
 
@@ -1277,7 +1277,7 @@ See [secure operation](docs/secure-operation.md) for complete configuration exam
 |---|---|---|
 | `RHINO_MCP_BIND_HOST` | `127.0.0.1` | IP address the Rhino plugin binds its TCP listener to. Set to `0.0.0.0` to accept connections from any network interface (required for remote AI clients). Must be set in Rhino's environment before `MCPStart` is run. |
 | `RHINO_MCP_PLUGIN_SECRET` | *(unset)* | Pre-shared key required from the Python server on every connection. **Required for network (non-loopback) binding** — since v0.16.0 the plugin refuses to start listening on a non-loopback address without it. Set the same value on both machines. Unset = no authentication (loopback-only binding still works). |
-| `RHINO_MCP_PLUGIN_TLS_CERT` | *(unset)* | PFX certificate with private key; required for non-loopback binding in 0.17.0. |
+| `RHINO_MCP_PLUGIN_TLS_CERT` | *(unset)* | PFX certificate with private key; required for non-loopback binding since 0.17.0. |
 | `RHINO_MCP_PLUGIN_TLS_PASSWORD` | *(unset)* | Password for the PFX file. |
 
 ---

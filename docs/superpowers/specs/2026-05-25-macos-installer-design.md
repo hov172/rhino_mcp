@@ -1,4 +1,6 @@
 # macOS Installer Package — Design Spec
+
+> Historical design/implementation record. Its macOS installation paths are superseded by the [0.17.1 upgrade guide](../../upgrade-0.17.1.md); use version-specific `MacPlugIns` bundles and quit Rhino before installation.
 **Project:** rhino-mcp  
 **Date:** 2026-05-25  
 **Status:** Approved (senior dev review pass 6 — 2026-05-25)

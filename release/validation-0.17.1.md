@@ -12,6 +12,15 @@
 - GitHub CI passed on Python 3.10, 3.11, and 3.12.
 - All packaged Python source files and the installer helper match the release source.
 - 476 tests plus five subtests passed; lint, installer shell syntax, and whitespace checks passed.
-- Installer was built and verified without replacing the live shared installation. A clean-machine installation test and live 0.17.1 Rhino plugin query were not performed; Rhino was closed during final package verification.
+- Installer build and initial payload checks did not replace the live installation; Rhino was closed during those checks. Subsequent installed-system verification is recorded below. A clean-machine installation test was not performed.
+
+## Installed-system verification — 2026-09-07
+
+- `/Users/Shared/rhino_mcp/VERSION`, installed Python package metadata, and MCP initialization all report 0.17.1.
+- The shared plugin payload and all seven files in the installed Rhino 8 `MacPlugIns/rhino-mcp.rhp` bundle match the released plugin and dependencies by SHA-256.
+- Rhino’s cached assembly path points to `8.0/MacPlugIns/rhino-mcp.rhp/rhino-mcp.rhp`.
+- Live TCP `ping` at `127.0.0.1:1999` returned `status: ok`, plugin version `0.17.1`, and Rhino version `8.34.26223.11002`.
+- The installed Apple Silicon Python runtime initialized an MCP stdio session as 0.17.1 and successfully called `get_document_summary` through `call_rhino_tool`, returning `ok: true` and `backend: plugin`.
+- These checks establish local installation, listener availability, and a read-only end-to-end request. They do not establish mutation recovery, every tool’s behavior, remote TLS, or a running Docker deployment.
 
 See SHA256SUMS-0.17.1 for final stapled package hashes.

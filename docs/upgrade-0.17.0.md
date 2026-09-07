@@ -1,5 +1,7 @@
 # Upgrading to 0.17.0
 
+> Historical release guide. For current macOS installation, use the [0.17.1 upgrade guide](upgrade-0.17.1.md), which fixes plugin discovery and cached registration.
+
 0.17.0 updates the Python server, Rhino plugin, and Docker image. Upgrade both server and plugin to obtain the dispatch controls and document recovery changes. The public tool count remains 358.
 
 ## Build and artifact status

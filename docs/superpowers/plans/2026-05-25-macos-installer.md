@@ -1,5 +1,7 @@
 # macOS Installer Implementation Plan
 
+> Historical design/implementation record. Its macOS installation paths are superseded by the [0.17.1 upgrade guide](../../upgrade-0.17.1.md); use version-specific `MacPlugIns` bundles and quit Rhino before installation.
+
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
 **Goal:** Produce a signed, notarized macOS `.pkg` installer that deploys the rhino-mcp server to `/Users/Shared/rhino_mcp/`, installs the Rhino plugin per-user, and auto-configures Claude Desktop, Claude Code CLI, ChatGPT Desktop, and Codex Desktop.

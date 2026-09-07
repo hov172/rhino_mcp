@@ -13,6 +13,10 @@ Versioning follows [Semantic Versioning](https://semver.org/).
 - Require Rhino to be closed during installation and retire conflicting application-bundle copies.
 - Remove the correct plugin bundle during uninstallation.
 
+### Verified
+- Signed and notarized installer/uninstaller packages; 476 tests plus five subtests and Python 3.10–3.12 CI passed.
+- Installed plugin and MCP server 0.17.1 passed a live ping and read-only MCP document query on Rhino 8.34.26223.11002. See the [validation record](release/validation-0.17.1.md) for scope and limitations.
+
 ## [0.17.0] — 2026-09-06
 
 ### Fixed

@@ -42,3 +42,7 @@ See [.env.example](.env.example) and [secure operation](docs/secure-operation.md
 ## Builds and releases
 
 Follow the [0.17.1 upgrade guide](docs/upgrade-0.17.1.md) and [publishing checklist](rhino_plugin/PUBLISHING.md). Builds do not automatically install the plugin. The GitHub plugin release workflow is manually dispatched on a self-hosted macOS runner with Rhino; it is not an automatic release-on-tag pipeline.
+
+## Latest installed verification
+
+On 2026-09-07, installed plugin and MCP server **0.17.1** passed a live ping and an end-to-end read-only document query on Rhino **8.34.26223.11002**. See the [validation record](release/validation-0.17.1.md) for artifact checks and remaining validation limits. Recheck runtime status when needed; this is a dated observation.
