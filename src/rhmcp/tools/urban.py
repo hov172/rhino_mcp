@@ -1098,7 +1098,7 @@ def register(mcp: FastMCP) -> None:
         fmt = output_format.lower().lstrip(".")
         if fmt not in {"3dm", "glb", "gltf", "geojson", "pdf"}:
             return {"ok": False, "error": "output_format must be one of 3dm, glb, gltf, geojson, pdf"}
-        raw_path = path or os.path.join(tempfile.gettempdir(), f"urban_export_{_dt.datetime.now(_dt.UTC).strftime('%Y%m%d_%H%M%S')}.{fmt}")
+        raw_path = path or os.path.join(tempfile.gettempdir(), f"urban_export_{_dt.datetime.now(_dt.timezone.utc).strftime('%Y%m%d_%H%M%S')}.{fmt}")
         try:
             export_path = _safe_export_path(raw_path)
         except ValueError as exc:
@@ -1148,7 +1148,7 @@ def register(mcp: FastMCP) -> None:
         Save a timestamped design version manifest and 3DM export.
         """
         safe_project = re.sub(r"[^A-Za-z0-9_.-]+", "_", project_name).strip("_") or "urban_project"
-        stamp = _dt.datetime.now(_dt.UTC).strftime("%Y%m%d_%H%M%S")
+        stamp = _dt.datetime.now(_dt.timezone.utc).strftime("%Y%m%d_%H%M%S")
         safe_version = re.sub(r"[^A-Za-z0-9_.-]+", "_", version_name or stamp).strip("_")
         folder = os.path.join(directory, safe_project, safe_version)
         folder = _safe_export_path(folder)  # restrict to home or temp directory
@@ -1159,7 +1159,7 @@ def register(mcp: FastMCP) -> None:
         manifest = {
             "project_name": project_name,
             "version_name": version_name or stamp,
-            "created_utc": _dt.datetime.now(_dt.UTC).isoformat().replace("+00:00", "Z"),
+            "created_utc": _dt.datetime.now(_dt.timezone.utc).isoformat().replace("+00:00", "Z"),
             "model_path": model_path,
             "metadata": metadata or {},
             "export_ok": export.get("ok"),

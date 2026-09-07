@@ -314,8 +314,14 @@ productsign --sign "$INSTALLER_SIGNING_ID" "$UNINSTALLER_PKG" "$SIGNED_UNINSTALL
 
 if [ -n "${NOTARY_PROFILE:-}" ]; then
     echo "[16] Notarizing with keychain profile '$NOTARY_PROFILE' (this can take a few minutes)..."
-    xcrun notarytool submit "$SIGNED_FINAL" --keychain-profile "$NOTARY_PROFILE" --wait
-    xcrun notarytool submit "$SIGNED_UNINSTALL" --keychain-profile "$NOTARY_PROFILE" --wait
+    # Submit both before waiting so Apple can process them concurrently.
+    mkdir -p "$BUILDTMP"
+    xcrun notarytool submit "$SIGNED_FINAL" --keychain-profile "$NOTARY_PROFILE" --output-format json > "$BUILDTMP/installer-notary.json"
+    xcrun notarytool submit "$SIGNED_UNINSTALL" --keychain-profile "$NOTARY_PROFILE" --output-format json > "$BUILDTMP/uninstaller-notary.json"
+    for SUBMISSION in "$BUILDTMP/installer-notary.json" "$BUILDTMP/uninstaller-notary.json"; do
+        SUBMISSION_ID=$(uv run python -c 'import json,sys; print(json.load(open(sys.argv[1]))["id"])' "$SUBMISSION")
+        xcrun notarytool wait "$SUBMISSION_ID" --keychain-profile "$NOTARY_PROFILE"
+    done
     echo "[17] Stapling notarization tickets..."
     xcrun stapler staple "$SIGNED_FINAL"
     xcrun stapler staple "$SIGNED_UNINSTALL"

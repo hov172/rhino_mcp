@@ -8,6 +8,7 @@ Versioning follows [Semantic Versioning](https://semver.org/).
 ## [0.17.0] — 2026-09-06
 
 ### Fixed
+- Preserve Python 3.10 compatibility when timestamping saved project versions.
 - Keep the FastMCP dependency on SDK 1.x; verify both macOS installer runtimes before signing and build in temporary staging with plugin dependencies.
 - Report the installed rhino-mcp version in MCP initialization metadata instead of the SDK version.
 - Prevent command replay after delivery starts, including backend and CLI fallback;
