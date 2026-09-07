@@ -5,6 +5,17 @@ Versioning follows [Semantic Versioning](https://semver.org/).
 
 ---
 
+## [0.18.0] — 2026-09-07
+
+### Changed
+- Replace the PyMuPDF dependency with PDFium/pdfplumber; retain all four PDF tool names and 358 total tools.
+- Return vector paths in explicit PDF-point coordinates, with a matching-DPI pixel-scale conversion or `real_units_per_point`.
+- Preserve cubic curves and path closures; normalize rotation/crop origins and disclose visibility/partial extraction limits.
+- Paginate PDF metadata and report truncation; require valid pages, positive finite scale/DPI, actual PDF headers, and structured encrypted/corrupt-file errors.
+- Isolate PDF parsing in bounded disposable processes with timeout, memory, pixel, input/output, text, and geometry budgets.
+- Resolve installer dependencies from hashed locks, build patched Intel cryptography from verified sources, include dependency inventories/native notices, and add CI policy/advisory checks.
+- Upgrade runtime dependencies flagged by the advisory scan. Add dedicated PDF regression fixtures and tests.
+
 ## [0.17.1] — 2026-09-07
 
 ### Fixed

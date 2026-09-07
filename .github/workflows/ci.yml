@@ -27,7 +27,7 @@ jobs:
         uses: astral-sh/setup-uv@v6
 
       - name: Install package and dev dependencies
-        run: uv sync --group dev
+        run: uv sync --locked --group dev
 
       - name: Run unit, smoke, and script-syntax tests
         run: |
@@ -38,6 +38,20 @@ jobs:
             --ignore=tests/test_studio_pipeline_integration.py \
             --ignore=tests/test_gh_intelligence_integration.py \
             -v --tb=short -m "not integration"
+
+  dependencies:
+    name: Dependency policy and advisories
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - uses: astral-sh/setup-uv@v6
+      - run: uv sync --locked --group dev
+      - run: uv run python scripts/dependency-inventory.py dependency-inventory
+      - run: uv export --locked --no-dev --no-emit-project -o requirements-audit.txt
+      - run: uv run pip-audit -r requirements-audit.txt --no-deps --disable-pip
 
   lint:
     name: Lint

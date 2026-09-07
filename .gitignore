@@ -33,3 +33,6 @@ release/*-unsigned.pkg
 build/
 dist/
 release/*.zip
+
+# Verified locally built Intel dependency wheels and provenance
+release/intel-wheels/

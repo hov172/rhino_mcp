@@ -129,8 +129,18 @@ class RuntimeMCP(FastMCP):
                 finally:
                     if lock is not None:
                         lock.release()
-            # Sync Rhino/HTTP calls must not block the MCP event loop.
-            return await asyncio.to_thread(run)
+            # Share PDF cancellation through compact dispatch and worker threads.
+            # Other tools retain their existing execution semantics.
+            from rhmcp.tools_helpers.pdf_backend import cancellation
+            cancelled = cancellation.get() or threading.Event()
+            token = cancellation.set(cancelled)
+            try:
+                return await asyncio.to_thread(run)
+            except asyncio.CancelledError:
+                cancelled.set()
+                raise
+            finally:
+                cancellation.reset(token)
 
         @functools.wraps(fn)
         async def invoke(**arguments):

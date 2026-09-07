@@ -155,10 +155,21 @@ rm -rf "${PAYLOAD}/.venv-arm64" "${PAYLOAD}/.venv-x86_64"
 
 # ── 9. Install rhino-mcp into both venvs ──────────────────────────────────────
 echo "[7/14] Installing rhino-mcp into venvs..."
-"${PAYLOAD}/.venv-arm64/bin/pip" install --quiet "$ROOT/dist/rhino_mcp-${VERSION}-py3-none-any.whl"
-# cryptography >= 49 ships no macOS x86_64/universal2 wheels — without the pin
-# pip falls back to a source build that needs a Rust x86_64 cross target.
-"${PAYLOAD}/.venv-x86_64/bin/pip" install --quiet "$ROOT/dist/rhino_mcp-${VERSION}-py3-none-any.whl" "cryptography<49"
+uv export --locked --no-dev --no-emit-project --format requirements-txt --output-file "$BUILDTMP/requirements.lock.txt" > /dev/null
+uv run python "$ROOT/scripts/build-intel-cryptography.py" "$PAYLOAD/python-x86_64/bin/python3.13" "$ROOT/release/intel-wheels"
+uv run python "$ROOT/scripts/intel-requirements.py" "$BUILDTMP/requirements.lock.txt" "$ROOT/release/intel-wheels" "$BUILDTMP/requirements.intel.txt"
+for ARCH in arm64 x86_64; do
+    REQUIREMENTS="$BUILDTMP/requirements.lock.txt"
+    if [ "$ARCH" = x86_64 ]; then REQUIREMENTS="$BUILDTMP/requirements.intel.txt"; fi
+    "${PAYLOAD}/.venv-${ARCH}/bin/pip" install --quiet --require-hashes --only-binary=:all: --find-links "$ROOT/release/intel-wheels" -r "$REQUIREMENTS"
+    "${PAYLOAD}/.venv-${ARCH}/bin/pip" install --quiet --no-deps "$ROOT/dist/rhino_mcp-${VERSION}-py3-none-any.whl"
+    "${PAYLOAD}/.venv-${ARCH}/bin/python" "$ROOT/scripts/dependency-inventory.py" "$PAYLOAD/third-party/$ARCH"
+    "${PAYLOAD}/.venv-${ARCH}/bin/python" "$ROOT/scripts/pdf-smoke.py" "$ROOT/tests/fixtures/pdf/smoke.pdf"
+done
+cp "$BUILDTMP/requirements.lock.txt" "$PAYLOAD/third-party/requirements.lock.txt"
+cp "$BUILDTMP/requirements.intel.txt" "$PAYLOAD/third-party/requirements.intel.txt"
+cp "$ROOT/release/intel-wheels/cryptography-intel-provenance.json" "$PAYLOAD/third-party/"
+cp "$ROOT/release/intel-wheels/OPENSSL-LICENSE.txt" "$PAYLOAD/third-party/"
 
 # Validate both installed runtimes before relocation, signing, or submission.
 for ARCH in arm64 x86_64; do

@@ -35,3 +35,18 @@ dist/
 *.key
 *.pfx
 *.p12
+
+# Only these reviewed build helpers/fixtures enter the image.
+!scripts/
+scripts/*
+!scripts/dependency-inventory.py
+!scripts/pdf-smoke.py
+!tests/
+tests/*
+!tests/fixtures/
+tests/fixtures/*
+!tests/fixtures/pdf/
+tests/fixtures/pdf/*
+!tests/fixtures/pdf/smoke.pdf
+!LICENSE
+!THIRD_PARTY_NOTICES.md

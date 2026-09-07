@@ -11,7 +11,7 @@ This file gives AI coding agents (Claude, Codex, Gemini, etc.) the context neede
 1. **Python MCP server** (`src/rhmcp/`) — FastMCP-based server exposing 358 tools to AI clients
 2. **C# Rhino plugin** (`rhino_plugin/`) — TCP socket server inside Rhino (port 1999) that receives and executes commands
 
-Current version: **0.17.1**
+Current version: **0.18.0**
 
 ---
 
@@ -121,7 +121,7 @@ uv run pytest tests/test_integration.py -v -m integration
 uvx ruff check src/rhmcp --select=E,W,F --ignore=E501,E701,E402,E741
 ```
 
-**476 tests** (unit, smoke, script-syntax, and security) must pass before any commit. The CI workflow (`.github/workflows/ci.yml`) runs these on Python 3.10/3.11/3.12.
+**512 tests** (unit, smoke, script-syntax, and security) must pass before any commit. The CI workflow (`.github/workflows/ci.yml`) runs these on Python 3.10/3.11/3.12.
 
 ---
 

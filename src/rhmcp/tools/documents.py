@@ -5,7 +5,7 @@ without leaving the MCP session.
 
 Supported formats
 -----------------
-PDF    read_pdf, get_pdf_info   (pymupdf)
+PDF    read_pdf, get_pdf_info   (PDFium + pdfplumber)
 Image  read_image               (Pillow; pillow-heif adds HEIC support)
 Sheet  read_spreadsheet         (stdlib csv  +  openpyxl for .xlsx/.xls)
 SVG    read_svg                 (stdlib xml.etree — no extra dependency)
@@ -60,27 +60,6 @@ def _b64_png(img: Any) -> str:
     buf = io.BytesIO()
     img.save(buf, format="PNG")
     return base64.b64encode(buf.getvalue()).decode()
-
-
-def _parse_page_spec(spec: str | None, page_count: int) -> list[int]:
-    """1-based page spec → sorted list of 0-based indices."""
-    if not spec:
-        return list(range(page_count))
-    indices: set[int] = set()
-    try:
-        for part in spec.split(","):
-            part = part.strip()
-            if "-" in part:
-                a, b = part.split("-", 1)
-                lo, hi = max(1, int(a)), min(page_count, int(b))
-                indices.update(range(lo - 1, hi))
-            else:
-                n = int(part)
-                if 1 <= n <= page_count:
-                    indices.add(n - 1)
-    except (ValueError, TypeError) as exc:
-        raise ValueError(f"Invalid pages spec {spec!r}: {exc}") from exc
-    return sorted(indices)
 
 
 def _parse_scale_hint(hint: str) -> tuple[float, str]:
@@ -179,154 +158,39 @@ def register(mcp: FastMCP) -> None:
     # ── PDF ─────────────────────────────────────────────────────────────────
 
     @mcp.tool(annotations=ToolAnnotations(title="Get PDF Info", readOnlyHint=True))
-    def get_pdf_info(path: str) -> dict[str, Any]:
-        """
-        Return metadata for a PDF without rendering pages.
-
-        Reports page count, title, author, and the dimensions of every page.
-        Call this before ``read_pdf`` to decide which pages to fetch.
-        """
-        try:
-            path = _validate_read_path(path)
-        except ValueError as exc:
-            return {"ok": False, "error": str(exc)}
-
-        try:
-            import fitz
-        except ImportError:
-            return {"ok": False, "error": "pymupdf not installed — run: uv pip install pymupdf"}
-
-        p = Path(path)
-        if not p.exists():
-            return {"ok": False, "error": f"File not found: {path}"}
-        if p.suffix.lower() not in _PDF_EXTS:
-            return {"ok": False, "error": f"Not a PDF: {path}"}
-
-        try:
-            doc = fitz.open(str(p))
-        except Exception as exc:
-            return {"ok": False, "error": str(exc)}
-
-        meta = doc.metadata or {}
-        pages = [
-            {
-                "page": i + 1,
-                "width_pt": round(pg.rect.width, 1),
-                "height_pt": round(pg.rect.height, 1),
-                "width_in": round(pg.rect.width / 72, 2),
-                "height_in": round(pg.rect.height / 72, 2),
-            }
-            for i, pg in enumerate(doc)
-        ]
-        doc.close()
-        return {
-            "ok": True,
-            "path": str(p),
-            "page_count": len(pages),
-            "title": meta.get("title", ""),
-            "author": meta.get("author", ""),
-            "subject": meta.get("subject", ""),
-            "creator": meta.get("creator", ""),
-            "pages": pages,
-        }
+    def get_pdf_info(path: str, pages: str | None = None, max_pages: int = 50) -> dict[str, Any]:
+        """Return PDF metadata and page sizes; paginate with pages (at most 50 per call)."""
+        from rhmcp.tools_helpers.pdf_backend import request
+        return request('info', path, pages=pages, max_pages=max_pages)
 
     @mcp.tool(annotations=ToolAnnotations(title="Read PDF", readOnlyHint=True))
-    def read_pdf(
-        path: str,
-        pages: str | None = None,
-        dpi: int = 150,
-        extract_text: bool = True,
-        max_pages: int = 10,
-        scale_hint: str | None = None,
-    ) -> dict[str, Any]:
-        """Render PDF pages to images and optionally extract text.
+    def read_pdf(path: str, pages: str | None = None, dpi: int = 150,
+                 extract_text: bool = True, max_pages: int = 10,
+                 scale_hint: str | None = None) -> dict[str, Any]:
+        """Render PDF pages to PNG and text with bounded isolated processing.
 
-        Each page is returned as a base64-encoded PNG so the agent can see
-        drawings, floor plans, diagrams, and annotations..."""
-        from rhmcp.tools_helpers.security import clamp
-        dpi = clamp(dpi, 50, 600)
-        max_pages = clamp(max_pages, 1, 50)
+        DPI must be 50–600; oversized pages require a lower DPI. Pass the same
+        DPI to read_pdf_vectors when using the returned real_units_per_px.
+        """
+        import math
+        from rhmcp.tools_helpers.pdf_backend import request, failure, number, PDFError
+        info = None
         try:
-            path = _validate_read_path(path)
-        except ValueError as exc:
-            return {"ok": False, "error": str(exc)}
-
-        # Parse scale hint up-front so a bad string fails fast
-        scale_info: dict[str, Any] | None = None
-        if scale_hint:
-            try:
-                paper_in_per_unit, real_unit = _parse_scale_hint(scale_hint)
-            except ValueError as exc:
-                return {"ok": False, "error": str(exc)}
-            px_per_unit = paper_in_per_unit * dpi
-            scale_info = {
-                "scale_hint": scale_hint,
-                "real_unit": real_unit,
-                "px_per_real_unit": round(px_per_unit, 4),
-                "real_units_per_px": round(1.0 / px_per_unit, 6),
-            }
-
-        try:
-            import fitz
-        except ImportError:
-            return {"ok": False, "error": "pymupdf not installed — run: uv pip install pymupdf"}
-
-        p = Path(path)
-        if not p.exists():
-            return {"ok": False, "error": f"File not found: {path}"}
-        if p.suffix.lower() not in _PDF_EXTS:
-            return {"ok": False, "error": f"Not a PDF: {path}"}
-
-        try:
-            doc = fitz.open(str(p))
-        except Exception as exc:
-            return {"ok": False, "error": str(exc)}
-
-        page_count = doc.page_count
-        try:
-            indices = _parse_page_spec(pages, page_count)
-        except ValueError as exc:
-            doc.close()
-            return {"ok": False, "error": str(exc)}
-        truncated = len(indices) > max_pages
-        indices = indices[:max_pages]
-
-        mat = fitz.Matrix(dpi / 72.0, dpi / 72.0)
-        result_pages = []
-        for idx in indices:
-            pg = doc[idx]
-            pix = pg.get_pixmap(matrix=mat, alpha=False)
-            entry: dict[str, Any] = {
-                "page": idx + 1,
-                "width_px": pix.width,
-                "height_px": pix.height,
-                "image_data": base64.b64encode(pix.tobytes("png")).decode(),
-                "mime_type": "image/png",
-            }
-            if extract_text:
-                entry["text"] = pg.get_text("text").strip()
-            if scale_info:
-                rpu = scale_info["real_units_per_px"]
-                entry["real_width"] = round(pix.width * rpu, 4)
-                entry["real_height"] = round(pix.height * rpu, 4)
-                entry["real_unit"] = scale_info["real_unit"]
-                entry["px_per_real_unit"] = scale_info["px_per_real_unit"]
-                entry["real_units_per_px"] = rpu
-            result_pages.append(entry)
-
-        doc.close()
-        out: dict[str, Any] = {
-            "ok": True,
-            "path": str(p),
-            "page_count": page_count,
-            "pages_returned": len(result_pages),
-            "truncated": truncated,
-            "dpi": dpi,
-            "pages": result_pages,
-        }
-        if scale_info:
-            out["scale"] = scale_info
-        return out
+            number(dpi, 'dpi', 50, 600, integer=True)
+            if scale_hint:
+                if not isinstance(scale_hint, str) or len(scale_hint) > 256:
+                    raise ValueError('Scale hint too long.')
+                paper, unit = _parse_scale_hint(scale_hint)
+                if not math.isfinite(paper) or paper <= 0:
+                    raise ValueError('Scale must be finite and positive.')
+                pixels = paper * dpi
+                info = {'scale_hint': scale_hint, 'real_unit': unit,
+                        'px_per_real_unit': pixels, 'real_units_per_px': 1 / pixels,
+                        'real_units_per_point': 1 / (paper * 72)}
+        except (ValueError, TypeError, ZeroDivisionError, OverflowError, AttributeError) as exc:
+            return failure(exc.code if isinstance(exc, PDFError) else 'INVALID_VALUE', 'Invalid DPI or drawing scale.')
+        return request('read', path, pages=pages, dpi=dpi, extract_text=extract_text,
+                       max_pages=max_pages, scale_info=info)
 
     @mcp.tool(annotations=ToolAnnotations(title="Calibrate PDF Scale", readOnlyHint=True))
     def calibrate_pdf_scale(
@@ -341,13 +205,18 @@ def register(mcp: FastMCP) -> None:
         After calling ``read_pdf``, visually identify two points whose
         real-world..."""
         import math
-        if len(pixel_point_1) < 2 or len(pixel_point_2) < 2:
-            return {"ok": False, "error": "pixel_point_1 and pixel_point_2 must each be [x, y]"}
-        if real_distance <= 0:
-            return {"ok": False, "error": "real_distance must be greater than zero"}
-        valid_units = {"feet", "meters", "inches", "mm"}
-        if real_unit not in valid_units:
-            return {"ok": False, "error": f"real_unit must be one of: {', '.join(sorted(valid_units))}"}
+        from rhmcp.tools_helpers.pdf_backend import number, PDFError, failure
+        try:
+            for name, point in [('pixel_point_1', pixel_point_1), ('pixel_point_2', pixel_point_2)]:
+                if not isinstance(point, (list, tuple)) or len(point) != 2:
+                    raise PDFError('INVALID_VALUE', f'{name} must contain exactly two coordinates.')
+                for value in point:
+                    number(value, name, -1e12, 1e12)
+            number(real_distance, 'real_distance', 1e-12, 1e12)
+            if real_unit not in {'feet', 'meters', 'inches', 'mm'}:
+                raise PDFError('INVALID_VALUE', 'Unsupported real_unit.')
+        except PDFError as exc:
+            return failure(exc.code, str(exc))
 
         dx = float(pixel_point_2[0]) - float(pixel_point_1[0])
         dy = float(pixel_point_2[1]) - float(pixel_point_1[1])
@@ -359,7 +228,7 @@ def register(mcp: FastMCP) -> None:
         return {
             "ok": True,
             "px_per_real_unit": round(px_per_unit, 4),
-            "real_units_per_px": round(real_distance / pixel_distance, 6),
+            "real_units_per_px": real_distance / pixel_distance,
             "real_unit": real_unit,
             "pixel_distance": round(pixel_distance, 2),
             "real_distance": real_distance,
@@ -371,266 +240,35 @@ def register(mcp: FastMCP) -> None:
         }
 
     @mcp.tool(annotations=ToolAnnotations(title="Read PDF Vectors", readOnlyHint=True))
-    def read_pdf_vectors(
-        path: str,
-        pages: str | None = None,
-        real_units_per_px: float | None = None,
-        real_unit: str = "feet",
-        min_length_px: float = 2.0,
-    ) -> dict[str, Any]:
-        """Extract vector paths (lines, rectangles, curves) from a PDF page as
-        structured coordinate data.
+    def read_pdf_vectors(path: str, pages: str | None = None,
+                         real_units_per_px: float | None = None, real_unit: str = "feet",
+                         min_length_px: float = 2.0, dpi: int = 150,
+                         real_units_per_point: float | None = None,
+                         max_pages: int = 10) -> dict[str, Any]:
+        """Extract lines, rectangles, and cubic curves in rotated crop-relative PDF points.
 
-        Works best for PDFs exported from CAD/BIM tools (Revit, AutoCAD,
-        Rhino)...."""
-        import math
-
-        try:
-            path = _validate_read_path(path)
-        except ValueError as exc:
-            return {"ok": False, "error": str(exc)}
-
-        try:
-            import fitz
-        except ImportError:
-            return {"ok": False, "error": "pymupdf not installed — run: uv pip install pymupdf"}
-
-        p = Path(path)
-        if not p.exists():
-            return {"ok": False, "error": f"File not found: {path}"}
-        if p.suffix.lower() not in _PDF_EXTS:
-            return {"ok": False, "error": f"Not a PDF: {path}"}
-
-        try:
-            doc = fitz.open(str(p))
-        except Exception as exc:
-            return {"ok": False, "error": str(exc)}
-
-        page_count = doc.page_count
-        try:
-            indices = _parse_page_spec(pages, page_count)
-        except ValueError as exc:
-            doc.close()
-            return {"ok": False, "error": str(exc)}
-
-        # Hard cap at 10 pages
-        indices = indices[:10]
-
-        result_pages: list[dict[str, Any]] = []
-        total_segments = 0
-
-        for idx in indices:
-            pg = doc[idx]
-            drawings = pg.get_drawings()
-            segments: list[dict[str, Any]] = []
-
-            for path_dict in drawings:
-                for item in path_dict.get("items", []):
-                    op = item[0] if item else None
-
-                    if op == "l":
-                        # Line: ("l", p1, p2)
-                        p1, p2 = item[1], item[2]
-                        dx = p2.x - p1.x
-                        dy = p2.y - p1.y
-                        length = math.sqrt(dx * dx + dy * dy)
-                        if length < min_length_px:
-                            continue
-                        seg: dict[str, Any] = {
-                            "type": "line",
-                            "start": [round(p1.x, 3), round(p1.y, 3)],
-                            "end": [round(p2.x, 3), round(p2.y, 3)],
-                        }
-                        if real_units_per_px is not None:
-                            rpu = real_units_per_px
-                            seg["start_real"] = [round(p1.x * rpu, 6), round(p1.y * rpu, 6)]
-                            seg["end_real"] = [round(p2.x * rpu, 6), round(p2.y * rpu, 6)]
-                            seg["length_real"] = round(length * rpu, 6)
-                            seg["real_unit"] = real_unit
-                        segments.append(seg)
-
-                    elif op == "re":
-                        # Rectangle: ("re", rect)
-                        r = item[1]
-                        corners = [
-                            (r.x0, r.y0),
-                            (r.x1, r.y0),
-                            (r.x1, r.y1),
-                            (r.x0, r.y1),
-                        ]
-                        edges = [
-                            (corners[0], corners[1]),
-                            (corners[1], corners[2]),
-                            (corners[2], corners[3]),
-                            (corners[3], corners[0]),
-                        ]
-                        for (x0, y0), (x1, y1) in edges:
-                            dx = x1 - x0
-                            dy = y1 - y0
-                            length = math.sqrt(dx * dx + dy * dy)
-                            if length < min_length_px:
-                                continue
-                            seg = {
-                                "type": "rect",
-                                "start": [round(x0, 3), round(y0, 3)],
-                                "end": [round(x1, 3), round(y1, 3)],
-                            }
-                            if real_units_per_px is not None:
-                                rpu = real_units_per_px
-                                seg["start_real"] = [round(x0 * rpu, 6), round(y0 * rpu, 6)]
-                                seg["end_real"] = [round(x1 * rpu, 6), round(y1 * rpu, 6)]
-                                seg["length_real"] = round(length * rpu, 6)
-                                seg["real_unit"] = real_unit
-                            segments.append(seg)
-
-            total_segments += len(segments)
-            result_pages.append({
-                "page": idx + 1,
-                "segment_count": len(segments),
-                "segments": segments,
-                "has_vectors": len(segments) > 0,
-            })
-
-        doc.close()
-
-        vector_pdf = any(pg["has_vectors"] for pg in result_pages)
-        if not vector_pdf and result_pages:
-            return {
-                "ok": False,
-                "error": "no_vectors",
-                "message": (
-                    "No vector paths found on the requested pages. "
-                    "This PDF may be raster-only (scanned). "
-                    "Use read_pdf to inspect it as an image instead."
-                ),
-                "pages_checked": [pg["page"] for pg in result_pages],
-            }
-
-        return {
-            "ok": True,
-            "path": str(p),
-            "page_count": page_count,
-            "pages_returned": len(result_pages),
-            "total_segments": total_segments,
-            "vector_pdf": vector_pdf,
-            "real_units_per_px": real_units_per_px,
-            "real_unit": real_unit if real_units_per_px is not None else None,
-            "pages": result_pages,
-        }
+        Use real_units_per_point, or supply real_units_per_px with the SAME dpi
+        used to render/calibrate the page. min_length_px uses that DPI. Paths
+        describe drawing commands; clipping/layer visibility is not verified.
+        """
+        from rhmcp.tools_helpers.pdf_backend import request
+        return request('vectors', path, pages=pages, dpi=dpi, max_pages=max_pages,
+                       real_units_per_px=real_units_per_px, real_units_per_point=real_units_per_point,
+                       real_unit=real_unit, min_length_px=min_length_px)
 
     @mcp.tool(annotations=ToolAnnotations(title="Extract PDF Dimensions", readOnlyHint=True))
-    def extract_pdf_dimensions(
-        path: str,
-        pages: str | None = None,
-        real_units_per_px: float | None = None,
-        real_unit: str = "feet",
-        dpi: int = 150,
-    ) -> dict[str, Any]:
-        """Extract dimension annotation strings and their positions from a PDF's
-        text layer.
+    def extract_pdf_dimensions(path: str, pages: str | None = None,
+                               real_units_per_px: float | None = None,
+                               real_unit: str = "feet", dpi: int = 150,
+                               max_pages: int = 10) -> dict[str, Any]:
+        """Find heuristic dimension annotations with rotated crop-relative pixel bounds.
 
-        Parses strings matching common architectural/engineering dimension
-        formats (``20'-6"``,..."""
-        _DIM_PATTERNS = [
-            re.compile(r"\d+\s*['’]\s*-?\s*\d*\s*['’\"]?"),  # 20'-6", 3'-0"
-            re.compile(r"\d+(?:\.\d+)?\s*(?:ft|feet|')\b"),             # 20 ft, 20'
-            re.compile(r"\d+(?:\.\d+)?\s*(?:mm|cm|m)\b"),               # 3000mm, 4.5m
-            re.compile(r"\b\d{3,5}\b"),                                  # bare numbers >= 100
-        ]
-
-        try:
-            path = _validate_read_path(path)
-        except ValueError as exc:
-            return {"ok": False, "error": str(exc)}
-
-        try:
-            import fitz
-        except ImportError:
-            return {"ok": False, "error": "pymupdf not installed — run: uv pip install pymupdf"}
-
-        p = Path(path)
-        if not p.exists():
-            return {"ok": False, "error": f"File not found: {path}"}
-        if p.suffix.lower() not in _PDF_EXTS:
-            return {"ok": False, "error": f"Not a PDF: {path}"}
-
-        try:
-            doc = fitz.open(str(p))
-        except Exception as exc:
-            return {"ok": False, "error": str(exc)}
-
-        page_count = doc.page_count
-        try:
-            indices = _parse_page_spec(pages, page_count)
-        except ValueError as exc:
-            doc.close()
-            return {"ok": False, "error": str(exc)}
-
-        # Hard cap at 10 pages
-        indices = indices[:10]
-
-        px_scale = dpi / 72.0
-        result_pages: list[dict[str, Any]] = []
-        total_dims = 0
-
-        for idx in indices:
-            pg = doc[idx]
-            text_dict = pg.get_text("dict")
-            dimensions: list[dict[str, Any]] = []
-
-            for block in text_dict.get("blocks", []):
-                if block.get("type") != 0:  # 0 = text block
-                    continue
-                for line in block.get("lines", []):
-                    for span in line.get("spans", []):
-                        text = span.get("text", "").strip()
-                        if not text:
-                            continue
-                        matched = any(pat.search(text) for pat in _DIM_PATTERNS)
-                        if not matched:
-                            continue
-
-                        bbox = span.get("bbox", [0, 0, 0, 0])
-                        # Convert PDF points → pixels
-                        x0 = bbox[0] * px_scale
-                        y0 = bbox[1] * px_scale
-                        x1 = bbox[2] * px_scale
-                        y1 = bbox[3] * px_scale
-                        cx = (x0 + x1) / 2.0
-                        cy = (y0 + y1) / 2.0
-
-                        dim: dict[str, Any] = {
-                            "text": text,
-                            "bbox_px": [round(x0, 2), round(y0, 2),
-                                        round(x1, 2), round(y1, 2)],
-                            "center_px": [round(cx, 2), round(cy, 2)],
-                        }
-                        if real_units_per_px is not None:
-                            rpu = real_units_per_px
-                            dim["center_real"] = [round(cx * rpu, 6), round(cy * rpu, 6)]
-                            dim["real_unit"] = real_unit
-
-                        dimensions.append(dim)
-
-            total_dims += len(dimensions)
-            result_pages.append({
-                "page": idx + 1,
-                "dimensions": dimensions,
-            })
-
-        doc.close()
-
-        return {
-            "ok": True,
-            "path": str(p),
-            "page_count": page_count,
-            "pages_returned": len(result_pages),
-            "total_dimensions": total_dims,
-            "dpi": dpi,
-            "real_units_per_px": real_units_per_px,
-            "real_unit": real_unit if real_units_per_px is not None else None,
-            "pages": result_pages,
-        }
+        Use the same DPI as read_pdf. Only text with explicit units is matched;
+        bare part numbers are not measurements. No OCR is performed.
+        """
+        from rhmcp.tools_helpers.pdf_backend import request
+        return request('dimensions', path, pages=pages, dpi=dpi, max_pages=max_pages,
+                       real_units_per_px=real_units_per_px, real_unit=real_unit)
 
     # ── IMAGE ────────────────────────────────────────────────────────────────
 

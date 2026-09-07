@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "rhino-mcp"
-version = "0.17.1"
+version = "0.18.0"
 description = "Control Rhino 3D from Claude, Cursor, Codex — 358 tools: geometry, Grasshopper, V-Ray, Enscape, BIM, AI generation, import/export"
 readme = "README.md"
 license = { text = "MIT" }
@@ -24,18 +24,21 @@ classifiers = [
 ]
 requires-python = ">=3.10"
 dependencies = [
-    "mcp[cli]>=1.2.0,<2",
+    "mcp[cli]>=1.29.1,<2",
     "pyyaml",
     "httpx>=0.27.0",
     "anthropic>=0.25.0",
     "jinja2>=3.1.0",
     "boto3>=1.34.0",
-    "pymupdf>=1.23.0",
     "openpyxl>=3.1.0",
-    "Pillow>=10.0.0",
+    "pillow>=12.3.0",
     "pillow-heif>=0.13.0",
     "python-docx>=1.1.0",
     "cairosvg>=2.7.0",
+    "pypdfium2>=5.13,<6",
+    "pdfplumber>=0.11.9,<0.12",
+    "cryptography>=50",
+    "psutil>=7,<8",
 ]
 
 [project.urls]
@@ -46,6 +49,9 @@ Changelog = "https://github.com/hov172/rhino_mcp/releases"
 
 [project.scripts]
 rhino-mcp = "rhmcp:main"
+
+[tool.setuptools]
+license-files = ["LICENSE", "THIRD_PARTY_NOTICES.md"]
 
 [tool.setuptools.packages.find]
 where = ["src"]
@@ -65,5 +71,6 @@ markers = [
 
 [dependency-groups]
 dev = [
+    "pip-audit>=2.10.1",
     "pytest>=9.0.3",
 ]

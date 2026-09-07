@@ -105,7 +105,7 @@ Control Rhino 3D from Claude, Cursor, Codex, and any other MCP-capable AI tool. 
 
 ## Quick Start
 
-**Version 0.17.1:** fixes macOS plugin discovery and stale registration. See the [0.17.1 upgrade guide](docs/upgrade-0.17.1.md). Since 0.17.0, remote HTTP/plugin connections now require TLS. See [secure operation and migration notes](docs/secure-operation.md) for certificates, HTTP identities, execution gates, project state, and changed error/export behavior. Installed plugin and MCP server 0.17.1 passed a live read-only check on Rhino 8.34.26223.11002 on 2026-09-07; see the [validation record](release/validation-0.17.1.md).
+**Version 0.18.0:** replaces PyMuPDF with PDFium/pdfplumber, corrects PDF geometry scaling, and isolates PDF processing with resource limits. See the [0.18.0 upgrade guide](docs/upgrade-0.18.0.md). The [secure-operation requirements](docs/secure-operation.md) and macOS registration fixes remain in effect.
 
 > **Two separate pieces — both are required:**
 >
@@ -359,14 +359,14 @@ The `.pkg` installer is the fastest way to get up and running on macOS. It requi
 - The `rhino` MCP server entry into Claude Desktop and Claude Code automatically
 
 **Steps:**
-1. Download the [signed and notarized 0.17.1 installer](https://github.com/hov172/rhino_mcp/releases/download/v0.17.1/rhino-mcp-0.17.1-universal-signed.pkg)
+1. Download the [signed and notarized 0.18.0 installer](https://github.com/hov172/rhino_mcp/releases/download/v0.18.0/rhino-mcp-0.18.0-universal-signed.pkg)
 2. Quit Rhino completely, then double-click the `.pkg` and follow the installer prompts
 3. Launch Rhino — the plugin loads automatically
 4. Launch your AI client — the MCP server is already configured
 
 > The installer backs up conflicting legacy copies and repairs cached plugin paths. If no GUI user is logged in during installation, run `/usr/local/bin/rhino-mcp-configure` after login with Rhino closed. See the [upgrade guide](docs/upgrade-0.17.1.md) for backup locations and verification.
 
-The [signed 0.17.1 uninstaller](https://github.com/hov172/rhino_mcp/releases/download/v0.17.1/rhino-mcp-0.17.1-universal-uninstaller-signed.pkg) is available in the same release.
+The [signed 0.18.0 uninstaller](https://github.com/hov172/rhino_mcp/releases/download/v0.18.0/rhino-mcp-0.18.0-universal-uninstaller-signed.pkg) is available in the same release.
 
 ---
 
@@ -2003,7 +2003,7 @@ Read external design files — floor plans, specifications, spreadsheets, and re
 1. get_pdf_info(path)                                       → page count + sheet dimensions
 2. read_pdf(path, pages="1", dpi=200, scale_hint='1/4"=1\'') → page image + nominal px-to-feet ratio
 3. calibrate_pdf_scale([x1,y1], [x2,y2], real_distance=20)  → corrected ratio (fixes print-to-fit error)
-4. read_pdf_vectors(path, pages="1", real_units_per_px=...)  → exact line coords (CAD-exported PDFs)
+4. read_pdf_vectors(path, pages="1", dpi=200, real_units_per_px=...)  → exact line coords (CAD-exported PDFs)
 5. extract_pdf_dimensions(path, pages="1")                   → dimension annotations for cross-check
 6. create_rhino_scene(items=[...], snap_to_grid=0.5)         → geometry snapped to 6-inch grid
 7. validate_rhino_geometry(auto_fix=True)                    → close gaps, remove duplicates
@@ -2018,11 +2018,11 @@ Read external design files — floor plans, specifications, spreadsheets, and re
 
 | Tool | Description |
 |---|---|
-| `get_pdf_info` | Return page count, title, author, and width/height (points and inches) of every page. Call first to inspect the document. |
+| `get_pdf_info` | Return page count, metadata, and page sizes. Use `pages` to paginate; at most 50 pages per call, with explicit `truncated`. |
 | `read_pdf` | Render pages as base64-encoded PNG images. `scale_hint` enables pixel→real-world mapping. Parameters: `pages`, `dpi` (default 150; use 200-300 for fine detail), `max_pages` (default 10), `scale_hint`. |
 | `calibrate_pdf_scale` | Compute the true `px_per_real_unit` ratio from two pixel coordinates and a known real-world distance — corrects for print-to-fit scaling. |
-| `read_pdf_vectors` | Extract exact line/rect coordinates from the PDF vector layer (`page.get_drawings()`). Works for CAD-exported PDFs; returns `no_vectors` error for raster-only scans. Pass `real_units_per_px` to get real-world coordinates. |
-| `extract_pdf_dimensions` | Extract dimension annotation strings (`20'-6"`, `3000mm`, etc.) and their bounding box positions from the PDF text layer. Use to cross-check traced geometry against annotated distances. |
+| `read_pdf_vectors` | Extract lines, rectangles, and cubic curves in PDF points relative to the rotated crop origin. Use `real_units_per_point` or `real_units_per_px` with matching `dpi`. Reports partial/visibility limits; `NO_VECTORS` means no drawing paths. |
+| `extract_pdf_dimensions` | Extract dimension annotation strings (`20'-6"`, `3000mm`, etc.) and their bounding box positions from the PDF text layer. Heuristic, explicit-unit matches only; bare part numbers are excluded. Use the same DPI as rendering. |
 
 **Other document tools:**
 
@@ -2039,9 +2039,9 @@ Read external design files — floor plans, specifications, spreadsheets, and re
 |---|---|---|---|
 | `pages` | `read_pdf`, `read_pdf_vectors`, `extract_pdf_dimensions` | all (up to `max_pages`) | `"3"`, `"1-5"`, `"1,3,5-8"` — 1-based |
 | `dpi` | `read_pdf`, `read_svg`, `extract_pdf_dimensions` | 150 | 150 = overview; 200-300 = fine drawing detail |
-| `max_pages` | `read_pdf` | 10 | Hard cap per call |
+| `max_pages` | PDF readers | 10 (info: 50) | 1–50 pages per call; truncation is reported |
 | `scale_hint` | `read_pdf` | *(none)* | Imperial: `"1/4\" = 1'"`. Metric: `"1:100"` |
-| `real_units_per_px` | `read_pdf_vectors`, `extract_pdf_dimensions` | *(none)* | From `calibrate_pdf_scale` or `read_pdf` — converts coords to real-world units |
+| `real_units_per_px` | `read_pdf_vectors`, `extract_pdf_dimensions` | *(none)* | From `calibrate_pdf_scale` or `read_pdf`; supply the same `dpi` to vector/dimension tools. Vector output remains in points; conversion accounts for DPI. |
 | `max_dimension` | `read_image` | 2048 | Max pixel dimension after resize |
 | `sheet` | `read_spreadsheet` | first sheet | Sheet name or 1-based index |
 | `max_rows` | `read_spreadsheet` | 500 | Row cap; re-call with offset for large sheets |
@@ -2497,7 +2497,7 @@ uv run python -m pytest tests/ \
     --collect-only -q
 ```
 
-The non-integration collection currently includes 476 tests plus five subtests. Integration tests auto-skip cleanly if the plugin socket is not reachable.
+The non-integration collection currently includes 512 tests plus five subtests. Integration tests auto-skip cleanly if the plugin socket is not reachable.
 
 ---
 

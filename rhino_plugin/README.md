@@ -1,6 +1,6 @@
 # RhinoMCPPlugin
 
-Version **0.17.1**. The Rhino-side TCP socket server for the Rhino MCP project. This plugin runs inside Rhino 3D and handles all incoming commands from the Python MCP server.
+Version **0.18.0**. The Rhino-side TCP socket server for the Rhino MCP project. This plugin runs inside Rhino 3D and handles all incoming commands from the Python MCP server.
 
 ---
 

@@ -1,6 +1,6 @@
-# Operating rhino-mcp 0.17.1
+# Operating rhino-mcp 0.18.0
 
-For package builds and installation, see the [upgrade guide](upgrade-0.17.1.md). The security behavior introduced in 0.17.0 remains in effect. See the [validation record](../release/validation-0.17.1.md) for the checks performed; a local read-only check does not validate remote TLS or mutation recovery.
+For package builds and installation, see the [upgrade guide](upgrade-0.18.0.md). The security behavior introduced in 0.17.0 remains in effect. See the [validation record](../release/validation-0.17.1.md) for the checks performed; a local read-only check does not validate remote TLS or mutation recovery.
 
 ## Execution and recovery
 
@@ -164,3 +164,9 @@ installing into Rhino. Explicitly pass `-p:InstallPluginAfterBuild=true` for the
 legacy macOS post-build copy. Live Rhino validation is separate from mocked tests:
 use a scratch document and test deletion/modification rollback, third-party tools,
 TLS listener startup, and actual multi-instance routing before deployment.
+
+## PDF processing
+
+PDF tools use disposable PDFium/pdfplumber worker processes. At most two requests run concurrently per MCP server. Input is snapshotted (50 MiB maximum); processing is limited to 30 seconds, 16 million pixels per page, 32 million pixels per request, 10000 output geometry/dimension items, 200000 characters per page, and 24 MiB of JSON output. Worker RSS is monitored against 768 MiB on supported platforms; Linux also has a 1.5 GiB virtual-memory ceiling. POSIX workers have CPU/file-size ceilings. These are resource controls, not an OS privilege sandbox. Workers inherit the server account's privileges.
+
+`RHINO_MCP_READ_ROOTS` remains process-wide. Narrow it to project input folders; project IDs do not create filesystem isolation. PDF images/text are returned to the MCP client. See the [PDF migration guide](upgrade-0.18.0.md) for coordinate and error changes.

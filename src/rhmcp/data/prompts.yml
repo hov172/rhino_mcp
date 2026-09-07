@@ -84,7 +84,7 @@ document_reading: |
   external programs.
 
   Workflow for architectural drawings (PDF):
-    1. get_pdf_info(path)         → learn page count and page dimensions
+    1. get_pdf_info(path)         → learn page count and page dimensions (paginate beyond 50 pages)
     2. read_pdf(path, pages="N")  → render the relevant page(s) as images you can see
     3. Interpret the images directly — extract dimensions, room names, and layout details.
 
@@ -110,3 +110,6 @@ document_reading: |
 
   For Excel workbooks with multiple sheets: read_spreadsheet returns sheet_names so
   you can enumerate the workbook, then re-call with sheet="SheetName" to fetch each.
+
+# PDF backend 0.18.0: rendering/vector/dimension tools must share the same DPI
+# when using real_units_per_px; vector coordinates themselves are PDF points.
