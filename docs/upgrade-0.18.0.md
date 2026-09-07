@@ -23,7 +23,7 @@ Errors include `PDF_PASSWORD_REQUIRED`, `INVALID_PDF`, `INVALID_PAGE_RANGE`, `IN
 
 ## Dependency and release verification
 
-The installer consumes exported hashed requirements from `uv.lock` for both architectures. Current cryptography no longer publishes Intel macOS wheels: `scripts/build-intel-cryptography.py` builds the locked source with hash-verified OpenSSL 3.6.4, records provenance, and includes its native notice. This requires Xcode command-line tools, Rust with the Intel target, and the bundled Intel Python runtime. A verified wheel cache is retained under `release/intel-wheels/`.
+The installer consumes exported hashed requirements from `uv.lock` for both architectures. Current cryptography no longer publishes Intel macOS wheels: `scripts/build-intel-cryptography.py` builds the locked source with hash-verified OpenSSL 3.6.4, uses static libraries/providers (`no-shared no-module`), records provenance, and includes its native notice. The build verifies cryptography with an unavailable external provider directory so the installed runtime does not depend on a temporary build path. This requires Xcode command-line tools, Rust with the Intel target, and the bundled Intel Python runtime. A verified wheel cache is retained under `release/intel-wheels/`.
 
 `third-party/` in the installer contains per-architecture Python inventories, CycloneDX package inventories, collected license notices (including PDFium's native notices), hashed requirements, and Intel cryptography provenance. Docker includes `/app/third-party/`. These package inventories do not claim a complete native binary dependency graph.
 

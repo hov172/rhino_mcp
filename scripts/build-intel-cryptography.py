@@ -15,6 +15,7 @@ import tomllib
 import urllib.request
 
 OPENSSL_VERSION = '3.6.4'
+OPENSSL_OPTIONS = ['no-shared', 'no-module', 'no-tests']
 OPENSSL_SHA256 = '9bffaa1ad1e07b354c21bd3324ec02fa15579f45a7d0494b3e74bc449b7333ef'
 
 
@@ -44,6 +45,8 @@ def build(python, wheelhouse):
         previous = json.loads(record.read_text())
         wheel = wheelhouse/previous['wheel']
         if (previous['source_sha256']==digest and previous['openssl_sha256']==OPENSSL_SHA256
+                and previous.get('openssl_options') == OPENSSL_OPTIONS
+                and (wheelhouse/'OPENSSL-LICENSE.txt').is_file()
                 and wheel.is_file() and hashlib.sha256(wheel.read_bytes()).hexdigest()==previous['wheel_sha256']):
             print('Verified cached Intel wheel:', wheel.name)
             return wheel
@@ -53,7 +56,7 @@ def build(python, wheelhouse):
         download(f'https://www.openssl.org/source/openssl-{OPENSSL_VERSION}.tar.gz', OPENSSL_SHA256, staging/'openssl.tar.gz')
         openssl = staging/f'openssl-{OPENSSL_VERSION}'
         prefix = staging/'openssl-static'
-        run(['./Configure', 'darwin64-x86_64-cc', 'no-shared', 'no-tests', f'--prefix={prefix}'], cwd=openssl)
+        run(['./Configure', 'darwin64-x86_64-cc', *OPENSSL_OPTIONS, f'--prefix={prefix}'], cwd=openssl)
         run(['make', '-j8'], cwd=openssl)
         run(['make', 'install_sw'], cwd=openssl)
         run(['rustup', 'target', 'add', 'x86_64-apple-darwin'])
@@ -71,9 +74,19 @@ def build(python, wheelhouse):
              '--config-settings=build-args=--locked', '--wheel-dir', str(wheelhouse),
              str(staging/f'cryptography-{version}')], env=env)
         wheel = next(wheelhouse.glob(f'cryptography-{version}-*x86_64.whl'))
+        run([build_python, '-m', 'pip', 'install', '--no-deps', '--force-reinstall', str(wheel)])
+        # A relocated installation must not need modules from the build prefix.
+        run([build_python, '-Werror', '-c',
+             'from cryptography.hazmat.backends.openssl.backend import backend; '
+             'from cryptography.hazmat.primitives.ciphers.aead import AESGCM; '
+             'a=AESGCM(AESGCM.generate_key(bit_length=128)); '
+             'assert a.decrypt(b"0"*12,a.encrypt(b"0"*12,b"portable",None),None)==b"portable"; '
+             'print(backend.openssl_version_text())'],
+            env=dict(env, OPENSSL_MODULES=str(staging/'missing-modules')))
         (wheelhouse/'OPENSSL-LICENSE.txt').write_bytes((openssl/'LICENSE.txt').read_bytes())
         record.write_text(json.dumps({'version': version, 'source_sha256': digest,
                                       'openssl_version': OPENSSL_VERSION, 'openssl_sha256': OPENSSL_SHA256,
+                                      'openssl_options': OPENSSL_OPTIONS,
                                       'wheel': wheel.name, 'wheel_sha256': hashlib.sha256(wheel.read_bytes()).hexdigest()}, indent=2))
         return wheel
 
