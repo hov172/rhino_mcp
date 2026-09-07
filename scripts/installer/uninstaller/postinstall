@@ -60,6 +60,7 @@ for USER_HOME in /Users/*/; do
     # Remove Rhino plugin registration (Rhino 8 and 9)
     for RH_VER in 8.0 9.0; do
         PLUG_DIR="$USER_HOME/Library/Application Support/McNeel/Rhinoceros/$RH_VER/Plug-ins"
+        rm -rf "$USER_HOME/Library/Application Support/McNeel/Rhinoceros/$RH_VER/MacPlugIns/rhino-mcp.rhp"
         [ -d "$PLUG_DIR" ] || continue
         find "$PLUG_DIR" -maxdepth 1 -name "rhino-mcp*" -exec rm -rf {} + 2>/dev/null || true
     done

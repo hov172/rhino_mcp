@@ -5,6 +5,14 @@ Versioning follows [Semantic Versioning](https://semver.org/).
 
 ---
 
+## [0.17.1] — 2026-09-07
+
+### Fixed
+- Install macOS plugin bundles under version-specific `MacPlugIns` folders with dependencies.
+- Repair stale cached plugin paths and back up misplaced files, including when the client-configuration sentinel is current.
+- Require Rhino to be closed during installation and retire conflicting application-bundle copies.
+- Remove the correct plugin bundle during uninstallation.
+
 ## [0.17.0] — 2026-09-06
 
 ### Fixed

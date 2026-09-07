@@ -19,35 +19,20 @@ else
     INSTALLED_VERSION="unknown"
 fi
 
-# Idempotency: skip if already configured for this version
-if [ -f "$SENTINEL" ] && [ "$INSTALLED_VERSION" != "unknown" ]; then
-    if [ "$(cat "$SENTINEL")" = "$INSTALLED_VERSION" ]; then
-        log "Already configured for v$INSTALLED_VERSION — skipping"
-        exit 0
-    fi
+# Repair plugin discovery even when client configuration is already current.
+# Rhino writes its settings on exit, so never race its cached registration.
+if pgrep -u "$(id -u)" -x Rhinoceros >/dev/null 2>&1; then
+    log "Quit Rhino, then run /usr/local/bin/rhino-mcp-configure again."
+    exit 1
 fi
+"$PYTHON" "$SHARED_DIR/install-plugin.py" "$SHARED_DIR/plugin" | tee -a "$LOG_FILE"
 
+if [ -f "$SENTINEL" ] && [ "$INSTALLED_VERSION" != "unknown" ] && \
+   [ "$(cat "$SENTINEL")" = "$INSTALLED_VERSION" ]; then
+    log "Plugin registration checked; client configuration already current."
+    exit 0
+fi
 log "=== rhino-mcp configure v${INSTALLED_VERSION} for ${USER:-$(id -un)} ==="
-
-# ── 1. Rhino plugin ──────────────────────────────────────────────────────────
-PLUGIN_SRC="$SHARED_DIR/plugin/rhino-mcp.rhp"
-
-if [ -f "$PLUGIN_SRC" ]; then
-    for RHINO_VER in 7 8 9; do
-        if [ -d "/Applications/Rhino ${RHINO_VER}.app" ]; then
-            PLUGIN_DST="$HOME/Library/Application Support/McNeel/Rhinoceros/${RHINO_VER}.0/Plug-ins/rhino-mcp.rhp"
-            mkdir -p "$(dirname "$PLUGIN_DST")"
-            cp "$PLUGIN_SRC" "$PLUGIN_DST"
-            for SUPPORT_FILE in "$SHARED_DIR/plugin/"*.json "$SHARED_DIR/plugin/"*.dll; do
-                [ -f "$SUPPORT_FILE" ] || continue
-                cp "$SUPPORT_FILE" "$(dirname "$PLUGIN_DST")/"
-            done
-            log "Rhino plugin installed: $PLUGIN_DST"
-        fi
-    done
-else
-    log "ERROR: Plugin source not found: $PLUGIN_SRC"
-fi
 
 # ── Helper: merge mcpServers.rhino into a JSON config (creates if absent) ────
 # Usage: merge_mcp_json <config_path>

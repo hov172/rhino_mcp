@@ -189,6 +189,8 @@ cp "$ROOT/rhino_plugin/release/"Microsoft.CodeAnalysis*.dll "${PAYLOAD}/plugin/"
 # ── 12. Stage component payloads ──────────────────────────────────────────────
 echo "[10/14] Staging package payloads..."
 
+cp "$ROOT/scripts/installer/install-plugin.py" "$PAYLOAD/install-plugin.py"
+
 # Component 1: payload is already staged under its final installation path.
 mkdir -p "$BUILDTMP/pkg1/usr/local/bin"
 cp "$ROOT/scripts/installer/rhino-mcp-configure.sh" \

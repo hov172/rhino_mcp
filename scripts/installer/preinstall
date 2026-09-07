@@ -24,32 +24,21 @@ if [ ! -d "/Applications/Rhino 8.app" ]; then
     echo "         The MCP server will install but the Rhino plugin cannot load." >&2
 fi
 
-# Remove previous plugin copies so Rhino doesn't load both old and new simultaneously.
-# Covers: direct copies in Plug-ins/ (Rhino 8 and 9) and Yak-installed packages.
-CONSOLE_USER=$(stat -f "%Su" /dev/console 2>/dev/null || true)
-if [ -n "$CONSOLE_USER" ] && [ "$CONSOLE_USER" != "root" ]; then
-    USER_SUPPORT="/Users/$CONSOLE_USER/Library/Application Support/McNeel/Rhinoceros"
-
-    for RHP in \
-        "$USER_SUPPORT/7.0/Plug-ins/rhino-mcp.rhp" \
-        "$USER_SUPPORT/8.0/Plug-ins/rhino-mcp.rhp" \
-        "$USER_SUPPORT/9.0/Plug-ins/rhino-mcp.rhp"; do
-        if [ -f "$RHP" ]; then
-            rm -f "$RHP"
-            echo "Removed previous plugin: $RHP"
-        fi
-    done
-
-    # Yak installs a versioned subdirectory; remove all versions
-    for YAK_DIR in \
-        "$USER_SUPPORT/packages/7.0/rhino-mcp" \
-        "$USER_SUPPORT/packages/8.0/rhino-mcp" \
-        "$USER_SUPPORT/packages/9.0/rhino-mcp"; do
-        if [ -d "$YAK_DIR" ]; then
-            rm -rf "$YAK_DIR"
-            echo "Removed Yak-installed plugin: $YAK_DIR"
-        fi
-    done
+# Close Rhino before changing plugins or cached registration.
+if pgrep -x Rhinoceros >/dev/null 2>&1; then
+    echo "ERROR: Quit Rhino before installing rhino-mcp, then run this installer again." >&2
+    exit 1
 fi
 
+# Retire application-bundle copies that would conflict with the user bundle.
+for RHINO_VER in 8 9; do
+    OLD_PLUGIN="/Applications/Rhino ${RHINO_VER}.app/Contents/PlugIns/rhino-mcp.rhp"
+    if [ -f "$OLD_PLUGIN" ]; then
+        BACKUP_DIR=$(mktemp -d /Users/Shared/rhino-mcp-legacy-plugin.XXXXXX)
+        mv "$OLD_PLUGIN" "$BACKUP_DIR/rhino-mcp.rhp"
+        echo "Backed up previous application plugin: $BACKUP_DIR"
+    fi
+done
+
+# Per-user legacy files and cached paths are repaired by install-plugin.py.
 exit 0

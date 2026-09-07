@@ -130,3 +130,65 @@ def test_installer_venv_relocation_handles_path_aliases(tmp_path):
             assert str(alias) not in file.read_text()
             assert str(actual) not in file.read_text()
         assert (venv / "bin/rhino-mcp").stat().st_mode & 0o111
+
+
+@pytest.fixture
+def mac_plugin_install(tmp_path):
+    import runpy
+    installer = runpy.run_path(str(REPO_ROOT / 'scripts/installer/install-plugin.py'))
+    home, source, apps = [tmp_path / name for name in ('home', 'source', 'apps')]
+    source.mkdir()
+    apps.mkdir()
+    (source / 'rhino-mcp.rhp').write_bytes(b'plugin')
+    (source / 'dependency.dll').write_bytes(b'dependency')
+    return installer['install'], home, source, apps
+
+
+def test_mac_plugin_bundle_discovery_path(mac_plugin_install):
+    install, home, source, apps = mac_plugin_install
+    for major in (7, 8, 9):
+        (apps / f'Rhino {major}.app').mkdir()
+    installed = install(home, source, apps)
+    assert len(installed) == 2
+    for major, bundle in zip((8, 9), installed):
+        assert bundle == home / f'Library/Application Support/McNeel/Rhinoceros/{major}.0/MacPlugIns/rhino-mcp.rhp'
+        assert (bundle / 'rhino-mcp.rhp').read_bytes() == b'plugin'
+        assert (bundle / 'dependency.dll').read_bytes() == b'dependency'
+
+
+def test_mac_plugin_repairs_registration_and_preserves_settings(mac_plugin_install):
+    import xml.etree.ElementTree as ET
+    install, home, source, apps = mac_plugin_install
+    (apps / 'Rhino 8.app').mkdir()
+    base = home / 'Library/Application Support/McNeel/Rhinoceros/8.0'
+    settings = base / 'settings/settings-Scheme__Default.xml'
+    settings.parent.mkdir(parents=True)
+    settings.write_text('<settings><entry key="unrelated">keep me</entry><child key="b70f7d84-06a9-42df-a44b-2808f9a7f430"><child key="PlugIn"><entry key="FileName">/Applications/Rhino 8.app/Contents/PlugIns/rhino-mcp.rhp</entry></child></child></settings>')
+    legacy = base / 'Plug-ins/rhino-mcp.rhp'
+    legacy.parent.mkdir(); legacy.write_bytes(b'old')
+    bundle = install(home, source, apps)[0]
+    tree = ET.parse(settings)
+    assert tree.find(".//entry[@key='FileName']").text == str(bundle / 'rhino-mcp.rhp')
+    assert tree.find(".//entry[@key='unrelated']").text == 'keep me'
+    assert not legacy.exists()
+    backups = home / 'Library/Application Support/rhino-mcp/backups'
+    assert any(p.read_bytes() == b'old' for p in backups.rglob('*') if p.is_file())
+
+
+def test_mac_plugin_rerun_repairs_missing_dependency(mac_plugin_install):
+    install, home, source, apps = mac_plugin_install
+    (apps / 'Rhino 8.app').mkdir()
+    bundle = install(home, source, apps)[0]
+    assembly_mtime = (bundle / 'rhino-mcp.rhp').stat().st_mtime_ns
+    (bundle / 'dependency.dll').unlink()
+    install(home, source, apps)
+    assert (bundle / 'dependency.dll').read_bytes() == b'dependency'
+    assert (bundle / 'rhino-mcp.rhp').stat().st_mtime_ns == assembly_mtime
+
+
+def test_mac_plugin_missing_source_fails_before_mutation(mac_plugin_install):
+    install, home, source, apps = mac_plugin_install
+    (source / 'rhino-mcp.rhp').unlink()
+    with pytest.raises(FileNotFoundError):
+        install(home, source, apps)
+    assert not home.exists()

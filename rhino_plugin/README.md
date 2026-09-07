@@ -1,6 +1,6 @@
 # RhinoMCPPlugin
 
-Version **0.17.0**. The Rhino-side TCP socket server for the Rhino MCP project. This plugin runs inside Rhino 3D and handles all incoming commands from the Python MCP server.
+Version **0.17.1**. The Rhino-side TCP socket server for the Rhino MCP project. This plugin runs inside Rhino 3D and handles all incoming commands from the Python MCP server.
 
 ---
 
@@ -175,6 +175,8 @@ All command handlers that touch Rhino or Grasshopper state run on the Rhino main
 ---
 
 ## Upgrading
+
+The 0.17.1 macOS installer fixes discovery by using `8.0/MacPlugIns/rhino-mcp.rhp/rhino-mcp.rhp` (or `9.0`) and repairing cached paths while Rhino is closed. See the [0.17.1 upgrade guide](../docs/upgrade-0.17.1.md).
 
 Follow the [0.17.0 upgrade guide](../docs/upgrade-0.17.0.md) for matching Python, plugin, and Docker versions. Quit Rhino completely before replacing an installed plugin.
 

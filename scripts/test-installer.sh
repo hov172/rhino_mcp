@@ -95,7 +95,7 @@ CONSOLE_USER=$(stat -f "%Su" /dev/console 2>/dev/null || echo "")
 if [ -n "$CONSOLE_USER" ] && [ "$CONSOLE_USER" != "root" ]; then
     USER_HOME=$(dscl . -read "/Users/$CONSOLE_USER" NFSHomeDirectory 2>/dev/null | awk '{print $2}')
     if [ -n "$USER_HOME" ]; then
-        PLUGIN_PATH="$USER_HOME/Library/Application Support/McNeel/Rhinoceros/8.0/Plug-ins/rhino-mcp.rhp"
+        PLUGIN_PATH="$USER_HOME/Library/Application Support/McNeel/Rhinoceros/8.0/MacPlugIns/rhino-mcp.rhp/rhino-mcp.rhp"
         if [ -f "$PLUGIN_PATH" ]; then
             echo "  PASS: Rhino plugin installed for $CONSOLE_USER"
             PASS=$((PASS + 1))

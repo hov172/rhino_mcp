@@ -105,7 +105,7 @@ Control Rhino 3D from Claude, Cursor, Codex, and any other MCP-capable AI tool. 
 
 ## Quick Start
 
-**Version 0.17.0:** remote HTTP/plugin connections now require TLS. See [secure operation and migration notes](docs/secure-operation.md) for certificates, HTTP identities, execution gates, project state, and changed error/export behavior. Follow the [0.17.0 upgrade guide](docs/upgrade-0.17.0.md) to rebuild and install matching packages.
+**Version 0.17.1:** fixes macOS plugin discovery and stale registration. See the [0.17.1 upgrade guide](docs/upgrade-0.17.1.md). Since 0.17.0, remote HTTP/plugin connections now require TLS. See [secure operation and migration notes](docs/secure-operation.md) for certificates, HTTP identities, execution gates, project state, and changed error/export behavior. Follow the [0.17.0 upgrade guide](docs/upgrade-0.17.0.md) to rebuild and install matching packages.
 
 > **Two separate pieces — both are required:**
 >
@@ -146,9 +146,9 @@ The plugin file is included in the repo at `rhino_plugin/package/rhino-mcp.rhp`.
 
 ```bash
 # macOS — user plug-ins folder (no admin rights needed)
-mkdir -p "$HOME/Library/Application Support/McNeel/Rhinoceros/8.0/Plug-ins"
-cp rhino_plugin/package/rhino-mcp.rhp \
-   "$HOME/Library/Application Support/McNeel/Rhinoceros/8.0/Plug-ins/"
+mkdir -p "$HOME/Library/Application Support/McNeel/Rhinoceros/8.0/MacPlugIns/rhino-mcp.rhp"
+cp rhino_plugin/package/rhino-mcp.rhp rhino_plugin/package/*.json rhino_plugin/package/*.dll \
+   "$HOME/Library/Application Support/McNeel/Rhinoceros/8.0/MacPlugIns/rhino-mcp.rhp/"
 ```
 
 ```powershell
@@ -359,14 +359,14 @@ The `.pkg` installer is the fastest way to get up and running on macOS. It requi
 - The `rhino` MCP server entry into Claude Desktop and Claude Code automatically
 
 **Steps:**
-1. Download the [signed and notarized 0.17.0 installer](https://github.com/hov172/rhino_mcp/releases/download/v0.17.0/rhino-mcp-0.17.0-universal-signed.pkg)
+1. Download the [signed and notarized 0.17.1 installer](https://github.com/hov172/rhino_mcp/releases/download/v0.17.1/rhino-mcp-0.17.1-universal-signed.pkg)
 2. Double-click the `.pkg` and follow the installer prompts
 3. Launch Rhino — the plugin loads automatically
 4. Launch your AI client — the MCP server is already configured
 
 > The installer removes previous per-user manual and Yak copies. If you previously installed into the Rhino application bundle, check that location for a duplicate before installing.
 
-The [signed 0.17.0 uninstaller](https://github.com/hov172/rhino_mcp/releases/download/v0.17.0/rhino-mcp-0.17.0-universal-uninstaller-signed.pkg) is available in the same release.
+The [signed 0.17.1 uninstaller](https://github.com/hov172/rhino_mcp/releases/download/v0.17.1/rhino-mcp-0.17.1-universal-uninstaller-signed.pkg) is available in the same release.
 
 ---
 
@@ -564,7 +564,7 @@ Check **both** install locations — you may have installed once via `.rhp` copy
 
 ```bash
 # Manual .rhp install location
-rm -f "$HOME/Library/Application Support/McNeel/Rhinoceros/8.0/Plug-ins/rhino-mcp.rhp"
+rm -f "$HOME/Library/Application Support/McNeel/Rhinoceros/8.0/MacPlugIns/rhino-mcp.rhp/rhino-mcp.rhp"
 
 # Yak / PackageManager install location
 rm -rf "$HOME/Library/Application Support/McNeel/Rhinoceros/packages/8.0/rhino-mcp"
@@ -614,13 +614,13 @@ The plugin is a `.rhp` file that runs a TCP socket server inside Rhino on port 1
 
 #### Option A — Copy the pre-built `.rhp` directly (fastest)
 
-Download `rhino-mcp.rhp` from the [latest release](https://github.com/hov172/rhino_mcp/releases/latest), then copy it to the Rhino plug-ins folder:
+On macOS, extract the plugin ZIP from the [latest release](https://github.com/hov172/rhino_mcp/releases/latest) and copy its assembly and dependencies into the bundle below. Quit Rhino before installation. Windows users can install the `.rhp` directly.
 
 ```bash
 # macOS — user plug-ins folder (no admin rights needed)
-mkdir -p "$HOME/Library/Application Support/McNeel/Rhinoceros/8.0/Plug-ins"
-cp rhino-mcp.rhp \
-   "$HOME/Library/Application Support/McNeel/Rhinoceros/8.0/Plug-ins/"
+mkdir -p "$HOME/Library/Application Support/McNeel/Rhinoceros/8.0/MacPlugIns/rhino-mcp.rhp"
+cp rhino-mcp.rhp *.json *.dll \
+   "$HOME/Library/Application Support/McNeel/Rhinoceros/8.0/MacPlugIns/rhino-mcp.rhp/"
 ```
 
 ```powershell
@@ -785,7 +785,7 @@ The `.pkg` installer replaces steps 1, 2, and 3 entirely on macOS. See [Path C �
 | `/Users/Shared/rhino_mcp/plugin/rhino-mcp.rhp` | Rhino plugin source used during per-user configuration |
 | `/Users/Shared/rhino_mcp/VERSION` | Installed version string |
 | `/usr/local/bin/rhino-mcp-configure` | Per-user configuration script (re-run manually if needed) |
-| `~/Library/Application Support/McNeel/Rhinoceros/<ver>/Plug-ins/rhino-mcp.rhp` | Plugin copy for each installed Rhino version (7, 8, 9) |
+| `~/Library/Application Support/McNeel/Rhinoceros/<ver>/MacPlugIns/rhino-mcp.rhp/` | Plugin bundle and dependencies for installed Rhino 8/9 |
 
 **Re-running configuration manually:**
 
@@ -2497,7 +2497,7 @@ uv run python -m pytest tests/ \
     --collect-only -q
 ```
 
-The non-integration collection currently includes 472 tests plus five subtests. Integration tests auto-skip cleanly if the plugin socket is not reachable.
+The non-integration collection currently includes 476 tests plus five subtests. Integration tests auto-skip cleanly if the plugin socket is not reachable.
 
 ---
 

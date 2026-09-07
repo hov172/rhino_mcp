@@ -1,6 +1,6 @@
 # Rhino MCP — Development Guide
 
-Version **0.17.0** exposes 358 tools for controlling Rhino 3D. See [AGENTS.md](AGENTS.md) for tool patterns, validation, error shapes, and version synchronization.
+Version **0.17.1** exposes 358 tools for controlling Rhino 3D. See [AGENTS.md](AGENTS.md) for tool patterns, validation, error shapes, and version synchronization.
 
 ## Architecture
 
@@ -41,4 +41,4 @@ See [.env.example](.env.example) and [secure operation](docs/secure-operation.md
 
 ## Builds and releases
 
-Follow the [0.17.0 upgrade guide](docs/upgrade-0.17.0.md) and [publishing checklist](rhino_plugin/PUBLISHING.md). Builds do not automatically install the plugin. The GitHub plugin release workflow is manually dispatched on a self-hosted macOS runner with Rhino; it is not an automatic release-on-tag pipeline.
+Follow the [0.17.1 upgrade guide](docs/upgrade-0.17.1.md) and [publishing checklist](rhino_plugin/PUBLISHING.md). Builds do not automatically install the plugin. The GitHub plugin release workflow is manually dispatched on a self-hosted macOS runner with Rhino; it is not an automatic release-on-tag pipeline.
