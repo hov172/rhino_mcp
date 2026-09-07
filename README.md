@@ -105,6 +105,8 @@ Control Rhino 3D from Claude, Cursor, Codex, and any other MCP-capable AI tool. 
 
 ## Quick Start
 
+**Version 0.17.0:** remote HTTP/plugin connections now require TLS. See [secure operation and migration notes](docs/secure-operation.md) for certificates, HTTP identities, execution gates, project state, and changed error/export behavior. Follow the [0.17.0 upgrade guide](docs/upgrade-0.17.0.md) to rebuild and install matching packages.
+
 > **Two separate pieces — both are required:**
 >
 > | Piece | What it is | Where it runs |
@@ -243,6 +245,8 @@ Claude Desktop → spawns → python -m rhmcp (stdio)
 
 ### Path B — Docker setup with Claude Desktop
 
+Prepare the certificates and shared plugin secret described in [secure operation](docs/secure-operation.md#tls). Set `RHINO_MCP_CERT_DIR` to that local certificate directory. The HTTP certificate must cover `localhost`; the plugin certificate must cover `host.docker.internal`.
+
 Docker bundles the Python server and all dependencies into a self-contained image. No Python, no uv, no cloning required on the machine running the container.
 
 **Prerequisites:** Rhino 7 or 8, Docker Desktop.
@@ -264,7 +268,13 @@ docker build -t rhino-mcp .
 # Run — paste your real API keys
 docker run -d \
   -p 8000:8000 \
-  -e RHINO_MCP_AUTH_TOKEN="choose-a-long-random-string" \
+  -v "$RHINO_MCP_CERT_DIR:/certs:ro" \
+  -e RHINO_MCP_HTTP_TLS_CERT=/certs/http-server.pem \
+  -e RHINO_MCP_HTTP_TLS_KEY=/certs/http-server-key.pem \
+  -e RHINO_MCP_HTTP_TLS_CA=/certs/ca.pem \
+  -e RHINO_MCP_PLUGIN_TLS_CA=/certs/ca.pem \
+  -e RHINO_MCP_PLUGIN_SECRET="$RHINO_MCP_PLUGIN_SECRET" \
+  -e RHINO_MCP_AUTH_TOKEN="replace-with-a-unique-random-token-at-least-32-chars" \
   -e ANTHROPIC_API_KEY="sk-ant-..." \
   -e FAL_KEY="..." \
   --name rhino-mcp \
@@ -278,7 +288,13 @@ The container starts the MCP server in HTTP mode and defaults `RHINO_MCP_HOST=ho
 ```bash
 docker run -d -p 8000:8000 \
   --add-host=host.docker.internal:host-gateway \
-  -e RHINO_MCP_AUTH_TOKEN="choose-a-long-random-string" \
+  -v "$RHINO_MCP_CERT_DIR:/certs:ro" \
+  -e RHINO_MCP_HTTP_TLS_CERT=/certs/http-server.pem \
+  -e RHINO_MCP_HTTP_TLS_KEY=/certs/http-server-key.pem \
+  -e RHINO_MCP_HTTP_TLS_CA=/certs/ca.pem \
+  -e RHINO_MCP_PLUGIN_TLS_CA=/certs/ca.pem \
+  -e RHINO_MCP_PLUGIN_SECRET="$RHINO_MCP_PLUGIN_SECRET" \
+  -e RHINO_MCP_AUTH_TOKEN="replace-with-a-unique-random-token-at-least-32-chars" \
   -e ANTHROPIC_API_KEY="sk-ant-..." \
   -e FAL_KEY="..." \
   --name rhino-mcp \
@@ -288,7 +304,7 @@ docker run -d -p 8000:8000 \
 Verify the server is up (the `/health` endpoint needs no auth):
 
 ```bash
-curl http://localhost:8000/health
+curl --cacert "$RHINO_MCP_CERT_DIR/ca.pem" https://localhost:8000/health
 ```
 
 All other endpoints require the bearer token: `Authorization: Bearer <your RHINO_MCP_AUTH_TOKEN>`. If you didn't set `RHINO_MCP_AUTH_TOKEN`, a random token was generated at startup — find it with `docker logs rhino-mcp`.
@@ -301,9 +317,9 @@ In HTTP mode the server is already running — Claude Desktop connects to it rat
 {
   "mcpServers": {
     "rhino": {
-      "url": "http://localhost:8000/",
+      "url": "https://localhost:8000/",
       "headers": {
-        "Authorization": "Bearer choose-a-long-random-string"
+        "Authorization": "Bearer replace-with-a-unique-random-token-at-least-32-chars"
       }
     }
   }
@@ -335,7 +351,7 @@ Claude Desktop → HTTP → localhost:8000 (Docker container)
 
 The `.pkg` installer is the fastest way to get up and running on macOS. It requires no terminal, no Python install, and no manual config editing.
 
-**Requirements:** macOS 13 Ventura or later · Rhino 7, 8, or 9 · Apple Silicon or Intel
+**Requirements:** macOS 13 Ventura or later · Rhino 8.17+ · Apple Silicon or Intel. GH2 tools require Rhino 9 with GH2 loaded.
 
 **What it installs:**
 - A self-contained Python 3.13 runtime and virtual environment under `/Users/Shared/rhino_mcp/` (shared across all users on the machine)
@@ -343,14 +359,14 @@ The `.pkg` installer is the fastest way to get up and running on macOS. It requi
 - The `rhino` MCP server entry into Claude Desktop and Claude Code automatically
 
 **Steps:**
-1. Download `rhino-mcp-<version>-universal-installer.pkg` from the [latest release](https://github.com/hov172/rhino_mcp/releases/latest)
+1. Download the [signed and notarized 0.17.0 installer](https://github.com/hov172/rhino_mcp/releases/download/v0.17.0/rhino-mcp-0.17.0-universal-signed.pkg)
 2. Double-click the `.pkg` and follow the installer prompts
 3. Launch Rhino — the plugin loads automatically
 4. Launch your AI client — the MCP server is already configured
 
-> Any previous version of the plugin (including Yak-installed copies) is removed automatically before the new version is placed.
+> The installer removes previous per-user manual and Yak copies. If you previously installed into the Rhino application bundle, check that location for a duplicate before installing.
 
-An uninstaller (`rhino-mcp-<version>-universal-uninstaller.pkg`) is available in the same release to fully remove all installed files.
+The [signed 0.17.0 uninstaller](https://github.com/hov172/rhino_mcp/releases/download/v0.17.0/rhino-mcp-0.17.0-universal-uninstaller-signed.pkg) is available in the same release.
 
 ---
 
@@ -379,7 +395,7 @@ An uninstaller (`rhino-mcp-<version>-universal-uninstaller.pkg`) is available in
 | **Enscape** | Launch Enscape window, capture screenshots, export 360° panoramas, export standalone executables, set time of day and atmosphere, save named views |
 | **Views** | Capture the active viewport — **Claude receives the image and can see the scene**; set named views, camera position, target, and lens length; save PNG to disk |
 | **Files** | Save and export to `.3dm`, `.obj`, `.stl`, `.fbx`, `.step`, `.iges`, `.dwg`. Import any Rhino-supported format with automatic display setup: DWG/DXF → Wireframe + black background + AutoCAD colours; FBX/OBJ/STL/STEP → Shaded mode. Zoom to extents applied on every import. |
-| **Scripting** | Run arbitrary Rhino Python (RhinoScriptSyntax / RhinoCommon) or C# (Roslyn) directly. Python scripts auto-revert newly added objects if the script raises an exception. Use `verified_functions` to suppress the API-hallucination warning. Execution gates (`RHINO_MCP_ENABLE_RHINOSCRIPT`, `RHINO_MCP_ENABLE_CSHARP`, `RHINO_MCP_ENABLE_RUN_COMMAND`) let operators disable these tools. |
+| **Scripting** | Run arbitrary Rhino Python (RhinoScriptSyntax / RhinoCommon) or C# (Roslyn) directly. Failed plugin operations use Rhino undo records to restore document edits; external side effects are outside this recovery scope. Use `verified_functions` to suppress the API-hallucination warning. Execution gates (`RHINO_MCP_ENABLE_RHINOSCRIPT`, `RHINO_MCP_ENABLE_CSHARP`, `RHINO_MCP_ENABLE_RUN_COMMAND`) let operators disable these tools. |
 | **AI Generation** | Generate 3D models from text or images via Hunyuan3D, import results into Rhino |
 | **Asset Libraries** | Search and import Poly Haven textures/HDRIs, download Sketchfab models |
 | **VisualARQ (BIM)** | Create walls, doors, windows, slabs, columns, stairs, railings, levels; query BIM properties; export IFC |
@@ -703,6 +719,8 @@ export AWS_SECRET_ACCESS_KEY="..."       # optional
 
 ### Docker Quick-Start (alternative to steps 2 & 3)
 
+Prepare the certificates and shared plugin secret described in [secure operation](docs/secure-operation.md#tls). Set `RHINO_MCP_CERT_DIR` to that local certificate directory. The HTTP certificate must cover `localhost`; the plugin certificate must cover `host.docker.internal`.
+
 Docker bundles the Python server and all dependencies into a self-contained image. You still need the Rhino plugin (step 1) — it runs inside Rhino on your machine and cannot be containerized.
 
 **Build the image:**
@@ -716,7 +734,13 @@ docker build -t rhino-mcp .
 ```bash
 docker run -d \
   -p 8000:8000 \
-  -e RHINO_MCP_AUTH_TOKEN="choose-a-long-random-string" \
+  -v "$RHINO_MCP_CERT_DIR:/certs:ro" \
+  -e RHINO_MCP_HTTP_TLS_CERT=/certs/http-server.pem \
+  -e RHINO_MCP_HTTP_TLS_KEY=/certs/http-server-key.pem \
+  -e RHINO_MCP_HTTP_TLS_CA=/certs/ca.pem \
+  -e RHINO_MCP_PLUGIN_TLS_CA=/certs/ca.pem \
+  -e RHINO_MCP_PLUGIN_SECRET="$RHINO_MCP_PLUGIN_SECRET" \
+  -e RHINO_MCP_AUTH_TOKEN="replace-with-a-unique-random-token-at-least-32-chars" \
   -e ANTHROPIC_API_KEY="sk-ant-..." \
   -e FAL_KEY="..." \
   -e DOCRAPTOR_API_KEY="..." \
@@ -731,12 +755,18 @@ The container defaults to `RHINO_MCP_HOST=host.docker.internal`, which on **macO
 
 ```bash
 docker run -d -p 8000:8000 --add-host=host.docker.internal:host-gateway \
-  -e RHINO_MCP_AUTH_TOKEN="choose-a-long-random-string" \
+  -v "$RHINO_MCP_CERT_DIR:/certs:ro" \
+  -e RHINO_MCP_HTTP_TLS_CERT=/certs/http-server.pem \
+  -e RHINO_MCP_HTTP_TLS_KEY=/certs/http-server-key.pem \
+  -e RHINO_MCP_HTTP_TLS_CA=/certs/ca.pem \
+  -e RHINO_MCP_PLUGIN_TLS_CA=/certs/ca.pem \
+  -e RHINO_MCP_PLUGIN_SECRET="$RHINO_MCP_PLUGIN_SECRET" \
+  -e RHINO_MCP_AUTH_TOKEN="replace-with-a-unique-random-token-at-least-32-chars" \
   -e ANTHROPIC_API_KEY="sk-ant-..." \
   rhino-mcp
 ```
 
-Once running, point your AI client at `http://localhost:8000/` — see [Docker / HTTP Transport](#docker--http-transport) below.
+Once running, point your AI client at `https://localhost:8000/` — see [Docker / HTTP Transport](#docker--http-transport) below.
 
 **Both paths work independently.** Existing manual stdio setups are unaffected by the Docker option.
 
@@ -1106,6 +1136,8 @@ Replace `/path/to/rhino-mcp` with the absolute path to the cloned repo. Restart 
 
 ### Docker / HTTP Transport
 
+Prepare the certificates and shared plugin secret described in [secure operation](docs/secure-operation.md#tls). Set `RHINO_MCP_CERT_DIR` to that local certificate directory. The HTTP certificate must cover `localhost`; the plugin certificate must cover `host.docker.internal`.
+
 When the server is running in Docker (or started manually with `--transport http`), AI clients connect to a URL instead of spawning a process. API keys are set on the container at `docker run` time — no `env` block needed in the client config.
 
 Every request (except `GET /health`) must carry `Authorization: Bearer <token>`. Set a stable token with `RHINO_MCP_AUTH_TOKEN` when starting the container/server; otherwise a random one is generated and printed to stderr on each start (`docker logs rhino-mcp`).
@@ -1116,7 +1148,7 @@ Every request (except `GET /health`) must carry `Authorization: Bearer <token>`.
 {
   "mcpServers": {
     "rhino": {
-      "url": "http://localhost:8000/",
+      "url": "https://localhost:8000/",
       "headers": {
         "Authorization": "Bearer <your RHINO_MCP_AUTH_TOKEN>"
       }
@@ -1128,19 +1160,19 @@ Every request (except `GET /health`) must carry `Authorization: Bearer <token>`.
 **Claude Code (CLI):**
 
 ```bash
-claude --mcp-server "rhino:http://localhost:8000/"
+claude --mcp-server "rhino:https://localhost:8000/"
 ```
 
-**Cursor** — Settings → MCP → Add Server, type `http`, URL `http://localhost:8000/`.
+**Cursor** — Settings → MCP → Add Server, type `http`, URL `https://localhost:8000/`.
 
-**Windsurf** — add a server with type `sse` and URL `http://localhost:8000/`.
+**Windsurf** — add a server with type `sse` and URL `https://localhost:8000/`.
 
-**GitHub Copilot (VS Code)** — in `.vscode/mcp.json` use `"type": "http"` and `"url": "http://localhost:8000/"`.
+**GitHub Copilot (VS Code)** — in `.vscode/mcp.json` use `"type": "http"` and `"url": "https://localhost:8000/"`.
 
 **Codex CLI:**
 
 ```bash
-codex --mcp-server "http://localhost:8000/"
+codex --mcp-server "https://localhost:8000/"
 ```
 
 > The manual stdio setup and Docker/HTTP setup can coexist. Point different clients at whichever they prefer — the Rhino plugin on port 1999 handles both.
@@ -1210,17 +1242,34 @@ When debugging connection failures, set `RHINO_MCP_BACKEND=plugin` temporarily. 
 | `RHINO_MCP_TELEMETRY` | *(unset)* | Set to `1`, `true`, or `yes` to enable usage telemetry |
 | `RHINO_MCP_TELEMETRY_LOG` | `~/.rhino_mcp_telemetry.jsonl` | Path for the telemetry log file (JSONL format) |
 | `RHINO_MCP_READ_ROOTS` | `~` (home dir) | Colon-separated paths `read_*` tools may access. Default restricts reads to home directory. |
-| `RHINO_MCP_RATE_LIMIT_RPM` | `120` | HTTP transport: maximum requests per minute per token. |
+| `RHINO_MCP_RATE_LIMIT_RPM` | `120` | HTTP transport: maximum requests per minute per authenticated identity; `0` disables, negative values are rejected. |
 | `RHINO_MCP_USE_SLOT_REGISTRY` | *(unset)* | Set to `1` to always route `plugin_result()` via the slot registry (auto-discover Rhino instances). Default: off (uses `RHINO_MCP_HOST`/`RHINO_MCP_PORT` directly). |
 | `RHINO_MCP_RHINO_PATH` | *(auto-detected)* | Override path to the Rhino executable used by `launch_rhino`. Default: searches standard install locations. |
 | `RHMCP_PROFILE` | `full` | Tool profile to load at startup: `core`, `grasshopper`, `rendering`, `urban`, `bim`, or `full`. Equivalent to `--profile` CLI flag. See [Tool Profiles](#tool-profiles). |
 | `RHMCP_COMPACT` | `1` | Compact mode enabled by default. Set to `0` to load all schemas upfront. See [Compact Mode](#compact-mode). |
 | `RHINO_MCP_KEEPALIVE` | `1` | Reuse a single persistent TCP connection to the Rhino plugin. Set to `0` to open a new connection per call (slower, useful for debugging). |
-| `RHINO_MCP_ENABLE_RHINOSCRIPT` | `1` | Execution gate for `execute_rhino_python` / `execute_rhinoscript_python_code`. Set to `0` to refuse arbitrary Python execution. |
-| `RHINO_MCP_ENABLE_CSHARP` | `1` | Execution gate for `execute_rhino_csharp` / `execute_rhinocommon_csharp_code`. Set to `0` to refuse arbitrary C# execution. |
-| `RHINO_MCP_ENABLE_RUN_COMMAND` | `1` | Execution gate for `run_rhino_command` / `run_command`. Set to `0` to refuse command macro execution. |
+| `RHINO_MCP_ENABLE_RHINOSCRIPT` | `1` | Set to `0` to block Python execution, including built-in script-backed operations and GH Python script creation. Set in both MCP and Rhino environments. |
+| `RHINO_MCP_ENABLE_CSHARP` | `1` | Set to `0` to block C# execution and GH C# script creation. Set in both MCP and Rhino environments. |
+| `RHINO_MCP_ENABLE_RUN_COMMAND` | `1` | Set to `0` to block command macros at backend and plugin dispatch. Set in both MCP and Rhino environments. |
 | `RHINO_MCP_ALLOW_REMOTE` | `0` | Set to `1` to allow the Python server to connect to a non-loopback Rhino host (required when `RHINO_MCP_HOST` is a remote address or `host.docker.internal`). See [Remote Host Support](#remote-host-support). |
-| `RHINO_MCP_AUTH_TOKEN` | *(unset)* | Fixed bearer token for the HTTP transport. When set, clients authenticate with `Authorization: Bearer <token>` and the token survives restarts — set this for Docker / Cloud Run deployments. Unset = a random token is generated at startup and printed to stderr. |
+| `RHINO_MCP_AUTH_TOKEN` | *(unset)* | Owner bearer token of at least 32 characters for HTTP. Ignored when `RHINO_MCP_AUTH_CONFIG` is set. When set, clients authenticate with `Authorization: Bearer <token>` and the token survives restarts — set this for Docker / Cloud Run deployments. Unset = a random token is generated at startup and printed to stderr. |
+
+### Remote transport and workflow settings
+
+See [secure operation](docs/secure-operation.md) for complete configuration examples.
+
+| Variable | Default | Description |
+|---|---|---|
+| `RHINO_MCP_AUTH_CONFIG` | *(unset)* | JSON file with identity tokens and tool/project/instance grants; overrides the owner token. |
+| `RHINO_MCP_HTTP_TLS_CERT` / `RHINO_MCP_HTTP_TLS_KEY` | *(unset)* | PEM certificate and private key, required for non-loopback HTTP binding. |
+| `RHINO_MCP_HTTP_ALLOWED_HOSTS` | *(loopback hosts)* | Comma-separated allowed hostnames, including port patterns such as `rhino.example.internal:*`. |
+| `RHINO_MCP_HTTP_ALLOWED_ORIGINS` | *(loopback origins)* | Comma-separated allowed browser origins. |
+| `RHINO_MCP_HTTP_TLS_CA` | *(HTTP certificate)* | Trust file used by the Docker health check. |
+| `RHINO_MCP_HTTP_TLS_SERVER_NAME` | `localhost` | Certificate hostname used by the Docker health check. |
+| `RHINO_MCP_PLUGIN_TLS` | `0` | Set to `1` for remote plugin connections; also requires `RHINO_MCP_ALLOW_REMOTE=1`. |
+| `RHINO_MCP_PLUGIN_TLS_CA` | *(system trust)* | PEM CA used to verify the plugin certificate and hostname. |
+| `RHINO_MCP_GH_DIR` | *(bundled definitions)* | Urban definition directory as seen by Rhino; configure when MCP runs on another host/container. |
+| `RHINO_MCP_REPORT_DIR` | `~/.urbanagent/reports` | Local report root; artifacts use separate scope namespaces and unique names. |
 
 ### Rhino Plugin (C# side)
 
@@ -1228,6 +1277,8 @@ When debugging connection failures, set `RHINO_MCP_BACKEND=plugin` temporarily. 
 |---|---|---|
 | `RHINO_MCP_BIND_HOST` | `127.0.0.1` | IP address the Rhino plugin binds its TCP listener to. Set to `0.0.0.0` to accept connections from any network interface (required for remote AI clients). Must be set in Rhino's environment before `MCPStart` is run. |
 | `RHINO_MCP_PLUGIN_SECRET` | *(unset)* | Pre-shared key required from the Python server on every connection. **Required for network (non-loopback) binding** — since v0.16.0 the plugin refuses to start listening on a non-loopback address without it. Set the same value on both machines. Unset = no authentication (loopback-only binding still works). |
+| `RHINO_MCP_PLUGIN_TLS_CERT` | *(unset)* | PFX certificate with private key; required for non-loopback binding in 0.17.0. |
+| `RHINO_MCP_PLUGIN_TLS_PASSWORD` | *(unset)* | Password for the PFX file. |
 
 ---
 
@@ -1235,14 +1286,14 @@ When debugging connection failures, set `RHINO_MCP_BACKEND=plugin` temporarily. 
 
 Profiles let you control which tool modules are loaded at startup. Use a narrower profile to reduce context size when you don't need the full tool set.
 
-| Profile | Tools | ~Tokens | Includes |
-|---------|-------|---------|---------|
-| `full` *(default)* | 358 | ~52k | Everything |
-| `core` | 194 | ~28k | Geometry, layers, transforms, curves, surfaces, meshes, materials, export, annotations, document |
-| `grasshopper` | 277 | ~40k | `core` + all Grasshopper modules (GH1, GH2, Pufferfish, Weaverbird, LunchBox, Kangaroo, Ladybug…) |
-| `rendering` | 225 | ~35k | `core` + V-Ray, Enscape, PBR materials, asset libraries |
-| `urban` | 226 | ~34k | `core` + urban design, massing, studio pipeline, AI generation |
-| `bim` | 212 | ~31k | `core` + VisualARQ, Lands Design |
+| Profile | Tools | Includes |
+|---------|-------|---------|
+| `full` *(default)* | 358 | Everything |
+| `core` | 194 | Geometry, layers, transforms, curves, surfaces, meshes, materials, export, annotations, document |
+| `grasshopper` | 277 | `core` + all Grasshopper modules (GH1, GH2, Pufferfish, Weaverbird, LunchBox, Kangaroo, Ladybug…) |
+| `rendering` | 225 | `core` + V-Ray, Enscape, PBR materials, asset libraries |
+| `urban` | 226 | `core` + urban design, massing, studio pipeline, AI generation |
+| `bim` | 212 | `core` + VisualARQ, Lands Design |
 
 Regenerate the profile counts with:
 
@@ -1296,6 +1347,10 @@ The `core` profile covers standard Rhino modeling — geometry creation, boolean
 
 ## Compact Mode
 
+Compact mode loads Python modules at startup and exposes their schemas on demand.
+Discovery includes module categories and underlying safety annotations; it also
+filters tools by the authenticated identity’s grants.
+
 Compact mode registers 3 meta-tools instead of full schemas, reducing the per-request token cost to ~1.5k regardless of how many tools are available.
 
 | Tool | Description |
@@ -1328,179 +1383,21 @@ rhino-mcp --no-compact --profile core  # full schemas, core tools only
 
 ## Remote Host Support
 
-The Python MCP server and the Rhino plugin communicate over TCP. By default both sides use `127.0.0.1` (loopback), so Rhino and the AI client must be on the same machine.
+Remote HTTP and Rhino plugin connections require TLS. The plugin also requires a
+shared secret. Configure certificates, client trust, and identity grants using
+[Secure operation](docs/secure-operation.md#tls). This applies to Docker as well
+as separate machines; earlier plaintext network examples require these settings.
 
-Two independent settings control remote connectivity:
-
-| Setting | Where | Purpose |
-|---|---|---|
-| `RHINO_MCP_BIND_HOST` | **Rhino plugin (C# side)** | Which network interface the plugin listens on. Default: `127.0.0.1`. Set to `0.0.0.0` to accept connections from other machines. |
-| `RHINO_MCP_ALLOW_REMOTE` | **Python MCP server** | Whether the server is allowed to connect to a non-loopback host. Default: `0` (blocked). Set to `1` when `RHINO_MCP_HOST` is a remote IP or `host.docker.internal`. |
-
-Both must be configured for cross-machine or Docker setups. The Python-side guard (`RHINO_MCP_ALLOW_REMOTE`) prevents the server from accidentally connecting to an unintended remote Rhino instance — a useful safeguard on shared machines.
-
-> **Docker users:** The Dockerfile already sets `RHINO_MCP_ALLOW_REMOTE=1` and `RHINO_MCP_HOST=host.docker.internal` — no extra configuration needed.
-
----
-
-### Bind address values
-
-| `RHINO_MCP_BIND_HOST` value | Effect |
-|---|---|
-| *(not set)* or `127.0.0.1` | Loopback only — local connections, most secure (default) |
-| `0.0.0.0` | All IPv4 interfaces — accepts connections from any machine on the network |
-| `192.168.x.x` (specific IP) | Only the named interface — useful on multi-homed machines |
-| `::` | All IPv6 interfaces |
-
----
-
-### Step 1 — Set the bind address on the Rhino machine
-
-The env var must be present in the environment that launches the Rhino process. Setting it in a terminal after Rhino is already open has no effect.
-
-> **Required:** `RHINO_MCP_PLUGIN_SECRET` must be set alongside `RHINO_MCP_BIND_HOST` — the plugin refuses to listen on a non-loopback address without it (it would otherwise expose unauthenticated code execution to the network). Set the same secret on the MCP server machine.
-
-**macOS — temporary (current terminal session only):**
-```bash
-export RHINO_MCP_BIND_HOST=0.0.0.0
-export RHINO_MCP_PLUGIN_SECRET=your-shared-secret
-open -a "Rhino 8"
-```
-
-**macOS — persistent (survives reboots, affects all Rhino launches):**
-```bash
-# Write a launchd environment variable
-launchctl setenv RHINO_MCP_BIND_HOST 0.0.0.0
-launchctl setenv RHINO_MCP_PLUGIN_SECRET your-shared-secret
-# Takes effect for new processes — restart Rhino if it's already running.
-# To remove later:
-launchctl unsetenv RHINO_MCP_BIND_HOST
-```
-
-**Windows — temporary (current PowerShell session):**
-```powershell
-$env:RHINO_MCP_BIND_HOST = "0.0.0.0"
-$env:RHINO_MCP_PLUGIN_SECRET = "your-shared-secret"
-& "C:\Program Files\Rhino 8\System\Rhino.exe"
-```
-
-**Windows — persistent (user-level, survives reboots):**
-```powershell
-[System.Environment]::SetEnvironmentVariable(
-    "RHINO_MCP_BIND_HOST", "0.0.0.0", "User")
-[System.Environment]::SetEnvironmentVariable(
-    "RHINO_MCP_PLUGIN_SECRET", "your-shared-secret", "User")
-# Restart Rhino after setting.
-# To remove:
-[System.Environment]::SetEnvironmentVariable(
-    "RHINO_MCP_BIND_HOST", $null, "User")
-```
-
-Then in Rhino: run `MCPStart`. The confirmation message shows the actual bind address:
-```
-Rhino MCP listening on 0.0.0.0:1999
-```
-If `RHINO_MCP_PLUGIN_SECRET` is not set, `MCPStart` refuses with a message explaining what to set.
-
-Run `MCPStatus` at any time to confirm:
-```
-Rhino MCP server running on 0.0.0.0:1999
-```
-
----
-
-### Step 2 — Open the firewall port on the Rhino machine
-
-```bash
-# macOS Application Firewall — allow Rhino to accept incoming connections
-sudo /usr/libexec/ApplicationFirewall/socketfilterfw \
-     --add "/Applications/Rhino 8.app/Contents/MacOS/Rhino"
-sudo /usr/libexec/ApplicationFirewall/socketfilterfw \
-     --unblockapp "/Applications/Rhino 8.app/Contents/MacOS/Rhino"
-```
-
-```powershell
-# Windows Defender Firewall — open port 1999 inbound
-netsh advfirewall firewall add rule `
-    name="RhinoMCP" protocol=TCP dir=in `
-    localport=1999 action=allow
-```
-
----
-
-### Step 2b — Set a shared plugin secret (recommended for network use)
-
-When the plugin listens on a network interface, anyone on the same network can send commands to Rhino. Setting `RHINO_MCP_PLUGIN_SECRET` requires the Python server to authenticate on every connection.
-
-**On the Rhino machine** — add to the same environment where `RHINO_MCP_BIND_HOST` is set:
-```bash
-# macOS
-launchctl setenv RHINO_MCP_PLUGIN_SECRET "$(openssl rand -hex 32)"
-```
-```powershell
-# Windows
-[System.Environment]::SetEnvironmentVariable(
-    "RHINO_MCP_PLUGIN_SECRET", [System.Guid]::NewGuid().ToString("N"), "User")
-```
-
-**On the MCP server machine** — add the same value to the `env` block in your AI client config:
-```json
-"RHINO_MCP_PLUGIN_SECRET": "same-value-as-on-rhino-machine"
-```
-
-The plugin prints a warning in the Rhino console if you bind to a non-loopback address without a secret configured.
-
-> **Localhost-only users:** Leave `RHINO_MCP_PLUGIN_SECRET` unset. It has no effect when `RHINO_MCP_BIND_HOST` is `127.0.0.1`.
-
----
-
-### Step 3 — Configure the MCP client
-
-Set `RHINO_MCP_HOST` to the IP address of the Rhino machine. The Python MCP server (which runs on the client machine) connects to that IP on port 1999.
-
-```json
-{
-  "mcpServers": {
-    "rhino": {
-      "command": "uv",
-      "args": ["run", "--directory", "/path/to/rhino-mcp", "python", "-m", "rhmcp"],
-      "env": {
-        "RHINO_MCP_BACKEND": "plugin",
-        "RHINO_MCP_HOST": "192.168.1.50",
-        "RHINO_MCP_PORT": "1999"
-      }
-    }
-  }
-}
-```
-
----
-
-### Step 4 — Verify connectivity
-
-From the client machine, before involving the AI client at all:
-
-```bash
-# macOS / Linux — check that port 1999 is open and responding
-nc -zv 192.168.1.50 1999
-# Expected: Connection to 192.168.1.50 port 1999 [tcp/*] succeeded!
-
-# Windows
-Test-NetConnection -ComputerName 192.168.1.50 -Port 1999
-# Expected: TcpTestSucceeded : True
-```
-
-If the connection is refused, recheck the bind address in `MCPStatus` and confirm the firewall rule is active.
-
----
-
-> **Security note:** Port 1999 accepts JSON commands that can execute arbitrary Python inside Rhino. Only expose it on trusted private networks. Never open it to the public internet. If you need remote access over the internet, tunnel through SSH (`ssh -L 1999:localhost:1999 user@rhino-host`) rather than exposing the port directly. Use execution gates (`RHINO_MCP_ENABLE_RHINOSCRIPT=0`, `RHINO_MCP_ENABLE_CSHARP=0`, `RHINO_MCP_ENABLE_RUN_COMMAND=0`) to restrict what the AI client can execute when operating in a shared or multi-user environment.
+HTTP supports separate authenticated identities with explicit tool, project, and
+Rhino-instance grants. All tools accept `project_id` and `rhino_id`; workflow
+state is isolated by identity/project/instance, with mutations serialized per
+instance within the server process. See [identity configuration](docs/secure-operation.md#http-identities-and-grants).
 
 ---
 
 ## Telemetry
 
-Telemetry is **opt-in** and **disabled by default**. No data leaves your machine — events are written to a local JSONL file only. When disabled (the default), the interceptor is never installed and adds zero overhead to tool calls.
+Telemetry is **opt-in** and **disabled by default**. No data leaves your machine — events are written to a local JSONL file only. When disabled, no events are written. Both compact and direct mode record the underlying tool name when enabled. Arguments and exception messages are omitted.
 
 ### Enable / disable
 
@@ -1531,20 +1428,21 @@ The parent directory is created automatically if it does not exist.
 Each line is a complete, self-contained JSON object:
 
 ```json
-{"ts":"2026-05-08T18:30:00.123456+00:00","tool":"capture_rhino_view","ms":142,"ok":true,"error":null}
-{"ts":"2026-05-08T18:30:05.001234+00:00","tool":"gh_run_solution","ms":3201,"ok":true,"error":null}
-{"ts":"2026-05-08T18:30:08.999999+00:00","tool":"vray_render","ms":87,"ok":false,"error":"RuntimeError: V-Ray for Rhino is not installed or not loaded."}
+{"ts":"2026-09-06T18:30:00+00:00","tool":"capture_rhino_view","ms":142,"actor":"local","project":"default","ok":true,"error":null}
+{"ts":"2026-09-06T18:30:08+00:00","tool":"urban_get_metrics","ms":87,"actor":"designer-a","project":"courtyard-study","ok":false,"error":"METRICS_UNAVAILABLE"}
 ```
 
 | Field | Type | Description |
 |---|---|---|
-| `ts` | ISO-8601 UTC string | Timestamp of invocation start |
-| `tool` | string | MCP tool name exactly as registered |
+| `ts` | ISO-8601 UTC string | Timestamp when the event is recorded |
+| `tool` | string | Underlying MCP tool name exactly as registered |
+| `actor` | string | HTTP identity ID, or `local` for stdio |
+| `project` | string | Requested `project_id`, or `default` when omitted |
 | `ms` | integer | Wall-clock duration in milliseconds (includes Rhino round-trip time for plugin-backend calls) |
-| `ok` | boolean | `true` if the tool returned normally; `false` if it raised an exception |
-| `error` | string \| null | `"ExceptionClass: message"` when `ok` is `false`; `null` otherwise |
+| `ok` | boolean | `false` for exceptions or dictionary results with `ok: false`; `true` otherwise |
+| `error` | string \| null | Exception class or result error code when available; no exception message |
 
-> `ms` measures total time from when the MCP client called the tool to when the Python server returned the result. For plugin-backend tools this includes the full TCP round-trip to Rhino plus any Rhino-side computation. It is a useful proxy for "how long did the user wait."
+> `ms` measures time inside the runtime tool wrapper; it excludes client/network transit to the MCP server. For plugin-backend tools this includes the full TCP round-trip to Rhino plus any Rhino-side computation. It is a useful proxy for "how long did the user wait."
 
 ### Querying the log
 
@@ -2158,7 +2056,7 @@ Read external design files — floor plans, specifications, spreadsheets, and re
 
 | Tool | Description |
 |---|---|
-| `execute_rhino_python` | Run arbitrary Python code inside Rhino with full RhinoScriptSyntax and RhinoCommon access. Assign a JSON-serialisable value to `result` to return data. **Auto-revert:** if the script raises an exception, any objects added during that run are automatically deleted, keeping the document clean. Pass `verified_functions=["rs.AddBox", ...]` to document which API calls were looked up — omitting it adds an `api_warning` to the response as a reminder to verify RhinoScript names before use. |
+| `execute_rhino_python` | Run arbitrary Python code inside Rhino with full RhinoScriptSyntax and RhinoCommon access. Assign a JSON-serialisable value to `result` to return data. **Document recovery:** failed execution rolls back the Rhino undo record, including recorded additions, modifications and deletions. External side effects and unsupported third-party state cannot be rolled back. Pass `verified_functions=["rs.AddBox", ...]` to document which API calls were looked up — omitting it adds an `api_warning` to the response as a reminder to verify RhinoScript names before use. |
 | `execute_rhino_csharp` | Run arbitrary C# code inside Rhino via Roslyn scripting. Returns stdout output or document changes. Requires RhinoCode C# support (Rhino 8). |
 | `get_rhino_commands` | List all available Rhino command names, optionally filtered by substring (`filter="circle"`). `loaded_only=true` (default) limits to loaded plugins. Call this before `run_rhino_command` to discover exact spellings. |
 | `run_rhino_command` | Execute a Rhino command macro string (e.g. `_Box 0,0,0 1,1,1`). `echo=true` echoes the command to Rhino's history. Returns `output` with captured command-window text so the AI can read results. Requires the Rhino plugin to be running (auto-starts with Rhino). |
@@ -2186,11 +2084,11 @@ Providing `verified_functions` suppresses the `api_warning` in the response and 
 
 | Variable | Tool(s) controlled |
 |---|---|
-| `RHINO_MCP_ENABLE_RHINOSCRIPT=0` | `execute_rhino_python`, `execute_rhinoscript_python_code` |
-| `RHINO_MCP_ENABLE_CSHARP=0` | `execute_rhino_csharp`, `execute_rhinocommon_csharp_code` |
+| `RHINO_MCP_ENABLE_RHINOSCRIPT=0` | Python dispatch, built-in script-backed tools, and GH Python script creation |
+| `RHINO_MCP_ENABLE_CSHARP=0` | C# dispatch and GH C# script creation |
 | `RHINO_MCP_ENABLE_RUN_COMMAND=0` | `run_rhino_command`, `run_command` |
 
-All gates default to enabled (`1`). When disabled, the tool returns `{"ok": false, "error_code": "TOOL_DISABLED"}` rather than raising an exception.
+Set these gates in both the MCP and Rhino environments. Replacing an existing GH script requires both script gates. These controls are not a sandbox; see [execution controls](docs/secure-operation.md#execution-controls). All gates default to enabled (`1`). When disabled, the tool returns `{"ok": false, "error_code": "TOOL_DISABLED"}` rather than raising an exception.
 
 **Named MCP Resources** (read-only, browseable in MCP clients that support resources):
 
@@ -2599,7 +2497,7 @@ uv run python -m pytest tests/ \
     --collect-only -q
 ```
 
-The current non-integration collection is 432 tests. Integration tests auto-skip cleanly if the plugin socket is not reachable.
+The non-integration collection currently includes 472 tests plus five subtests. Integration tests auto-skip cleanly if the plugin socket is not reachable.
 
 ---
 

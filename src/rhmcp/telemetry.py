@@ -60,6 +60,16 @@ def _write(event: dict) -> None:
 
 # ── Public API ───────────────────────────────────────────────────────────────
 
+def record(name: str, elapsed: float, result, error: str | None, actor: str, project: str) -> None:
+    """Record actual tool outcomes without argument values or exception messages."""
+    _write({
+        "ts": datetime.now(timezone.utc).isoformat(), "tool": name,
+        "ms": round(elapsed * 1000), "actor": actor, "project": project,
+        "ok": error is None and not (isinstance(result, dict) and result.get("ok") is False),
+        "error": error or (result.get("error_code") if isinstance(result, dict) else None),
+    })
+
+
 def install(mcp) -> None:  # type: ignore[type-arg]
     """
     Wrap FastMCP's tool-manager call_tool() to record one event per invocation.

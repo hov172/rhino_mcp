@@ -154,12 +154,12 @@ class TestUrbanSolarWiring(unittest.TestCase):
         import rhmcp.tools.urban_pipeline as m
         importlib.reload(m)
         import rhmcp.tools.urban as urban_mod
-        urban_mod._current_solar = {
+        urban_mod.state().current_solar = {
             "ok": True, "avg_radiation_kwh_m2": 380.0,
             "overshadow_hours_worst": 3.0, "epw_used": "GBR.epw",
         }
-        with patch("rhmcp.tools.urban_renders._current_renders", {}), \
-             patch("rhmcp.tools.urban_design_language._current_design_language", {}), \
+        with patch("rhmcp.tools_helpers.workflow_state._default.current_renders", {}), \
+             patch("rhmcp.tools_helpers.workflow_state._default.current_design_language", {}), \
              patch("rhmcp.tools.urban_report._render_html", return_value="<html/>") as mock_html, \
              patch("rhmcp.tools.urban_report._save_local",
                    return_value=("file:///tmp/r.pdf", "file:///tmp/r.html")):
@@ -167,7 +167,7 @@ class TestUrbanSolarWiring(unittest.TestCase):
         _, kwargs = mock_html.call_args
         self.assertIsNotNone(kwargs["solar"])
         self.assertEqual(kwargs["solar"]["avg_radiation_kwh_m2"], 380.0)
-        urban_mod._current_solar = None
+        urban_mod.state().current_solar = None
 
 
 class TestUrbanListPipelineRuns(unittest.TestCase):

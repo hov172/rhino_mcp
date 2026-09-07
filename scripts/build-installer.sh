@@ -12,7 +12,8 @@ trap cleanup EXIT
 
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 cd "$ROOT"
-BUILDTMP="${TMPDIR%/}/rhino-mcp-build"
+BUILDTMP=$(mktemp -d "${TMPDIR%/}/rhino-mcp-build.XXXXXX")
+PAYLOAD="$BUILDTMP/pkg1/Users/Shared/rhino_mcp"
 
 # ── Load .env if present ──────────────────────────────────────────────────────
 if [ -f "$ROOT/.env" ]; then
@@ -110,8 +111,8 @@ echo "[4/14] Cleaning stale build artifacts..."
 rm -rf "$BUILDTMP"
 mkdir -p "$BUILDTMP"
 
-# /Users/Shared is world-writable (mode 1777) — no sudo needed
-mkdir -p /Users/Shared/rhino_mcp/plugin
+# All build files stay in temporary staging; do not change the live installation.
+mkdir -p "${PAYLOAD}/plugin"
 
 # ── 7. Bundle Python runtimes (arm64 + x86_64) ────────────────────────────────
 echo "[5/14] Bundling Python 3.13 runtimes (arm64 + x86_64)..."
@@ -137,46 +138,65 @@ fi
 }
 echo "       x86_64: $PYTHON_X86"
 
-rm -rf /Users/Shared/rhino_mcp/python-arm64 /Users/Shared/rhino_mcp/python-x86_64
-cp -R "$PYTHON_ARM64" /Users/Shared/rhino_mcp/python-arm64
-cp -R "$PYTHON_X86"   /Users/Shared/rhino_mcp/python-x86_64
+rm -rf "${PAYLOAD}/python-arm64" "${PAYLOAD}/python-x86_64"
+cp -R "$PYTHON_ARM64" "${PAYLOAD}/python-arm64"
+cp -R "$PYTHON_X86"   "${PAYLOAD}/python-x86_64"
 
 # ── 8. Create portable venvs for both architectures ───────────────────────────
 echo "[6/14] Creating portable venvs..."
-rm -rf /Users/Shared/rhino_mcp/.venv-arm64 /Users/Shared/rhino_mcp/.venv-x86_64
-/Users/Shared/rhino_mcp/python-arm64/bin/python3.13 -m venv /Users/Shared/rhino_mcp/.venv-arm64
-/Users/Shared/rhino_mcp/python-x86_64/bin/python3.13 -m venv /Users/Shared/rhino_mcp/.venv-x86_64
+rm -rf "${PAYLOAD}/.venv-arm64" "${PAYLOAD}/.venv-x86_64"
+"${PAYLOAD}/python-arm64/bin/python3.13" -m venv "${PAYLOAD}/.venv-arm64"
+"${PAYLOAD}/python-x86_64/bin/python3.13" -m venv "${PAYLOAD}/.venv-x86_64"
+
+# The matching wheel must be built and verified before installer packaging.
+[ -f "$ROOT/dist/rhino_mcp-${VERSION}-py3-none-any.whl" ] || {
+    echo "ERROR: Build the matching Python wheel first (uv build)." >&2; exit 1;
+}
 
 # ── 9. Install rhino-mcp into both venvs ──────────────────────────────────────
 echo "[7/14] Installing rhino-mcp into venvs..."
-/Users/Shared/rhino_mcp/.venv-arm64/bin/pip install --quiet "$ROOT"
+"${PAYLOAD}/.venv-arm64/bin/pip" install --quiet "$ROOT/dist/rhino_mcp-${VERSION}-py3-none-any.whl"
 # cryptography >= 49 ships no macOS x86_64/universal2 wheels — without the pin
 # pip falls back to a source build that needs a Rust x86_64 cross target.
-/Users/Shared/rhino_mcp/.venv-x86_64/bin/pip install --quiet "$ROOT" "cryptography<49"
+"${PAYLOAD}/.venv-x86_64/bin/pip" install --quiet "$ROOT/dist/rhino_mcp-${VERSION}-py3-none-any.whl" "cryptography<49"
+
+# Validate both installed runtimes before relocation, signing, or submission.
+for ARCH in arm64 x86_64; do
+    "${PAYLOAD}/.venv-${ARCH}/bin/python" -c '
+from importlib.metadata import version
+from rhmcp.tools_helpers.tool_runtime import RuntimeMCP
+from rhmcp.tools_helpers.compact_registry import CompactRegistry
+v = version("rhino-mcp")
+assert v == __import__("sys").argv[1]
+assert RuntimeMCP("rhino-mcp")._mcp_server.create_initialization_options().server_version == v
+registry = CompactRegistry()
+registry.load_from_modules(None)
+assert len(registry._tools) == 358
+print("Verified bundled runtime:", v, "MCP SDK:", version("mcp"), "tools:", len(registry._tools))
+' "$VERSION"
+done
 
 # ── 10. Write VERSION file ────────────────────────────────────────────────────
 echo "[8/14] Writing VERSION..."
-printf "%s" "$VERSION" > /Users/Shared/rhino_mcp/VERSION
+printf "%s" "$VERSION" > "${PAYLOAD}/VERSION"
 
 # ── 11. Stage Rhino plugin ────────────────────────────────────────────────────
 echo "[9/14] Staging Rhino plugin..."
-cp "$ROOT/rhino_plugin/release/rhino-mcp.rhp" /Users/Shared/rhino_mcp/plugin/rhino-mcp.rhp
+cp "$ROOT/rhino_plugin/release/rhino-mcp.rhp" "${PAYLOAD}/plugin/"
+cp "$ROOT/rhino_plugin/release/"rhino-mcp.*json "${PAYLOAD}/plugin/"
+cp "$ROOT/rhino_plugin/release/"Microsoft.CodeAnalysis*.dll "${PAYLOAD}/plugin/"
 
 # ── 12. Stage component payloads ──────────────────────────────────────────────
 echo "[10/14] Staging package payloads..."
 
-# Component 1: full filesystem tree (installs to / )
-mkdir -p "$BUILDTMP/pkg1/Users/Shared/rhino_mcp"
-cp -R /Users/Shared/rhino_mcp/python-arm64  "$BUILDTMP/pkg1/Users/Shared/rhino_mcp/"
-cp -R /Users/Shared/rhino_mcp/python-x86_64 "$BUILDTMP/pkg1/Users/Shared/rhino_mcp/"
-cp -R /Users/Shared/rhino_mcp/.venv-arm64   "$BUILDTMP/pkg1/Users/Shared/rhino_mcp/"
-cp -R /Users/Shared/rhino_mcp/.venv-x86_64  "$BUILDTMP/pkg1/Users/Shared/rhino_mcp/"
-cp -R /Users/Shared/rhino_mcp/plugin  "$BUILDTMP/pkg1/Users/Shared/rhino_mcp/"
-cp    /Users/Shared/rhino_mcp/VERSION  "$BUILDTMP/pkg1/Users/Shared/rhino_mcp/"
+# Component 1: payload is already staged under its final installation path.
 mkdir -p "$BUILDTMP/pkg1/usr/local/bin"
 cp "$ROOT/scripts/installer/rhino-mcp-configure.sh" \
    "$BUILDTMP/pkg1/usr/local/bin/rhino-mcp-configure"
 chmod +x "$BUILDTMP/pkg1/usr/local/bin/rhino-mcp-configure"
+
+# Rewrite venv links/config/scripts to the final install prefix before signing.
+uv run python "$ROOT/scripts/relocate-installer-venvs.py" "$PAYLOAD"
 
 # Component 2: LaunchAgent plist only
 mkdir -p "$BUILDTMP/pkg2"

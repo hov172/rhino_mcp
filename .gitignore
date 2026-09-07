@@ -28,3 +28,8 @@ live_results.txt
 release/*.pkg
 release/*-unsigned.pkg
 .env
+
+# Generated Python build outputs and release bundles
+build/
+dist/
+release/*.zip

@@ -108,7 +108,7 @@ def check_execution_gate(env_var: str, tool_name: str) -> dict | None:
         if err:
             return err
     """
-    if os.environ.get(env_var, "1").lower() in _GATE_DISABLED:
+    if os.environ.get(env_var, "1").strip().lower() in _GATE_DISABLED:
         return {
             "ok": False,
             "error": (
@@ -158,3 +158,31 @@ def safe_extractall(source: "str | BinaryIO", dest_dir: str) -> None:
             if not member_real.startswith(real_dest + os.sep) and member_real != real_dest:
                 raise ValueError(f"Zip slip detected: '{member}' resolves outside extract dir")
         zf.extractall(dest_dir)
+
+
+def command_execution_gate(command_type: str, params: dict | None = None) -> dict | None:
+    """Enforce execution switches at dispatch, including Grasshopper scripts.
+
+    These are capability switches, not a sandbox. Disabling Python also disables
+    built-in tools implemented with Python; no client-supplied trust flag bypasses it.
+    """
+    gates = {
+        "execute_rhinoscript_python_code": ["RHINO_MCP_ENABLE_RHINOSCRIPT"],
+        "execute_rhinocommon_csharp_code": ["RHINO_MCP_ENABLE_CSHARP"],
+        "run_command": ["RHINO_MCP_ENABLE_RUN_COMMAND"],
+        "gh_set_script_code": ["RHINO_MCP_ENABLE_RHINOSCRIPT", "RHINO_MCP_ENABLE_CSHARP"],
+    }
+    if command_type == "gh_add_script_component":
+        language = (params or {}).get("language", "")
+        if language not in ("python", "csharp", "cs"):
+            return {"ok": False, "error": "Invalid script language.", "error_code": "INVALID_VALUE"}
+        gates[command_type] = ["RHINO_MCP_ENABLE_RHINOSCRIPT" if language == "python" else "RHINO_MCP_ENABLE_CSHARP"]
+    for gate in gates.get(command_type, []):
+        error = check_execution_gate(gate, command_type)
+        if error:
+            return error
+    if command_type in gates and "code" in (params or {}):
+        code = params["code"]
+        if not isinstance(code, str) or len(code) > 200_000:
+            return {"ok": False, "error": "Code must be a string of at most 200000 characters.", "error_code": "INVALID_VALUE"}
+    return None

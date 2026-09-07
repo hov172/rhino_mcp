@@ -1,5 +1,6 @@
 """AI render pipeline using fal.ai FLUX.1 ControlNet."""
 from __future__ import annotations
+from rhmcp.tools_helpers.workflow_state import current as state
 
 import base64
 import os
@@ -13,10 +14,9 @@ from rhmcp.tools_helpers import backend as rhino
 from rhmcp.tools_helpers.security import validate_download_url
 
 # ---------------------------------------------------------------------------
-# Module-level state
+# State is stored in the current actor/project/instance scope
 # ---------------------------------------------------------------------------
 
-_current_renders: dict[str, dict[str, Any]] = {}
 
 # ---------------------------------------------------------------------------
 # Constants
@@ -127,8 +127,7 @@ def _fal_text2img(prompt: str, seed: int | None) -> tuple[str, str, int]:
 
 def reset() -> None:
     """Reset module state. Called by urban_clear_massing."""
-    global _current_renders
-    _current_renders = {}
+    state().current_renders = {}
 
 
 # ---------------------------------------------------------------------------
@@ -151,19 +150,18 @@ def register(mcp: FastMCP) -> None:
         if style_override and len(style_override) > 2000:
             return [{"ok": False, "error": "style_override exceeds maximum length of 2000 characters."}]
 
-        from rhmcp.tools.urban_design_language import _current_design_language
 
         if views is None:
             views = ["Perspective", "Top", "Front", "Right"]
 
         base_prompt = (
-            _current_design_language.get("diffusion_prompt", "architectural render, photorealistic")
-            if _current_design_language
+            state().current_design_language.get("diffusion_prompt", "architectural render, photorealistic")
+            if state().current_design_language
             else "architectural render, photorealistic, 8k"
         )
         negative = (
-            _current_design_language.get("negative_prompt", _DEFAULT_NEGATIVE)
-            if _current_design_language
+            state().current_design_language.get("negative_prompt", _DEFAULT_NEGATIVE)
+            if state().current_design_language
             else _DEFAULT_NEGATIVE
         )
 
@@ -221,7 +219,7 @@ def register(mcp: FastMCP) -> None:
             }
             if error:
                 result["error"] = error
-            _current_renders[view] = result
+            state().current_renders[view] = result
             results.append(result)
 
         return results
@@ -250,4 +248,4 @@ def register(mcp: FastMCP) -> None:
     @mcp.tool(annotations=ToolAnnotations(title="Get Current Renders", readOnlyHint=True))
     def urban_get_renders() -> dict[str, object]:
         """Return all AI renders produced this session, keyed by view name."""
-        return dict(_current_renders)
+        return dict(state().current_renders)

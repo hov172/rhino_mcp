@@ -11,7 +11,7 @@ if [ "$(id -u)" -ne 0 ]; then
 fi
 
 VERSION=$(uv run python -c "import tomllib; print(tomllib.load(open('$ROOT/pyproject.toml','rb'))['project']['version'])")
-PKG="$ROOT/release/rhino-mcp-${VERSION}-arm64-installer.pkg"
+PKG="$ROOT/release/rhino-mcp-${VERSION}-universal-signed.pkg"
 
 if [ ! -f "$PKG" ]; then
     echo "ERROR: Installer not found: $PKG" >&2
@@ -79,13 +79,14 @@ else
     FAIL=$((FAIL + 1))
 fi
 
-# pyvenv.cfg home points to bundled Python
+# pyvenv.cfg home points to the architecture-specific bundled Python
+EXPECTED_PYTHON_HOME="/Users/Shared/rhino_mcp/python-$(uname -m)/bin"
 VENV_HOME=$(grep '^home' /Users/Shared/rhino_mcp/.venv/pyvenv.cfg 2>/dev/null | cut -d= -f2 | tr -d ' ')
-if [ "$VENV_HOME" = "/Users/Shared/rhino_mcp/python/bin" ]; then
-    echo "  PASS: pyvenv.cfg home = /Users/Shared/rhino_mcp/python/bin"
+if [ "$VENV_HOME" = "$EXPECTED_PYTHON_HOME" ]; then
+    echo "  PASS: pyvenv.cfg home = $EXPECTED_PYTHON_HOME"
     PASS=$((PASS + 1))
 else
-    echo "  FAIL: pyvenv.cfg home = '$VENV_HOME' (expected /Users/Shared/rhino_mcp/python/bin)"
+    echo "  FAIL: pyvenv.cfg home = '$VENV_HOME' (expected $EXPECTED_PYTHON_HOME)"
     FAIL=$((FAIL + 1))
 fi
 

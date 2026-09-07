@@ -1,69 +1,44 @@
 # Rhino MCP — Development Guide
 
-MCP server that exposes 358 tools for controlling Rhino 3D from AI clients (Claude, Cursor, Codex, etc.).
-
-## Project Structure
-
-```
-src/rhmcp/
-├── __init__.py          # Server entry point, HTTP/stdio transport setup
-├── __main__.py          # python -m rhmcp entrypoint
-├── telemetry.py         # Optional usage telemetry
-├── tools/               # One module per tool group (auto-loaded)
-├── tools_helpers/       # Shared utilities (plugin client, rhinocode, backend)
-└── data/                # prompts.yml, rhinoscript docs
-rhino_plugin/            # Rhino-side C# plugin (MCPStart command)
-tests/                   # pytest integration tests (require live Rhino)
-```
+Version **0.17.0** exposes 358 tools for controlling Rhino 3D. See [AGENTS.md](AGENTS.md) for tool patterns, validation, error shapes, and version synchronization.
 
 ## Architecture
 
-The server has two sides:
+The Python server in `src/rhmcp/` exposes stdio or HTTP MCP. The C# plugin in `rhino_plugin/` executes commands inside Rhino over newline-delimited TCP JSON on port 1999. Non-loopback HTTP and plugin connections require TLS.
 
-- **MCP side** (`src/rhmcp/`) — Python, runs on developer's machine or Docker. Exposes tools over stdio or HTTP.
-- **Rhino plugin side** (`rhino_plugin/`) — C# plugin installed into Rhino 8. Listens on TCP port 1999 and executes commands inside Rhino.
+`tools_helpers/backend.py` routes between the plugin and `rhinocode`. Once dispatch starts, ambiguous outcomes return `EXECUTION_OUTCOME_UNKNOWN` without replay. `http_transport.py` handles identities and HTTP policy; `tool_runtime.py` handles tool grants, scopes, worker execution, concurrency, and telemetry. Keep workflow state in `workflow_state.py`, not module globals.
 
-Communication between the two is via the plugin client (`tools_helpers/plugin_client.py`) over a TCP socket, or via the `rhinocode` CLI for script execution.
+## Development setup
 
-## Development Setup
+Run from the repository root:
 
 ```bash
-# Install dependencies
-uv sync
+uv sync --group dev
 
-# Run against a local Rhino instance (stdio)
+# Local stdio
 uv run python -m rhmcp
 
-# Run as HTTP server
-uv run python -m rhmcp --transport http --host 0.0.0.0 --port 8000
+# Local HTTP; use the bearer token printed at startup
+uv run python -m rhmcp --transport http --host 127.0.0.1 --port 8000
 
-# Run tests (requires Rhino running with MCPStart)
-uv run pytest tests/ -m integration
+# Non-integration tests; no Rhino required
+uv run pytest tests/ --ignore=tests/test_integration.py --ignore=tests/test_gh_integration.py --ignore=tests/test_studio_pipeline_integration.py --ignore=tests/test_gh_intelligence_integration.py -q
+uvx ruff check src/rhmcp --select=E,W,F --ignore=E501,E701,E402,E741
+
+# Live integration; requires Rhino with the plugin loaded
+uv run pytest tests/test_integration.py -v -m integration
 ```
 
-## Adding a Tool
+## Adding a tool
 
-1. Create or edit a module under `src/rhmcp/tools/`.
-2. Define a `register(mcp: FastMCP)` function and decorate tools with `@mcp.tool()`.
-3. The server auto-discovers and loads all modules in `tools/` at startup — no imports needed elsewhere.
+Create a module under `src/rhmcp/tools/` with `register(mcp)` and `@mcp.tool()` annotations. Modules are discovered at startup subject to the selected profile. Validate inputs before dispatch, declare read-only behavior accurately, and assign `result` in embedded Python scripts. The runtime adds project/instance scope parameters to underlying tools.
 
-## Environment Variables
+## Configuration and deployment
 
-See `.env.example` for the full list. Key ones for development:
+See [.env.example](.env.example) and [secure operation](docs/secure-operation.md). Execution gates must be set in both Rhino and MCP environments. For containers, configure both HTTP and plugin TLS and the definitions directory as seen by Rhino.
 
-- `RHINO_MCP_HOST` / `RHINO_MCP_PORT` — where the Rhino plugin is listening
-- `RHINO_MCP_BACKEND` — `auto` (default), `rhinocode`, or `plugin`
-- `ANTHROPIC_API_KEY` — required for urban design language and pipeline tools
+`mcpize.yaml` contains deployment configuration, but it does not provision certificates. Hosted deployment requires adapting its environment/startup settings for non-loopback TLS and validating connectivity to Rhino. `/health` reports HTTP liveness, not Rhino readiness.
 
-## Deployment (MCPize)
+## Builds and releases
 
-```bash
-mcpize deploy
-```
-
-The `mcpize.yaml` manifest configures the build and start commands. The server exposes a `/health` endpoint at `GET /health` used by Docker and Cloud Run health checks.
-
-## Version & Release
-
-Version is set in `pyproject.toml`, `rhino_plugin/`, and Docker image label — keep them in sync.
-Releases are tagged `vX.Y.Z` and built via GitHub Actions.
+Follow the [0.17.0 upgrade guide](docs/upgrade-0.17.0.md) and [publishing checklist](rhino_plugin/PUBLISHING.md). Builds do not automatically install the plugin. The GitHub plugin release workflow is manually dispatched on a self-hosted macOS runner with Rhino; it is not an automatic release-on-tag pipeline.

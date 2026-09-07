@@ -1,5 +1,6 @@
 """Studio Pipeline — single-call orchestrator: brief → design language → renders → report."""
 from __future__ import annotations
+from rhmcp.tools_helpers.workflow_state import current as state
 
 import time
 import uuid
@@ -9,11 +10,9 @@ from mcp.server.fastmcp import FastMCP
 from mcp.types import ToolAnnotations
 
 # ---------------------------------------------------------------------------
-# Module-level state
+# State is stored in the current actor/project/instance scope
 # ---------------------------------------------------------------------------
 
-_pipeline_history: list[dict[str, Any]] = []
-_current_run: dict[str, Any] | None = None
 
 # ---------------------------------------------------------------------------
 # Step functions (module-level so tests can patch them)
@@ -22,9 +21,8 @@ _current_run: dict[str, Any] | None = None
 def _step_generate_design_language(
     brief: str, typology: str, far: float, climate_zone: str, style_hints: str | None
 ) -> dict[str, Any]:
-    from rhmcp.tools.urban_design_language import _current_design_language
-    if not brief and _current_design_language:
-        return {"ok": True, **_current_design_language}
+    if not brief and state().current_design_language:
+        return {"ok": True, **state().current_design_language}
     from rhmcp.tools import urban_design_language
     import anthropic
     import json
@@ -42,7 +40,7 @@ def _step_generate_design_language(
         messages=[{"role": "user", "content": user_prompt}],
     )
     result = json.loads(msg.content[0].text)
-    urban_design_language._current_design_language = result
+    state().current_design_language = result
     return {"ok": True, **result}
 
 
@@ -54,10 +52,9 @@ def _step_render_views(views: list[str], strength: float) -> list[dict[str, Any]
                  "original_b64": "", "rendered_b64": "", "prompt_used": "",
                  "seed": 0, "model": "", "fal_request_id": ""} for v in views]
     results = []
-    from rhmcp.tools.urban_design_language import _current_design_language
-    base_prompt = (_current_design_language or {}).get(
+    base_prompt = (state().current_design_language or {}).get(
         "diffusion_prompt", "architectural render, photorealistic, 8k")
-    negative = (_current_design_language or {}).get(
+    negative = (state().current_design_language or {}).get(
         "negative_prompt", "cartoon, blurry, low quality")
     for view in views:
         b64 = urban_renders._capture_named_view(view)
@@ -76,7 +73,7 @@ def _step_render_views(views: list[str], strength: float) -> list[dict[str, Any]
             result = {"view": view, "ok": False, "error": str(exc),
                       "original_b64": b64, "rendered_b64": "", "prompt_used": prompt,
                       "seed": 0, "model": "", "fal_request_id": ""}
-        urban_renders._current_renders[view] = result
+        state().current_renders[view] = result
         results.append(result)
     return results
 
@@ -91,16 +88,16 @@ def _step_run_solar(geometry_layer: str, climate_zone: str) -> dict[str, Any]:
 
 def _step_export_report(project_name: str, scheme_name: str,
                         include_solar: bool) -> dict[str, Any]:
-    from rhmcp.tools import urban_design_language, urban_renders, urban_report
+    from rhmcp.tools import urban_report
     try:
-        from rhmcp.tools.urban import _urban_get_metrics, _current_solar
+        from rhmcp.tools.urban import _urban_get_metrics
         metrics = _urban_get_metrics()
-        solar = _current_solar if include_solar else None
+        solar = state().current_solar if include_solar else None
     except (ImportError, AttributeError):
-        metrics = {"gfa_m2": 0.0, "far": 0.0, "unit_count_est": 0, "open_space_pct": 0.0}
+        metrics = {"ok": False, "source": "unavailable", "gfa_m2": 0.0, "far": 0.0, "unit_count_est": 0, "open_space_pct": 0.0}
         solar = None
-    renders = urban_renders._current_renders
-    dl = urban_design_language._current_design_language or {}
+    renders = state().current_renders
+    dl = state().current_design_language or {}
     html = urban_report._render_html(
         project_name=project_name,
         scheme_name=scheme_name,
@@ -120,8 +117,6 @@ def _step_export_report(project_name: str, scheme_name: str,
             pdf_bytes = urban_report._html_to_pdf_docraptor(html)
         except Exception:
             pass
-    if not pdf_bytes:
-        pdf_bytes = html.encode()
     pdf_url = html_url = ""
     if os.environ.get("URBAN_AGENT_S3_BUCKET") and os.environ.get("AWS_ACCESS_KEY_ID"):
         try:
@@ -129,16 +124,15 @@ def _step_export_report(project_name: str, scheme_name: str,
                 pdf_bytes, html, project_name, scheme_name)
         except Exception:
             pass
-    if not pdf_url:
+    if not html_url:
         pdf_url, html_url = urban_report._save_local(
             pdf_bytes, html, project_name, scheme_name)
     return {"ok": True, "pdf_url": pdf_url, "html_url": html_url}
 
 
 def reset() -> None:
-    global _pipeline_history, _current_run
-    _pipeline_history = []
-    _current_run = None
+    state().pipeline_history = []
+    state().current_run = None
 
 
 # ---------------------------------------------------------------------------
@@ -161,7 +155,6 @@ def register(mcp: FastMCP) -> None:
         """Single-call studio pipeline: brief → design language → AI renders → solar → PDF report.
         Returns PipelineResult with report_url, renders, metrics, step_log.
         Individual step failures..."""
-        global _current_run
         skip = set(skip_steps or [])
         views = render_views or ["Perspective", "Top", "Front", "Right"]
         brief_text = brief or ""
@@ -172,7 +165,7 @@ def register(mcp: FastMCP) -> None:
         report_url = ""
         renders: list[dict] = []
 
-        _current_run = {"run_id": run_id, "running": True, "current_step": "design_language",
+        state().current_run = {"run_id": run_id, "running": True, "current_step": "design_language",
                         "steps_done": 0, "steps_total": 4}
 
         # Step 1 — Design Language (aborting on failure)
@@ -185,8 +178,7 @@ def register(mcp: FastMCP) -> None:
                 typology = "tower"
                 far = 3.5
                 try:
-                    from rhmcp.tools.urban import _current_typology
-                    typology = _current_typology or "tower"
+                    typology = state().current_typology or "tower"
                 except (ImportError, AttributeError):
                     pass
                 dl_result = _step_generate_design_language(
@@ -196,7 +188,7 @@ def register(mcp: FastMCP) -> None:
                     step_log.append({"step": "design_language", "status": "failed",
                                      "duration_s": round(time.time() - t0, 2),
                                      "summary": err})
-                    _current_run["running"] = False
+                    state().current_run["running"] = False
                     return {"ok": False, "run_id": run_id, "report_url": "",
                             "renders": [], "metrics": {}, "design_language": {},
                             "step_log": step_log, "elapsed_s": round(time.time() - t_start, 2),
@@ -205,14 +197,14 @@ def register(mcp: FastMCP) -> None:
                                  "duration_s": round(time.time() - t0, 2),
                                  "summary": f"Design language: {dl_result.get('style_name', '')}"})
             except Exception as exc:
-                _current_run["running"] = False
+                state().current_run["running"] = False
                 return {"ok": False, "run_id": run_id, "report_url": "",
                         "renders": [], "metrics": {}, "design_language": {},
                         "step_log": step_log, "elapsed_s": round(time.time() - t_start, 2),
                         "errors": [f"design_language: {exc}"]}
 
-        _current_run["steps_done"] = 1
-        _current_run["current_step"] = "renders"
+        state().current_run["steps_done"] = 1
+        state().current_run["current_step"] = "renders"
 
         # Step 2 — AI Renders (non-aborting)
         t0 = time.time()
@@ -234,8 +226,8 @@ def register(mcp: FastMCP) -> None:
                                  "summary": str(exc)})
                 errors.append(f"renders: {exc}")
 
-        _current_run["steps_done"] = 2
-        _current_run["current_step"] = "solar"
+        state().current_run["steps_done"] = 2
+        state().current_run["current_step"] = "solar"
 
         # Step 3 — Solar (non-aborting, optional)
         t0 = time.time()
@@ -260,15 +252,17 @@ def register(mcp: FastMCP) -> None:
                                  "summary": str(exc)})
                 errors.append(f"solar: {exc}")
 
-        _current_run["steps_done"] = 3
-        _current_run["current_step"] = "export"
+        state().current_run["steps_done"] = 3
+        state().current_run["current_step"] = "export"
 
         # Step 4 — Export (non-aborting)
         t0 = time.time()
         try:
             export = _step_export_report(project_name, scheme_name,
                                          include_solar and solar is not None)
-            report_url = export.get("pdf_url", "")
+            report_url = export.get("pdf_url") or export.get("html_url", "")
+            if not export.get("ok") or not report_url:
+                raise RuntimeError(export.get("error", "Report export did not produce an artifact."))
             step_log.append({"step": "export", "status": "ok",
                              "duration_s": round(time.time() - t0, 2),
                              "summary": f"report exported to {report_url}"})
@@ -278,8 +272,8 @@ def register(mcp: FastMCP) -> None:
             errors.append(f"export: {exc}")
 
         elapsed = round(time.time() - t_start, 2)
-        _current_run["running"] = False
-        _current_run["steps_done"] = 4
+        state().current_run["running"] = False
+        state().current_run["steps_done"] = 4
 
         # Collect metrics and design language from session state
         try:
@@ -288,13 +282,13 @@ def register(mcp: FastMCP) -> None:
         except (ImportError, AttributeError):
             metrics_out = {}
         try:
-            from rhmcp.tools.urban_design_language import _current_design_language
-            dl_out = _current_design_language or {}
+            dl_out = state().current_design_language or {}
         except (ImportError, AttributeError):
             dl_out = {}
 
         result: dict[str, Any] = {
-            "ok": True,
+            "ok": not errors,
+            "partial": bool(errors),
             "run_id": run_id,
             "scheme_name": scheme_name,
             "report_url": report_url,
@@ -305,7 +299,7 @@ def register(mcp: FastMCP) -> None:
             "elapsed_s": elapsed,
             "errors": errors,
         }
-        _pipeline_history.append({
+        state().pipeline_history.append({
             "run_id": run_id, "scheme_name": scheme_name,
             "timestamp": int(time.time()), "report_url": report_url,
             "steps_completed": len([s for s in step_log if s["status"] == "ok"]),
@@ -316,12 +310,12 @@ def register(mcp: FastMCP) -> None:
     @mcp.tool(annotations=ToolAnnotations(title="Pipeline Status", readOnlyHint=True))
     def urban_pipeline_status() -> dict[str, object]:
         """Return status of the running or last completed pipeline."""
-        if _current_run is None:
+        if state().current_run is None:
             return {"running": False, "current_step": None,
                     "steps_done": 0, "steps_total": 4, "elapsed_s": 0.0, "errors": []}
-        return dict(_current_run)
+        return dict(state().current_run)
 
     @mcp.tool(annotations=ToolAnnotations(title="List Pipeline Runs", readOnlyHint=True))
     def urban_list_pipeline_runs() -> list[dict[str, object]]:
         """List all pipeline runs this session with their report URLs and step summaries."""
-        return list(_pipeline_history)
+        return list(state().pipeline_history)

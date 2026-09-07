@@ -7,6 +7,7 @@ Ladybug solar analysis — all through composite tool calls Claude uses in
 conversation.
 """
 from __future__ import annotations
+from rhmcp.tools_helpers.workflow_state import current as state
 
 import base64
 import datetime as _dt
@@ -43,7 +44,7 @@ def _safe_export_path(path: str) -> str:
 # Paths
 # ---------------------------------------------------------------------------
 
-_GH_DIR = os.path.normpath(
+_GH_DIR = os.environ.get("RHINO_MCP_GH_DIR") or os.path.normpath(
     os.path.join(
         os.path.dirname(os.path.abspath(__file__)), "..", "..", "..", "grasshopper", "urban"
     )
@@ -101,20 +102,10 @@ _SLIDER_MAPS: dict[str, list[str]] = {
 }
 
 # ---------------------------------------------------------------------------
-# Module-level state
+# State is stored in the current actor/project/instance scope
 # Set by urban_generate_massing; consumed by urban_update_param,
 # urban_get_metrics, and urban_capture_and_evaluate.
 # ---------------------------------------------------------------------------
-
-_current_typology: str | None = None
-_current_slider_guids: dict[str, str] = {}   # param_name → instance_guid
-_current_metrics_guid: str | None = None
-_current_bake_guid: str | None = None
-_current_params: dict[str, float] = {}
-_current_site_width: float | None = None
-_current_site_depth: float | None = None
-_current_metrics_cache: dict[str, object] | None = None
-_current_solar: dict[str, object] | None = None
 
 
 # ---------------------------------------------------------------------------
@@ -482,6 +473,7 @@ def _parse_metrics_panel(text: str) -> dict[str, object]:
         "unit_count_est": 0,
         "open_space_pct": 0.0,
     }
+    found = set()
     for line in text.strip().splitlines():
         if ":" not in line:
             continue
@@ -489,6 +481,11 @@ def _parse_metrics_panel(text: str) -> dict[str, object]:
         key = key.strip().upper()
         val = val.strip()
         try:
+            import math
+            if not math.isfinite(float(val)) or float(val) < 0:
+                continue
+            if key in {"GFA", "FAR", "UNITS", "OPENSPACE"}:
+                found.add(key)
             if key == "GFA":
                 metrics["gfa_m2"] = float(val)
             elif key == "FAR":
@@ -499,6 +496,9 @@ def _parse_metrics_panel(text: str) -> dict[str, object]:
                 metrics["open_space_pct"] = float(val)
         except ValueError:
             pass
+    metrics.update({"ok": len(found) == 4, "source": "grasshopper", "estimated": False})
+    if len(found) != 4:
+        metrics.update({"error": "Metrics panel is incomplete or invalid", "error_code": "METRICS_UNAVAILABLE"})
     return metrics
 
 
@@ -545,21 +545,25 @@ def _urban_get_metrics() -> dict[str, object]:
     """
     _zero: dict[str, object] = {
         "gfa_m2": 0.0, "far": 0.0, "unit_count_est": 0, "open_space_pct": 0.0,
+        "ok": False, "source": "unavailable", "error_code": "METRICS_UNAVAILABLE",
+        "error": "No live or estimated metrics available.",
     }
     # Prefer the live GH Metrics panel; fall back to the heuristic estimates
     # cached by urban_generate_massing (labelled as estimated).
-    if _current_metrics_guid:
-        result = _gh("gh_get_output", {"instance_guid": _current_metrics_guid})
+    if state().current_metrics_guid:
+        result = _gh("gh_get_output", {"instance_guid": state().current_metrics_guid})
         if result.get("ok"):
             raw = result.get("result", {})
             outputs = raw.get("outputs", []) if isinstance(raw, dict) else []
             for out in outputs:
                 values = out.get("values", [])
                 if values:
-                    return _parse_metrics_panel(str(values[0]))
-    if _current_metrics_cache is not None:
-        cached = dict(_current_metrics_cache)
-        cached["estimated"] = True
+                    parsed = _parse_metrics_panel(str(values[0]))
+                    if parsed.get("ok"):
+                        return parsed
+    if state().current_metrics_cache is not None:
+        cached = dict(state().current_metrics_cache)
+        cached.update({"estimated": True, "source": "heuristic", "ok": True})
         return cached
     return _zero
 
@@ -572,7 +576,7 @@ def _urban_run_solar_internal(
     grid_size: float = 1.0,
 ) -> dict[str, object]:
     """Run solar analysis via the analysis_solar.gh definition and cache the result."""
-    global _current_solar
+    state().current_solar = None
 
     if epw_path:
         resolved_epw = epw_path
@@ -601,10 +605,16 @@ def _urban_run_solar_internal(
         ("analysis_period", analysis_period),
     ]:
         if panel_name in guid_map:
-            _gh("gh_set_panel", {"instance_guid": guid_map[panel_name], "text": text})
+            configured = _gh("gh_set_panel", {"instance_guid": guid_map[panel_name], "text": text})
+            if not configured.get("ok"):
+                return configured
+        else:
+            return {"ok": False, "error": f"Missing solar input: {panel_name}", "error_code": "ANALYSIS_INPUT_MISSING"}
 
     if "grid_size" in guid_map:
-        _gh("gh_set_slider", {"instance_guid": guid_map["grid_size"], "value": grid_size})
+        configured = _gh("gh_set_slider", {"instance_guid": guid_map["grid_size"], "value": grid_size})
+        if not configured.get("ok"):
+            return configured
 
     run_result = _gh("gh_run_solution", {"wait_ms": 120000})
     if not run_result.get("ok"):
@@ -616,8 +626,8 @@ def _urban_run_solar_internal(
             "layer": f"{geometry_layer}::Analysis::Solar",
         })
 
-    avg_rad = 0.0
-    overshadow = 0.0
+    avg_rad = None
+    overshadow = None
     for out_name, key in [
         ("avg_radiation_kwh_m2", "avg_rad"),
         ("overshadow_hours_worst", "overshadow"),
@@ -633,7 +643,10 @@ def _urban_run_solar_internal(
             if not vals:
                 continue
             try:
+                import math
                 value = float(str(vals[0]))
+                if not math.isfinite(value) or value < 0:
+                    continue
             except ValueError:
                 continue
             if key == "avg_rad":
@@ -641,14 +654,18 @@ def _urban_run_solar_internal(
             else:
                 overshadow = value
 
+    if avg_rad is None or overshadow is None:
+        state().current_solar = None
+        return {"ok": False, "error": "Required solar outputs are missing or invalid.", "error_code": "ANALYSIS_OUTPUT_MISSING"}
     result: dict[str, object] = {
         "ok": True,
+        "source": "grasshopper",
         "analysis_type": "solar",
         "avg_radiation_kwh_m2": avg_rad,
         "overshadow_hours_worst": overshadow,
         "epw_used": resolved_epw,
     }
-    _current_solar = result
+    state().current_solar = result
     return result
 
 
@@ -677,8 +694,6 @@ def register(mcp: FastMCP) -> None:
         Grasshopper definition.
 
         typology: One of "tower", "podium_tower", "courtyard",..."""
-        global _current_typology, _current_slider_guids, _current_metrics_guid, _current_bake_guid
-        global _current_params, _current_site_width, _current_site_depth, _current_metrics_cache
 
         if typology not in _TYPOLOGY_GH_MAP:
             return {
@@ -699,20 +714,23 @@ def register(mcp: FastMCP) -> None:
                          "Grasshopper definition. Ensure the .gh file's sliders use the expected "
                          f"NickNames: {_SLIDER_MAPS.get(typology, [])}",
             }
-        _current_typology = typology
-        _current_slider_guids = slider_guids
-        _current_metrics_guid = metrics_guid
-        _current_bake_guid = bake_guid
+        state().current_typology = typology
+        state().current_slider_guids = slider_guids
+        state().current_metrics_guid = metrics_guid
+        state().current_bake_guid = bake_guid
 
         combined: dict[str, float] = {"site_width": site_width, "site_depth": site_depth}
         if params:
             combined.update(params)
-        _current_params = {k: float(v) for k, v in combined.items()}
-        _current_site_width = float(site_width)
-        _current_site_depth = float(site_depth)
+        state().current_params = {k: float(v) for k, v in combined.items()}
+        state().current_site_width = float(site_width)
+        state().current_site_depth = float(site_depth)
         for key, value in combined.items():
             if key in slider_guids:
-                _gh("gh_set_slider", {"instance_guid": slider_guids[key], "value": value})
+                configured = _gh("gh_set_slider", {"instance_guid": slider_guids[key], "value": value})
+                if not configured.get("ok"):
+                    state().current_metrics_cache = None
+                    return configured
 
         run_result = _gh("gh_run_solution", {"wait_ms": 15000})
         if not run_result.get("ok"):
@@ -724,7 +742,9 @@ def register(mcp: FastMCP) -> None:
 
         layer = f"{layer_prefix}::Massing::{typology}"
         if bake_guid:
-            _gh("gh_bake_component", {"instance_guid": bake_guid, "layer": layer})
+            baked = _gh("gh_bake_component", {"instance_guid": bake_guid, "layer": layer})
+            if not baked.get("ok"):
+                return baked
 
         # Move baked geometry to site_origin if non-zero
         ox, oy = float(site_origin[0]), float(site_origin[1])
@@ -738,11 +758,14 @@ def register(mcp: FastMCP) -> None:
                 f"if objs: rs.MoveObjects(objs, ({ox}, {oy}, {oz}))\n"
                 "result = {'moved': len(objs) if objs else 0}"
             )
-            rhino.execute_python(move_code)
+            moved = rhino.execute_python(move_code)
+            if not moved.get("ok"):
+                return moved
 
-        metrics = _estimate_typology_metrics(typology, site_width, site_depth, _current_params)
-        _current_metrics_cache = metrics
-        return {"ok": True, "typology": typology, "layer": layer, **metrics}
+        metrics = _estimate_typology_metrics(typology, site_width, site_depth, state().current_params)
+        state().current_metrics_cache = metrics
+        return {"ok": True, "typology": typology, "layer": layer, **metrics,
+                "source": "heuristic", "estimated": True, "baked": bool(bake_guid)}
 
     @mcp.tool(annotations=ToolAnnotations(title="Update Urban Massing Parameter", destructiveHint=True))
     def urban_update_param(
@@ -754,17 +777,17 @@ def register(mcp: FastMCP) -> None:
         definition and re-run the solver.
 
         param_name: NickName of the slider to update, e.g...."""
-        if param_name not in _current_slider_guids:
-            active = sorted(_current_slider_guids.keys()) or ["none - call urban_generate_massing first"]
+        if param_name not in state().current_slider_guids:
+            active = sorted(state().current_slider_guids.keys()) or ["none - call urban_generate_massing first"]
             return {
                 "ok": False,
-                "error": f"Unknown param '{param_name}' for current typology '{_current_typology}'. "
+                "error": f"Unknown param '{param_name}' for current typology '{state().current_typology}'. "
                          f"Valid params: {active}",
             }
 
         set_result = _gh(
             "gh_set_slider",
-            {"instance_guid": _current_slider_guids[param_name], "value": value},
+            {"instance_guid": state().current_slider_guids[param_name], "value": value},
         )
         if not set_result.get("ok"):
             return {"ok": False, "error": f"Failed to set '{param_name}': {set_result.get('error')}"}
@@ -773,14 +796,13 @@ def register(mcp: FastMCP) -> None:
         if not run_result.get("ok"):
             return {"ok": False, "error": f"GH solution failed: {run_result.get('error')}"}
 
-        if _current_typology and _current_site_width is not None and _current_site_depth is not None:
-            _current_params[param_name] = float(value)
-            global _current_metrics_cache
-            _current_metrics_cache = _estimate_typology_metrics(
-                _current_typology,
-                _current_site_width,
-                _current_site_depth,
-                _current_params,
+        if state().current_typology and state().current_site_width is not None and state().current_site_depth is not None:
+            state().current_params[param_name] = float(value)
+            state().current_metrics_cache = _estimate_typology_metrics(
+                state().current_typology,
+                state().current_site_width,
+                state().current_site_depth,
+                state().current_params,
             )
         metrics = _urban_get_metrics()
         return {"ok": True, "param_name": param_name, **metrics}
@@ -835,9 +857,6 @@ def register(mcp: FastMCP) -> None:
 
         layer_prefix defaults to "Urban". Pass "Urban::Massing" to clear only
         generated massing layers while keeping..."""
-        global _current_typology, _current_slider_guids, _current_metrics_guid, _current_bake_guid
-        global _current_params, _current_site_width, _current_site_depth, _current_metrics_cache
-        global _current_solar
 
         code = (
             "import Rhino\n"
@@ -873,15 +892,15 @@ def register(mcp: FastMCP) -> None:
                         except ValueError:
                             pass
 
-        _current_typology = None
-        _current_slider_guids = {}
-        _current_metrics_guid = None
-        _current_bake_guid = None
-        _current_params = {}
-        _current_site_width = None
-        _current_site_depth = None
-        _current_metrics_cache = None
-        _current_solar = None
+        state().current_typology = None
+        state().current_slider_guids = {}
+        state().current_metrics_guid = None
+        state().current_bake_guid = None
+        state().current_params = {}
+        state().current_site_width = None
+        state().current_site_depth = None
+        state().current_metrics_cache = None
+        state().current_solar = None
 
         try:
             from rhmcp.tools import urban_design_language, urban_renders, urban_pipeline

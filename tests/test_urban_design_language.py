@@ -79,16 +79,16 @@ class TestUrbanUpdateDesignLanguage(unittest.TestCase):
         r = tools["urban_update_design_language"](field="style_name", value="Brutalist Concrete")
         self.assertTrue(r["ok"])
         import rhmcp.tools.urban_design_language as m
-        self.assertEqual(m._current_design_language["style_name"], "Brutalist Concrete")
-        self.assertIn("facade_vocabulary", m._current_design_language)
+        self.assertEqual(m.state().current_design_language["style_name"], "Brutalist Concrete")
+        self.assertIn("facade_vocabulary", m.state().current_design_language)
 
     def test_rederives_diffusion_prompt_on_style_change(self):
         tools = self._setup()
         import rhmcp.tools.urban_design_language as m
-        old_prompt = m._current_design_language["diffusion_prompt"]
+        old_prompt = m.state().current_design_language["diffusion_prompt"]
         r = tools["urban_update_design_language"](field="style_name", value="Tropical Brutalist")
         self.assertTrue(r["diffusion_prompt_updated"])
-        self.assertNotEqual(m._current_design_language["diffusion_prompt"], old_prompt)
+        self.assertNotEqual(m.state().current_design_language["diffusion_prompt"], old_prompt)
 
     def test_returns_error_on_unknown_field(self):
         tools = self._setup()

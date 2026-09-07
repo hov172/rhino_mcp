@@ -5,6 +5,32 @@ Versioning follows [Semantic Versioning](https://semver.org/).
 
 ---
 
+## [0.17.0] — 2026-09-06
+
+### Fixed
+- Keep the FastMCP dependency on SDK 1.x; verify both macOS installer runtimes before signing and build in temporary staging with plugin dependencies.
+- Report the installed rhino-mcp version in MCP initialization metadata instead of the SDK version.
+- Prevent command replay after delivery starts, including backend and CLI fallback;
+  report `EXECUTION_OUTCOME_UNKNOWN` for ambiguous outcomes.
+- Replace keep-alive connections when targets change; inherit authorized Rhino
+  targets in internal socket/CLI calls and reject HTTP host/port overrides.
+- Enforce execution switches in Python dispatch, CLI, Grasshopper script tools,
+  and C# dispatch. Recover failed document mutations through isolated undo records.
+- Isolate urban state and report storage by identity/project/instance; reject
+  concurrent mutations on one instance within a process.
+- Preserve compact tool categories and safety metadata; authorize actual tools
+  in compact and direct modes. HTTP supports explicit per-identity grants.
+- Require TLS for remote HTTP/plugin transport, validate certificates, bound plugin
+  client connections/read time, and fix rate-limit zero/identity behavior.
+- Export actual HTML when PDF generation is unavailable; reject invalid PDFs.
+  Label estimated/missing metrics, fail missing solar outputs, report partial
+  pipeline failures, and require explicit approval for partial GH migration.
+- Run all non-integration suites in CI (472 tests plus five subtests). Build the plugin without implicit installation.
+- Record actual underlying tool failures and identity/project context in opt-in telemetry without logging arguments or exception messages.
+
+See [secure operation](docs/secure-operation.md) for required remote configuration changes and
+recovery/isolation limits, and the [0.17.0 upgrade guide](docs/upgrade-0.17.0.md) for matching artifacts and installation. Remote deployments must configure TLS before upgrading.
+
 ## [0.16.0] — 2026-07-27
 
 Deep-review fix release: five parallel code reviews across the Python server, tool

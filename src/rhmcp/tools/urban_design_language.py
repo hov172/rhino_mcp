@@ -1,5 +1,6 @@
 """Urban design language generation via Claude API."""
 from __future__ import annotations
+from rhmcp.tools_helpers.workflow_state import current as state
 
 import json
 import os
@@ -10,10 +11,9 @@ from mcp.server.fastmcp import FastMCP
 from mcp.types import ToolAnnotations
 
 # ---------------------------------------------------------------------------
-# Module-level state
+# State is stored in the current actor/project/instance scope
 # ---------------------------------------------------------------------------
 
-_current_design_language: dict[str, Any] | None = None
 
 # ---------------------------------------------------------------------------
 # Constants
@@ -110,8 +110,7 @@ def _build_diffusion_prompt(dl: dict[str, Any]) -> str:
 
 def reset() -> None:
     """Reset module state. Called by urban_clear_massing."""
-    global _current_design_language
-    _current_design_language = None
+    state().current_design_language = None
 
 
 # ---------------------------------------------------------------------------
@@ -132,7 +131,6 @@ def register(mcp: FastMCP) -> None:
         diffusion prompt) from the site brief using Claude.
 
         Returns a DesignLanguage dict with style_name,..."""
-        global _current_design_language
         api_key = os.environ.get("ANTHROPIC_API_KEY")
         if not api_key:
             return {"ok": False, "error": "ANTHROPIC_API_KEY not set", **_ZERO}
@@ -159,7 +157,7 @@ def register(mcp: FastMCP) -> None:
         except Exception as exc:
             return {"ok": False, "error": str(exc), **_ZERO}
 
-        _current_design_language = result
+        state().current_design_language = result
         return {"ok": True, **result}
 
     @mcp.tool(annotations=ToolAnnotations(title="Update Design Language Field", destructiveHint=False))
@@ -171,15 +169,14 @@ def register(mcp: FastMCP) -> None:
         Re-derives diffusion_prompt if style_name, facade_vocabulary,
         material_palette, or colour_story changes.
         For structured..."""
-        global _current_design_language
-        if _current_design_language is None:
+        if state().current_design_language is None:
             return {"ok": False, "error": "No design language set. Call urban_generate_design_language first."}
         if field not in _SCHEMA_KEYS:
             return {"ok": False, "error": f"Unknown field: {field!r}. Valid: {sorted(_SCHEMA_KEYS)}"}
-        _current_design_language[field] = value
+        state().current_design_language[field] = value
         updated_prompt = field in ("material_palette", "facade_vocabulary", "colour_story", "style_name")
         if updated_prompt:
-            _current_design_language["diffusion_prompt"] = _build_diffusion_prompt(_current_design_language)
+            state().current_design_language["diffusion_prompt"] = _build_diffusion_prompt(state().current_design_language)
         return {"ok": True, "field": field, "value": value, "diffusion_prompt_updated": updated_prompt}
 
     @mcp.tool(annotations=ToolAnnotations(title="Get Design Language", readOnlyHint=True))
@@ -188,6 +185,6 @@ def register(mcp: FastMCP) -> None:
         Return the current session design language, or zero-safe defaults if none
         has been generated yet.
         """
-        if _current_design_language is None:
+        if state().current_design_language is None:
             return {"ok": True, "set": False, **_ZERO}
-        return {"ok": True, "set": True, **_current_design_language}
+        return {"ok": True, "set": True, **state().current_design_language}

@@ -56,11 +56,26 @@ def _slot_registry_enabled() -> bool:
     return os.environ.get("RHINO_MCP_USE_SLOT_REGISTRY", "").strip() == "1"
 
 
+def _unknown_execution(ex: Exception) -> dict[str, Any]:
+    return normalize({
+        "ok": False, "backend": BACKEND_PLUGIN,
+        "error": str(ex), "error_code": "EXECUTION_OUTCOME_UNKNOWN",
+        "retry_safe": False,
+        "hint": "Inspect the target Rhino document before retrying; no fallback was executed.",
+    })
+
+
 def plugin_result(
     command_type: str,
     params: dict[str, Any] | None = None,
     rhino_id: str | None = None,
 ) -> dict[str, Any]:
+    from rhmcp.tools_helpers.workflow_state import rhino_id as scoped_rhino_id
+    rhino_id = rhino_id or scoped_rhino_id()
+    from rhmcp.tools_helpers.security import command_execution_gate
+    error = command_execution_gate(command_type, params)
+    if error:
+        return error
     # Resolve connection target via slot registry when requested
     host: str | None = None
     port: int | None = None
@@ -76,7 +91,10 @@ def plugin_result(
                     "Use get_rhino_instances to list available instances."
                 ) from ex
             pass  # auto-select failure → env-var default is acceptable
-    response = plugin_client.send_command(command_type, params, host=host, port=port)
+    try:
+        response = plugin_client.send_command(command_type, params, host=host, port=port)
+    except plugin_client.PluginExecutionUnknown as ex:
+        return _unknown_execution(ex)
     if response.get("status") == "error":
         msg = response.get("message") or response.get("error") or "Plugin returned status=error with no message"
         return normalize({"ok": False, "backend": BACKEND_PLUGIN, "error": msg, **response})
@@ -88,6 +106,8 @@ def plugin_result(
             # handler itself failed (e.g. a script error) — surface that.
             if inner.get("success") is False or inner.get("ok") is False:
                 out["ok"] = False
+                if inner.get("error_code"):
+                    out["error_code"] = inner["error_code"]
                 out["error"] = (
                     inner.get("error") or inner.get("message")
                     or "Plugin command reported failure"
@@ -215,6 +235,10 @@ def run_plugin_or_python(
             if not unsupported:
                 return resp
             _plugin_error = str(resp.get("error"))
+        except plugin_client.PluginExecutionUnknown as ex:
+            return _unknown_execution(ex)
+        except PermissionError as ex:
+            return normalize({"ok": False, "error": str(ex), "error_code": "CONNECTION_DENIED"})
         except OSError as ex:
             if mode == BACKEND_PLUGIN:
                 host, port, _ = plugin_client.connection_settings()
@@ -230,7 +254,7 @@ def run_plugin_or_python(
     resp = normalize({"backend": BACKEND_RHINOCODE, **result})
     if _plugin_error:
         resp["plugin_error"] = _plugin_error
-    if not resp.get("ok") and result.get("status") == "unknown":
+    if not resp.get("ok") and result.get("status") == "unknown" and result.get("error_code") != "EXECUTION_OUTCOME_UNKNOWN":
         resp["error_code"] = "RHINOCODE_DISPATCH_FAILED"
         resp.setdefault("error", "Rhino did not execute the script. Ensure MCPStart is running or set RHINO_MCP_BACKEND=rhinocode.")
     return resp
@@ -247,6 +271,10 @@ def run_plugin_or_csharp(
     if mode in {BACKEND_AUTO, BACKEND_PLUGIN}:
         try:
             return plugin_result(command_type, params, rhino_id=rhino_id)
+        except plugin_client.PluginExecutionUnknown as ex:
+            return _unknown_execution(ex)
+        except PermissionError as ex:
+            return normalize({"ok": False, "error": str(ex), "error_code": "CONNECTION_DENIED"})
         except OSError as ex:
             if mode == BACKEND_PLUGIN:
                 host, port, _ = plugin_client.connection_settings()
@@ -278,6 +306,10 @@ def run_command(command: str, echo: bool = False, rhino_id: str | None = None, b
     if mode in {BACKEND_AUTO, BACKEND_PLUGIN}:
         try:
             return plugin_result("run_command", {"command": command, "echo": echo}, rhino_id=rhino_id)
+        except plugin_client.PluginExecutionUnknown as ex:
+            return _unknown_execution(ex)
+        except PermissionError as ex:
+            return normalize({"ok": False, "error": str(ex), "error_code": "CONNECTION_DENIED"})
         except OSError as ex:
             if mode == BACKEND_PLUGIN:
                 host, port, _ = plugin_client.connection_settings()

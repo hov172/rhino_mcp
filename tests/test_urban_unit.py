@@ -92,7 +92,7 @@ class TestUrbanGetMetrics(unittest.TestCase):
 
     def test_returns_zeros_when_no_definition_open(self) -> None:
         import rhmcp.tools.urban as u
-        u._current_metrics_guid = None
+        u.state().current_metrics_guid = None
         fn = self.tools["urban_get_metrics"]
         with patch("rhmcp.tools_helpers.backend.plugin_result"):
             result = fn()
@@ -103,7 +103,7 @@ class TestUrbanGetMetrics(unittest.TestCase):
 
     def test_parses_panel_output_correctly(self) -> None:
         import rhmcp.tools.urban as u
-        u._current_metrics_guid = "metrics-guid-123"
+        u.state().current_metrics_guid = "metrics-guid-123"
         fn = self.tools["urban_get_metrics"]
         mock_result = {
             "ok": True,
@@ -117,7 +117,7 @@ class TestUrbanGetMetrics(unittest.TestCase):
         self.assertAlmostEqual(result["far"], 3.0)
         self.assertEqual(result["unit_count_est"], 192)
         self.assertAlmostEqual(result["open_space_pct"], 35.0)
-        u._current_metrics_guid = None  # cleanup
+        u.state().current_metrics_guid = None  # cleanup
 
 
 class TestUrbanGenerateMassing(unittest.TestCase):
@@ -237,10 +237,10 @@ class TestUrbanGenerateMassing(unittest.TestCase):
         self.assertIn("far", result)
         self.assertIn("unit_count_est", result)
         self.assertIn("open_space_pct", result)
-        u._current_typology = None
-        u._current_slider_guids = {}
-        u._current_metrics_guid = None
-        u._current_bake_guid = None
+        u.state().current_typology = None
+        u.state().current_slider_guids = {}
+        u.state().current_metrics_guid = None
+        u.state().current_bake_guid = None
 
 
 class TestUrbanUpdateParam(unittest.TestCase):
@@ -251,15 +251,15 @@ class TestUrbanUpdateParam(unittest.TestCase):
 
     def setUp(self) -> None:
         import rhmcp.tools.urban as u
-        u._current_typology = "tower"
-        u._current_slider_guids = {"floor_count": "guid-fc", "setback": "guid-sb"}
-        u._current_metrics_guid = "guid-metrics"
+        u.state().current_typology = "tower"
+        u.state().current_slider_guids = {"floor_count": "guid-fc", "setback": "guid-sb"}
+        u.state().current_metrics_guid = "guid-metrics"
 
     def tearDown(self) -> None:
         import rhmcp.tools.urban as u
-        u._current_typology = None
-        u._current_slider_guids = {}
-        u._current_metrics_guid = None
+        u.state().current_typology = None
+        u.state().current_slider_guids = {}
+        u.state().current_metrics_guid = None
 
     def test_calls_gh_set_slider_with_correct_guid(self) -> None:
         fn = self.tools["urban_update_param"]
@@ -301,11 +301,11 @@ class TestUrbanCaptureAndEvaluate(unittest.TestCase):
 
     def setUp(self) -> None:
         import rhmcp.tools.urban as u
-        u._current_metrics_guid = "guid-metrics"
+        u.state().current_metrics_guid = "guid-metrics"
 
     def tearDown(self) -> None:
         import rhmcp.tools.urban as u
-        u._current_metrics_guid = None
+        u.state().current_metrics_guid = None
 
     def test_returns_metrics_dict_and_image(self) -> None:
         b64 = base64.b64encode(_PNG_1X1).decode()

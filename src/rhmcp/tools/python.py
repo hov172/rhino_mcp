@@ -15,41 +15,20 @@ _MAX_CODE_LEN = 200_000
 
 
 def _wrap_with_revert(code: str, clear_objects: list[str] | None = None) -> str:
-    code = code.expandtabs(4)
-    indented = "\n".join("    " + line for line in code.splitlines())
-
-    # Build a pre-execution block that deletes all objects on the requested layers.
-    if clear_objects:
-        layer_list = repr(clear_objects)
-        clear_block = (
-            'for _mcp_ln in ' + layer_list + ':\n'
-            '    _mcp_layer = _mcp_doc.Layers.FindName(_mcp_ln)\n'
-            '    if _mcp_layer is not None:\n'
-            '        _mcp_objs = _mcp_doc.Objects.FindByLayer(_mcp_layer)\n'
-            '        if _mcp_objs:\n'
-            '            for _mcp_o in _mcp_objs:\n'
-            '                _mcp_doc.Objects.Delete(_mcp_o.Id, True)\n'
-        )
-    else:
-        clear_block = ''
-
+    # Preserve multiline literals and traceback line numbers. The plugin owns
+    # the undo transaction; the CLI wrapper owns it on the fallback path.
     return (
-        'import rhinoscriptsyntax as rs\n'
         'import Rhino as _mcp_Rhino\n'
         '_mcp_doc = _mcp_Rhino.RhinoDoc.ActiveDoc\n'
-        + clear_block +
-        '_mcp_ids_before = set(str(o.Id) for o in _mcp_doc.Objects)\n'
-        'try:\n'
-        f'{indented}\n'
-        'except Exception as _mcp_ex:\n'
-        '    try:\n'
-        '        for _o in list(_mcp_doc.Objects):\n'
-        '            if str(_o.Id) not in _mcp_ids_before:\n'
-        '                _mcp_doc.Objects.Delete(_o.Id, True)\n'
-        '        _mcp_doc.Views.Redraw()\n'
-        '    except Exception:\n'
-        '        pass\n'
-        '    raise _mcp_ex\n'
+        'if _mcp_doc is None: raise RuntimeError("No active Rhino document")\n'
+        'for _mcp_ln in ' + repr(clear_objects or []) + ':\n'
+        '    _mcp_layer = _mcp_doc.Layers.FindName(_mcp_ln)\n'
+        '    if _mcp_layer is not None:\n'
+        '        for _mcp_o in (_mcp_doc.Objects.FindByLayer(_mcp_layer) or []):\n'
+        '            _mcp_doc.Objects.Delete(_mcp_o.Id, True)\n'
+        'exec(compile(' + repr(code) + ', "<rhino_mcp_user>", "exec"))\n'
+        'if isinstance(globals().get("result"), dict) and result.get("ok") is False:\n'
+        '    raise RuntimeError(result.get("error", "Script reported failure"))\n'
     )
 
 

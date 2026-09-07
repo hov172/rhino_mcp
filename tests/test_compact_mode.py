@@ -37,7 +37,7 @@ class TestCompactRegistry:
         all_tools = reg.list_tools()
         filtered = reg.list_tools("geometry")
         assert 0 < len(filtered) < len(all_tools)
-        assert all("geometry" in t["name"] for t in filtered)
+        assert all("geometry" in t["name"] or t["category"] == "geometry" for t in filtered)
 
     def test_list_tools_is_sorted(self):
         from rhmcp.tools_helpers.compact_registry import CompactRegistry

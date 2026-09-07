@@ -8,16 +8,15 @@ be running and its script server must be started with ``StartScriptServer``.
 from __future__ import annotations
 
 import argparse
-import collections
 import importlib
 import os
 import pkgutil
-import secrets
 import sys
-import time
 
 import yaml
-from mcp.server.fastmcp import FastMCP
+from rhmcp.tools_helpers.tool_runtime import RuntimeMCP as FastMCP
+
+from mcp.types import ToolAnnotations
 
 from rhmcp.tools_helpers.rhinoscript_docs import RHINOSCRIPT_MODULES, get_function
 
@@ -143,17 +142,17 @@ def main() -> int:
         _registry.load_from_modules(active_modules)
         _n = len(_registry._tools)
 
-        @mcp.tool()
+        @mcp.tool(annotations=ToolAnnotations(readOnlyHint=True))
         def list_rhino_tools(category: str = "") -> list[dict]:
             """List all available Rhino tools with one-line descriptions."""
             return _registry.list_tools(category)
 
-        @mcp.tool()
+        @mcp.tool(annotations=ToolAnnotations(readOnlyHint=True))
         def describe_rhino_tool(name: str) -> dict:
             """Get the full description and input schema for a specific Rhino tool."""
             return _registry.describe_tool(name)
 
-        @mcp.tool()
+        @mcp.tool(annotations=ToolAnnotations(destructiveHint=True, readOnlyHint=False))
         async def call_rhino_tool(name: str, arguments: dict | None = None) -> object:
             """Call any Rhino tool by name with a dict of arguments."""
             return await _registry.call_tool(name, arguments or {})
@@ -182,10 +181,6 @@ def main() -> int:
                 file=sys.stderr,
             )
 
-    # Install optional telemetry interceptor after all tools are registered.
-    from rhmcp import telemetry
-    telemetry.install(mcp)
-
     # Non-blocking startup connectivity check — printed to stderr only.
     try:
         from rhmcp.tools_helpers.plugin_client import health_check
@@ -209,129 +204,25 @@ def main() -> int:
 
     transport = args.transport
     if transport == "http":
-        from starlette.middleware.cors import CORSMiddleware
-
-        transport = "streamable-http"
+        import ipaddress
+        import uvicorn
+        from rhmcp.tools_helpers.http_transport import build_app, configure_security
+        cert = os.environ.get("RHINO_MCP_HTTP_TLS_CERT")
+        key = os.environ.get("RHINO_MCP_HTTP_TLS_KEY")
+        try:
+            local = args.host == "localhost" or ipaddress.ip_address(args.host).is_loopback
+        except ValueError:
+            local = False
+        if bool(cert) != bool(key) or (not local and not (cert and key)):
+            parser.error("Non-loopback HTTP requires RHINO_MCP_HTTP_TLS_CERT and RHINO_MCP_HTTP_TLS_KEY.")
         mcp.settings.host = args.host
         mcp.settings.port = args.port
         mcp.settings.streamable_http_path = "/"
         mcp.settings.stateless_http = True
-
-        _AUTH_TOKEN = os.environ.get("RHINO_MCP_AUTH_TOKEN") or ""
-        if _AUTH_TOKEN:
-            print("Rhino MCP: using auth token from RHINO_MCP_AUTH_TOKEN", file=sys.stderr)
-        else:
-            _AUTH_TOKEN = secrets.token_hex(32)
-            print(f"Rhino MCP auth token: {_AUTH_TOKEN}", file=sys.stderr)
-            print(
-                "Pass this as: Authorization: Bearer <token> "
-                "(set RHINO_MCP_AUTH_TOKEN for a stable token across restarts)",
-                file=sys.stderr,
-            )
-
-        from starlette.requests import Request
-        from starlette.responses import JSONResponse
-        from starlette.routing import Mount, Route
-
-        _RATE_LIMIT_RPM = int(os.environ.get("RHINO_MCP_RATE_LIMIT_RPM", "120"))
-
-        async def health(request: Request) -> JSONResponse:
-            return JSONResponse({"status": "ok"})
-
-        original_app = mcp.streamable_http_app
-
-        def app_with_cors():
-            from starlette.applications import Starlette
-            from starlette.middleware.base import BaseHTTPMiddleware
-            from starlette.responses import Response as StarletteResponse
-
-            mcp_app = original_app()
-            _allowed_origins = [
-                "http://localhost",
-                "http://127.0.0.1",
-                f"http://localhost:{args.port}",
-                f"http://127.0.0.1:{args.port}",
-            ]
-            mcp_app.add_middleware(
-                CORSMiddleware,
-                allow_origins=_allowed_origins,
-                allow_methods=["GET", "POST", "OPTIONS"],
-                allow_headers=["Authorization", "Content-Type"],
-            )
-
-            class _TokenAuth(BaseHTTPMiddleware):
-                async def dispatch(self, request, call_next):
-                    if request.url.path == "/health" or request.method == "OPTIONS":
-                        return await call_next(request)
-                    auth = request.headers.get("Authorization", "")
-                    # Compare as bytes: compare_digest raises TypeError on
-                    # non-ASCII str input (→ 500 instead of 401).
-                    expected = f"Bearer {_AUTH_TOKEN}".encode()
-                    if not secrets.compare_digest(auth.encode("utf-8", "replace"), expected):
-                        return StarletteResponse(
-                            '{"error":"Unauthorized"}',
-                            status_code=401,
-                            media_type="application/json",
-                        )
-                    return await call_next(request)
-
-            # R6-9: Per-token sliding-window rate limiter (120 req/min default)
-            class _RateLimiter(BaseHTTPMiddleware):
-                def __init__(self, app):
-                    super().__init__(app)
-                    self._windows: dict = {}
-                    self._lock = __import__("threading").Lock()
-
-                async def dispatch(self, request, call_next):
-                    if request.url.path == "/health" or request.method == "OPTIONS":
-                        return await call_next(request)
-                    # Key by client address, not the raw Authorization header:
-                    # header-keyed windows let an unauthenticated client mint
-                    # unlimited keys and flush legitimate tokens via eviction.
-                    client = request.client
-                    token = client.host if client else "unknown"
-                    now = time.time()
-                    window_start = now - 60.0
-                    with self._lock:
-                        hits = self._windows.get(token, collections.deque())
-                        while hits and hits[0] < window_start:
-                            hits.popleft()
-                        if len(hits) >= _RATE_LIMIT_RPM:
-                            return StarletteResponse(
-                                '{"error":"Rate limit exceeded"}',
-                                status_code=429,
-                                media_type="application/json",
-                            )
-                        hits.append(now)
-                        self._windows[token] = hits
-                        # Evict oldest tokens if cache is too large (R7-3)
-                        _MAX_WINDOW_KEYS = 4096
-                        if len(self._windows) > _MAX_WINDOW_KEYS:
-                            stale = [k for k, v in self._windows.items() if not v]
-                            for k in stale:
-                                del self._windows[k]
-                            if len(self._windows) > _MAX_WINDOW_KEYS:
-                                evict_count = len(self._windows) - _MAX_WINDOW_KEYS // 2
-                                for k in list(self._windows.keys())[:evict_count]:
-                                    del self._windows[k]
-                    return await call_next(request)
-
-            app = Starlette(
-                routes=[
-                    Route("/health", health),
-                    Mount("/", app=mcp_app),
-                ],
-                # Starlette does not run mounted sub-app lifespans; without
-                # forwarding it, FastMCP's streamable-http session manager
-                # never starts and every MCP request fails with
-                # "Task group is not initialized".
-                lifespan=lambda _app: mcp_app.router.lifespan_context(mcp_app),
-            )
-            app.add_middleware(_TokenAuth)
-            app.add_middleware(_RateLimiter)
-            return app
-
-        mcp.streamable_http_app = app_with_cors  # type: ignore[method-assign]
+        configure_security(mcp, args.host)
+        app = build_app(mcp.streamable_http_app(), args.port)
+        uvicorn.run(app, host=args.host, port=args.port, ssl_certfile=cert, ssl_keyfile=key)
+        return 0
 
     mcp.run(transport=transport)
     return 0

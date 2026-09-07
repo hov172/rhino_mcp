@@ -98,3 +98,35 @@ def test_readme_has_install_section():
     assert "install-plugin-local" in content
     # Should have GitHub releases reference
     assert "github.com" in content.lower() and "release" in content.lower()
+
+
+def test_installer_venv_relocation_handles_path_aliases(tmp_path):
+    import runpy
+
+    actual = tmp_path / "actual"
+    actual.mkdir()
+    alias = tmp_path / "alias"
+    alias.symlink_to(actual, target_is_directory=True)
+    for arch in ("arm64", "x86_64"):
+        venv = alias / f".venv-{arch}"
+        (venv / "bin").mkdir(parents=True)
+        (venv / "bin/python3.13").symlink_to(alias / f"python-{arch}/bin/python3.13")
+        (venv / "pyvenv.cfg").write_text(
+            f"home = {alias}/python-{arch}/bin\n"
+            f"executable = {actual}/python-{arch}/bin/python3.13\n"
+        )
+        script = venv / "bin/rhino-mcp"
+        script.write_text(f"#!{alias}/.venv-{arch}/bin/python3.13\n")
+        script.chmod(0o755)
+
+    runpy.run_path(str(REPO_ROOT / "scripts/relocate-installer-venvs.py"))["relocate"](alias)
+
+    for arch in ("arm64", "x86_64"):
+        venv = alias / f".venv-{arch}"
+        assert str((venv / "bin/python3.13").readlink()) == (
+            f"/Users/Shared/rhino_mcp/python-{arch}/bin/python3.13"
+        )
+        for file in (venv / "pyvenv.cfg", venv / "bin/rhino-mcp"):
+            assert str(alias) not in file.read_text()
+            assert str(actual) not in file.read_text()
+        assert (venv / "bin/rhino-mcp").stat().st_mode & 0o111

@@ -11,7 +11,7 @@ This file gives AI coding agents (Claude, Codex, Gemini, etc.) the context neede
 1. **Python MCP server** (`src/rhmcp/`) — FastMCP-based server exposing 358 tools to AI clients
 2. **C# Rhino plugin** (`rhino_plugin/`) — TCP socket server inside Rhino (port 1999) that receives and executes commands
 
-Current version: **0.15.1**
+Current version: **0.17.0**
 
 ---
 
@@ -27,7 +27,7 @@ C# plugin (rhino-mcp.rhp)         rhinocode subprocess
 Rhino 3D document
 ```
 
-**Dual backend**: `plugin_client.py` tries the TCP socket first; if unavailable, `rhinocode.py` falls back to the `rhinocode` CLI. Controlled by `RHINO_MCP_BACKEND` env var (`auto` | `plugin` | `rhinocode`).
+**Dual backend**: `plugin_client.py` tries the TCP socket first; if connection establishment fails before sending, supported script operations can fall back to the `rhinocode` CLI. Once sending starts, ambiguous outcomes return `EXECUTION_OUTCOME_UNKNOWN` and must not be replayed. Controlled by `RHINO_MCP_BACKEND` env var (`auto` | `plugin` | `rhinocode`).
 
 ---
 
@@ -37,6 +37,9 @@ Rhino 3D document
 |---|---|
 | `src/rhmcp/__init__.py` | MCP server entry point, HTTP/stdio transport setup, registers all tool modules |
 | `src/rhmcp/tools/` | 50+ tool modules, each with a `register(mcp)` function |
+| `src/rhmcp/tools_helpers/http_transport.py` | HTTP TLS, identities, grants, and rate limiting |
+| `src/rhmcp/tools_helpers/tool_runtime.py` | Runtime authorization, scope propagation, concurrency, and telemetry |
+| `src/rhmcp/tools_helpers/workflow_state.py` | Bounded in-memory state by identity/project/instance |
 | `src/rhmcp/tools_helpers/backend.py` | Backend router: `execute_python`, `run_plugin_or_python`, `run_command` |
 | `src/rhmcp/tools_helpers/plugin_client.py` | TCP socket client with exponential backoff retry |
 | `src/rhmcp/tools_helpers/rhinocode.py` | rhinocode CLI fallback, temp-file polling for results |
@@ -45,8 +48,7 @@ Rhino 3D document
 | `src/rhmcp/tools_helpers/slot_registry.py` | Multi-Rhino slot registry: `discover()`, `get()`, `wait_for_slot()` — reads `{pid}.json` files from system temp dir |
 | `src/rhmcp/tools_helpers/rhino_launcher.py` | Auto-launch Rhino and wait for slot announcement: `find_rhino()`, `launch()` |
 | `src/rhmcp/tools/gh2.py` | 11 GH2 tools — `rhino_id` aware, routes via `rhino.plugin_result()` |
-| `src/rhmcp/tools/gh_intelligence.py` | GH Intelligence tools: `gh_get_canvas_analysis`, `gh_get_graph_data`, `gh_refactor_canvas`, `gh1_export_migration_data`, `gh_migrate_to_gh2` |
-| `src/rhmcp/tools/gh2_intelligence.py` | GH2 write tools: `gh2_move_component`, `gh2_add_group` |
+| `src/rhmcp/tools/gh_intelligence.py` | GH1/GH2 analysis, layout, grouping, and migration tools; includes `gh_analyze_canvas` and `gh_migrate_to_gh2` |
 | `src/rhmcp/tools/slots.py` | `get_rhino_instances` (slot discovery) and `launch_rhino` (auto-launch) |
 | `src/rhmcp/tools_helpers/errors.py` | `normalize()` — ensures consistent `ok`/`error` shape |
 | `rhino_plugin/RhinoMCPPlugin/` | C# Rhino plugin source |
@@ -67,10 +69,10 @@ from rhmcp.tools_helpers import validate
 
 def register(mcp: FastMCP) -> None:
     @mcp.tool(annotations=ToolAnnotations(title="...", readOnlyHint=True))
-    def my_tool(object_id: str, ...) -> dict[str, object]:
+    def my_tool(object_id: str, rhino_id: str | None = None) -> dict[str, object]:
         err = validate.guid(object_id, "object_id")
         if err: return err
-        payload = {"op": "my_op", "object_id": object_id, ...}
+        payload = {"op": "my_op", "object_id": object_id}
         code = "__mcp_data = {!r}\n{}".format(payload, _SCRIPT)
         return rhino.execute_python(code, rhino_id=rhino_id)
 
@@ -119,7 +121,7 @@ uv run pytest tests/test_integration.py -v -m integration
 uvx ruff check src/rhmcp --select=E,W,F --ignore=E501,E701,E402,E741
 ```
 
-**432 tests** (unit, smoke, script-syntax, and security) must pass before any commit. The CI workflow (`.github/workflows/ci.yml`) runs these on Python 3.10/3.11/3.12.
+**472 tests** (unit, smoke, script-syntax, and security) must pass before any commit. The CI workflow (`.github/workflows/ci.yml`) runs these on Python 3.10/3.11/3.12.
 
 ---
 
@@ -133,21 +135,25 @@ bash scripts/package-plugin.sh
 uv build
 ```
 
-Artifacts land in `rhino_plugin/release/` (gitignored — upload to GitHub releases manually).
+Plugin artifacts land in `rhino_plugin/release/`; Python wheel and sdist land in `dist/` (both gitignored). Builds do not install or publish. See [publishing](rhino_plugin/PUBLISHING.md).
 
 ---
 
 ## Version Bumping Checklist
 
-When bumping the version (e.g. `0.11.0` → `0.12.0`):
+When bumping the version:
 
 1. `pyproject.toml` — `version = "..."`
 2. `rhino_plugin/RhinoMCPPlugin/RhinoMCPPlugin.csproj` — `<Version>...</Version>`
-3. `rhino_plugin/package/manifest.yml` — `version: ...`
-4. `rhino_plugin/release/manifest.yml` — `version: ...`
-5. `README.md` — download links and yak filename
-6. `CHANGELOG.md` — add new entry at top
-7. `.env.example` — verify all new env vars are documented
+3. `rhino_plugin/RhinoMCPPlugin/AssemblyInfo.cs` — `AssemblyInformationalVersion`
+4. `rhino_plugin/package/manifest.yml` — `version: ...`
+5. `rhino_plugin/release/manifest.yml` — `version: ...`
+6. `README.md` — download links and yak filename
+7. `CHANGELOG.md` — add new entry at top
+8. `.env.example` — verify all new env vars are documented
+9. `uv.lock` — synchronize the root package version without unrelated dependency upgrades
+10. `Dockerfile` — version label; rebuild with matching version and `latest` tags
+11. `AGENTS.md` and developer/upgrade guides — current version and verified counts
 
 Tool count: verify with the registry command below before updating docs. Keep `AGENTS.md`, `README.md`, `pyproject.toml`, `rhino_plugin/package/manifest.yml`, and `CHANGELOG.md` in sync when the public count changes.
 
@@ -182,7 +188,7 @@ All tools must return consistent shapes via `errors.normalize()`:
 {"ok": False, "error": "human-readable message", "error_code": "SNAKE_CASE_CODE"}
 ```
 
-Common error codes: `INVALID_GUID`, `INVALID_COLOR`, `INVALID_COORDINATE`, `INVALID_VALUE`, `INVALID_GUID_LIST`, `SOCKET_UNAVAILABLE`, `RHINOCODE_DISPATCH_FAILED`, `COMPUTATION_FAILED`.
+Common error codes: `INVALID_GUID`, `INVALID_COLOR`, `INVALID_COORDINATE`, `INVALID_VALUE`, `INVALID_GUID_LIST`, `SOCKET_UNAVAILABLE`, `RHINOCODE_DISPATCH_FAILED`, `COMPUTATION_FAILED`, `EXECUTION_OUTCOME_UNKNOWN`, `TOOL_DISABLED`, `FORBIDDEN`, `RHINO_BUSY`.
 
 ---
 
@@ -193,3 +199,5 @@ Common error codes: `INVALID_GUID`, `INVALID_COLOR`, `INVALID_COORDINATE`, `INVA
 - **lint** job: ruff with `--select=E,W,F --ignore=E501,E701,E402,E741`
 
 The `E701` ignore is intentional — `if err: return err` is the project's validation pattern.
+
+Review hardening and deployment changes: see `docs/secure-operation.md`. All underlying runtime tools accept `project_id` and `rhino_id`; workflow state belongs in `tools_helpers/workflow_state.py`, never module globals.

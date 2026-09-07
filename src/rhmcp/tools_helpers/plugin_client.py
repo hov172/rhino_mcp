@@ -30,6 +30,20 @@ def connection_settings(
     timeout: float | None = None,
 ) -> tuple[str, int, float]:
     from rhmcp.tools_helpers.security import check_remote_allowed
+    from rhmcp.tools_helpers.workflow_state import rhino_id as scoped_rhino_id
+    from rhmcp.tools_helpers.tool_runtime import actor_context
+    expected_host = os.environ.get("RHINO_MCP_HOST", DEFAULT_HOST)
+    expected_port = int(os.environ.get("RHINO_MCP_PORT", str(DEFAULT_PORT)))
+    if scoped_rhino_id():
+        from rhmcp.tools_helpers.slot_registry import get
+        slot = get(scoped_rhino_id())
+        expected_host, expected_port = slot.host, slot.port
+        if (host is not None and host != expected_host) or (port is not None and port != expected_port):
+            raise PermissionError("Explicit socket target conflicts with the scoped Rhino instance.")
+        host, port = expected_host, expected_port
+    if actor_context.get() is not None:
+        if (host is not None and host != expected_host) or (port is not None and port != expected_port):
+            raise PermissionError("HTTP tools cannot override their authorized socket target.")
     resolved_host = host or os.environ.get("RHINO_MCP_HOST", DEFAULT_HOST)
     check_remote_allowed(resolved_host)
     return (
@@ -42,7 +56,11 @@ def connection_settings(
 _MAX_RAW_DISPLAY = 200  # chars of raw response shown in error messages
 
 
-class PluginResponseTimeout(OSError):
+class PluginExecutionUnknown(OSError):
+    """Delivery started; execution outcome is unknown. Never replay automatically."""
+
+
+class PluginResponseTimeout(PluginExecutionUnknown):
     """
     Timed out waiting for a response *after* the request was delivered.
 
@@ -74,17 +92,21 @@ def _decode_chunks(chunks: list[bytes]) -> str | None:
 def _recv_one(sock: socket.socket) -> dict[str, Any]:
     """Read exactly one JSON object from *sock* and return it as a dict."""
     chunks: list[bytes] = []
+    total = 0
     decoder = json.JSONDecoder()
     while True:
         chunk = sock.recv(8192)
         if not chunk:
             raise OSError("Connection closed by plugin before response was received")
+        total += len(chunk)
+        if total > 64 * 1024 * 1024:
+            raise ValueError("Plugin response exceeded 64 MB limit")
         chunks.append(chunk)
         text = _decode_chunks(chunks)
         if text is None:
             continue
         try:
-            parsed, _end = decoder.raw_decode(text)
+            parsed, _end = decoder.raw_decode(text.lstrip())
         except json.JSONDecodeError:
             continue
         if isinstance(parsed, dict):
@@ -114,6 +136,27 @@ def _response_timeout_error(timeout: float) -> PluginResponseTimeout:
     )
 
 
+def _connect(host: str, port: int, timeout: float) -> socket.socket:
+    import ssl
+    import ipaddress
+    try:
+        local = host.lower() == "localhost" or ipaddress.ip_address(host).is_loopback
+    except ValueError:
+        local = False
+    tls = os.environ.get("RHINO_MCP_PLUGIN_TLS", "0").lower() in ("1", "true", "yes")
+    if not local and not tls:
+        raise PermissionError("Remote plugin connections require RHINO_MCP_PLUGIN_TLS=1.")
+    sock = socket.create_connection((host, port), timeout=timeout)
+    if not tls:
+        return sock
+    try:
+        context = ssl.create_default_context(cafile=os.environ.get("RHINO_MCP_PLUGIN_TLS_CA") or None)
+        return context.wrap_socket(sock, server_hostname=host)
+    except Exception:
+        sock.close()
+        raise
+
+
 def _attempt(
     command_type: str,
     params: dict[str, Any],
@@ -123,13 +166,15 @@ def _attempt(
 ) -> dict[str, Any]:
     """One-shot: open connection, send, receive, close."""
     request = _build_payload(command_type, params)
-    with socket.create_connection((target_host, target_port), timeout=target_timeout) as sock:
+    with _connect(target_host, target_port, target_timeout) as sock:
         sock.settimeout(target_timeout)
-        sock.sendall(request)
         try:
+            sock.sendall(request)
             return _recv_one(sock)
         except TimeoutError as ex:
             raise _response_timeout_error(target_timeout) from ex
+        except (OSError, ValueError) as ex:
+            raise PluginExecutionUnknown("Plugin execution outcome unknown; request was not replayed.") from ex
 
 
 # ---------------------------------------------------------------------------
@@ -152,6 +197,7 @@ class _KeepAliveConnection:
     def __init__(self) -> None:
         self._sock: socket.socket | None = None
         self._lock = threading.Lock()
+        self._target: tuple[str, int] | None = None
 
     def send(
         self,
@@ -163,45 +209,28 @@ class _KeepAliveConnection:
     ) -> dict[str, Any]:
         request = _build_payload(command_type, params)
         with self._lock:
-            # Attempt once on the existing connection, then once on a fresh one.
-            for attempt in range(2):
-                reused = self._sock is not None
-                try:
-                    if self._sock is None:
-                        self._sock = socket.create_connection((host, port), timeout=timeout)
-                    # Apply the caller's timeout on every call — the cached
-                    # socket may have been created with a different one.
-                    self._sock.settimeout(timeout)
-                    self._sock.sendall(request)
-                except OSError:
-                    self._close()
-                    if not reused or attempt == 1:
-                        raise
-                    continue  # stale cached connection — retry once on a fresh one
-                try:
-                    return _recv_one(self._sock)
-                except TimeoutError as ex:
-                    # The request was delivered; Rhino may still be executing
-                    # it. Never re-send — that would run the command twice.
-                    self._close()
-                    raise _response_timeout_error(timeout) from ex
-                except ValueError:
-                    # Undecodable/foreign bytes: the stream is desynchronized;
-                    # drop the connection so leftovers can't corrupt later calls.
-                    self._close()
-                    raise
-                except OSError:
-                    self._close()
-                    # A reused connection may have been closed while idle
-                    # (Rhino restart, MCPStop) before reading our request —
-                    # one transparent retry on a fresh connection is safe.
-                    # On a fresh connection the plugin may have started work,
-                    # so do not retry.
-                    if not reused or attempt == 1:
-                        raise
-            raise OSError("unreachable")  # pragma: no cover
+            if self._target != (host, port):
+                self._close()
+            if self._sock is None:
+                # Only connection establishment failures are safe to retry.
+                self._sock = _connect(host, port, timeout)
+                self._target = (host, port)
+            try:
+                self._sock.settimeout(timeout)
+                self._sock.sendall(request)
+                return _recv_one(self._sock)
+            except TimeoutError as ex:
+                self._close()
+                raise _response_timeout_error(timeout) from ex
+            except (OSError, ValueError) as ex:
+                self._close()
+                raise PluginExecutionUnknown(
+                    "Plugin execution outcome unknown; request was not replayed. "
+                    "Inspect the Rhino document before retrying."
+                ) from ex
 
     def _close(self) -> None:
+        self._target = None
         if self._sock is not None:
             try:
                 self._sock.close()
@@ -243,6 +272,10 @@ def send_command(
     ``retries`` defaults to ``RHINO_MCP_SOCKET_RETRIES`` env var (default 2).
     Set to 0 to disable retries.
     """
+    from rhmcp.tools_helpers.security import command_execution_gate
+    error = command_execution_gate(command_type, params)
+    if error:
+        return {"status": "error", "message": error["error"], **error}
     target_host, target_port, target_timeout = connection_settings(host, port, timeout)
     max_retries = retries if retries is not None else int(
         os.environ.get("RHINO_MCP_SOCKET_RETRIES", str(DEFAULT_RETRIES))
@@ -256,7 +289,9 @@ def send_command(
             if _keepalive_enabled():
                 return _keepalive.send(command_type, payload, target_host, target_port, target_timeout)
             return _attempt(command_type, payload, target_host, target_port, target_timeout)
-        except PluginResponseTimeout:
+        except PermissionError:
+            raise
+        except PluginExecutionUnknown:
             # The command was delivered and may still be running in Rhino —
             # retrying would execute it again.
             raise
@@ -280,7 +315,7 @@ def probe(timeout: float = 1.0) -> dict[str, Any]:
     """
     host, port, _ = connection_settings(timeout=timeout)
     try:
-        with socket.create_connection((host, port), timeout=timeout):
+        with _connect(host, port, timeout):
             return {"ok": True, "host": host, "port": port}
     except OSError as ex:
         return {"ok": False, "host": host, "port": port, "message": str(ex)}

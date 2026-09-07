@@ -5,12 +5,38 @@ namespace RhinoMCPPlugin;
 
 public static class CommandDispatcher
 {
+    private static bool Enabled(string variable) =>
+        (Environment.GetEnvironmentVariable(variable) ?? "1").Trim().ToLowerInvariant() is not ("0" or "false" or "no");
+
+    private static string? ExecutionDenied(string command, Dictionary<string, JsonElement> p)
+    {
+        string[] gates = command switch
+        {
+            "execute_rhinoscript_python_code" => new[] { "RHINO_MCP_ENABLE_RHINOSCRIPT" },
+            "execute_rhinocommon_csharp_code" => new[] { "RHINO_MCP_ENABLE_CSHARP" },
+            "run_command" => new[] { "RHINO_MCP_ENABLE_RUN_COMMAND" },
+            "gh_add_script_component" => new[] { p.String("language") == "python" ? "RHINO_MCP_ENABLE_RHINOSCRIPT" : "RHINO_MCP_ENABLE_CSHARP" },
+            // Existing component language is not supplied; require both capabilities.
+            "gh_set_script_code" => new[] { "RHINO_MCP_ENABLE_RHINOSCRIPT", "RHINO_MCP_ENABLE_CSHARP" },
+            _ => Array.Empty<string>()
+        };
+        foreach (var gate in gates)
+            if (!Enabled(gate)) return $"{command} is disabled by {gate}.";
+        if (gates.Length > 0 && (p.String("code")?.Length ?? 0) > 200000)
+            return "Code exceeds 200000 characters.";
+        return null;
+    }
+
     public static McpResponse Dispatch(McpRequest request)
     {
         var p = JsonHelpers.Dict(request.Params);
+        var denied = ExecutionDenied(request.Type, p);
+        if (denied is not null)
+            return McpResponse.Ok(new { ok = false, error = denied, error_code = "TOOL_DISABLED" });
 
         // Read-only commands bypass undo recording
         var readOnly = request.Type is
+            "undo" or "redo" or
             "ping" or
             "get_document_summary" or
             "get_objects" or
@@ -46,7 +72,14 @@ public static class CommandDispatcher
         var doc = Rhino.RhinoDoc.ActiveDoc;
         uint undoRecord = uint.MaxValue;
         if (!readOnly && doc is not null)
+        {
             undoRecord = doc.BeginUndoRecord($"MCP: {request.Type}");
+            if (undoRecord == 0)
+                return McpResponse.Error("Cannot start an isolated undo record; finish the active Rhino command and enable undo recording.");
+            // Keep even an otherwise empty record, so rollback never undoes the
+            // user's preceding edit when a command fails before changing anything.
+            doc.AddCustomUndoEvent("MCP transaction", (_, _) => { });
+        }
 
         try
         {
@@ -157,7 +190,34 @@ public static class CommandDispatcher
                 "gh2_add_group"             => McpResponse.Ok(GH2IntelligenceHandlers.AddGroup(p)),
                 _ => McpResponse.Error($"Unsupported command type: {request.Type}")
             };
+            if (undoRecord != uint.MaxValue && doc is not null)
+            {
+                var payload = JsonSerializer.SerializeToElement(result.Result, JsonHelpers.Options);
+                var failed = result.Status == "error" ||
+                    (payload.ValueKind == JsonValueKind.Object &&
+                     ((payload.TryGetProperty("success", out var success) && success.ValueKind == JsonValueKind.False) ||
+                      (payload.TryGetProperty("ok", out var ok) && ok.ValueKind == JsonValueKind.False)));
+                doc.EndUndoRecord(undoRecord);
+                undoRecord = uint.MaxValue;
+                if (failed)
+                {
+                    var restored = doc.Undo();
+                    return McpResponse.Ok(new { ok = false, error = result.Message ?? "Plugin command failed",
+                        details = result.Result, rollback = new { scope = "Rhino document undo", restored },
+                        error_code = restored ? "COMMAND_FAILED_ROLLED_BACK" : "ROLLBACK_FAILED" });
+                }
+            }
             return result;
+        }
+        catch
+        {
+            if (undoRecord != uint.MaxValue && doc is not null)
+            {
+                doc.EndUndoRecord(undoRecord);
+                undoRecord = uint.MaxValue;
+                doc.Undo();
+            }
+            throw;
         }
         finally
         {

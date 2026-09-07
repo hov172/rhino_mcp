@@ -32,9 +32,11 @@ jobs:
       - name: Run unit, smoke, and script-syntax tests
         run: |
           uv run pytest \
-            tests/test_tools_unit.py \
-            tests/test_smoke.py \
-            tests/test_script_syntax.py \
+            tests/ \
+            --ignore=tests/test_integration.py \
+            --ignore=tests/test_gh_integration.py \
+            --ignore=tests/test_studio_pipeline_integration.py \
+            --ignore=tests/test_gh_intelligence_integration.py \
             -v --tb=short -m "not integration"
 
   lint:

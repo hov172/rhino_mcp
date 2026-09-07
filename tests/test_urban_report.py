@@ -45,8 +45,8 @@ class TestUrbanExportReport(unittest.TestCase):
         tools = _register()
         defaults = dict(project_name="TestProject", scheme_name="SchemeA")
         defaults.update(kw)
-        with patch("rhmcp.tools.urban_design_language._current_design_language", _SAMPLE_DL):
-            with patch("rhmcp.tools.urban_renders._current_renders", {}):
+        with patch("rhmcp.tools_helpers.workflow_state._default.current_design_language", _SAMPLE_DL):
+            with patch("rhmcp.tools_helpers.workflow_state._default.current_renders", {}):
                 with patch("rhmcp.tools.urban._urban_get_metrics", return_value=_SAMPLE_METRICS):
                     with patch("httpx.post", return_value=_mock_docraptor_response()):
                         with patch("boto3.client", return_value=_mock_s3_client()):
@@ -65,8 +65,8 @@ class TestUrbanExportReport(unittest.TestCase):
 
     def test_s3_upload_uses_correct_key_format(self):
         s3 = _mock_s3_client()
-        with patch("rhmcp.tools.urban_design_language._current_design_language", _SAMPLE_DL):
-            with patch("rhmcp.tools.urban_renders._current_renders", {}):
+        with patch("rhmcp.tools_helpers.workflow_state._default.current_design_language", _SAMPLE_DL):
+            with patch("rhmcp.tools_helpers.workflow_state._default.current_renders", {}):
                 with patch("rhmcp.tools.urban._urban_get_metrics", return_value=_SAMPLE_METRICS):
                     with patch("httpx.post", return_value=_mock_docraptor_response()):
                         with patch("boto3.client", return_value=s3):
@@ -83,8 +83,8 @@ class TestUrbanExportReport(unittest.TestCase):
 
     def test_solar_section_omitted_when_flag_false(self):
         tools = _register()
-        with patch("rhmcp.tools.urban_design_language._current_design_language", _SAMPLE_DL):
-            with patch("rhmcp.tools.urban_renders._current_renders", {}):
+        with patch("rhmcp.tools_helpers.workflow_state._default.current_design_language", _SAMPLE_DL):
+            with patch("rhmcp.tools_helpers.workflow_state._default.current_renders", {}):
                 with patch("rhmcp.tools.urban._urban_get_metrics", return_value=_SAMPLE_METRICS):
                     with patch.dict("os.environ", {}):
                         r = tools["urban_export_report"](
@@ -94,8 +94,8 @@ class TestUrbanExportReport(unittest.TestCase):
 
     def test_design_language_section_omitted_when_flag_false(self):
         tools = _register()
-        with patch("rhmcp.tools.urban_design_language._current_design_language", _SAMPLE_DL):
-            with patch("rhmcp.tools.urban_renders._current_renders", {}):
+        with patch("rhmcp.tools_helpers.workflow_state._default.current_design_language", _SAMPLE_DL):
+            with patch("rhmcp.tools_helpers.workflow_state._default.current_renders", {}):
                 with patch("rhmcp.tools.urban._urban_get_metrics", return_value=_SAMPLE_METRICS):
                     with patch.dict("os.environ", {}):
                         r = tools["urban_export_report"](
@@ -106,8 +106,8 @@ class TestUrbanExportReport(unittest.TestCase):
         import tempfile
         tmp_home = Path(tempfile.mkdtemp())
         tools = _register()
-        with patch("rhmcp.tools.urban_design_language._current_design_language", _SAMPLE_DL):
-            with patch("rhmcp.tools.urban_renders._current_renders", {}):
+        with patch("rhmcp.tools_helpers.workflow_state._default.current_design_language", _SAMPLE_DL):
+            with patch("rhmcp.tools_helpers.workflow_state._default.current_renders", {}):
                 with patch("rhmcp.tools.urban._urban_get_metrics", return_value=_SAMPLE_METRICS):
                     with patch.dict("os.environ", {}, clear=True):
                         with patch("pathlib.Path.home", return_value=tmp_home):
@@ -119,8 +119,8 @@ class TestUrbanExportReport(unittest.TestCase):
 class TestUrbanPreviewReport(unittest.TestCase):
     def test_preview_writes_html_without_api_calls(self):
         tools = _register()
-        with patch("rhmcp.tools.urban_design_language._current_design_language", _SAMPLE_DL):
-            with patch("rhmcp.tools.urban_renders._current_renders", {}):
+        with patch("rhmcp.tools_helpers.workflow_state._default.current_design_language", _SAMPLE_DL):
+            with patch("rhmcp.tools_helpers.workflow_state._default.current_renders", {}):
                 with patch("rhmcp.tools.urban._urban_get_metrics", return_value=_SAMPLE_METRICS):
                     with patch("httpx.post") as mock_post:
                         r = tools["urban_preview_report"]()
@@ -130,8 +130,8 @@ class TestUrbanPreviewReport(unittest.TestCase):
 
     def test_preview_html_contains_project_sections(self):
         tools = _register()
-        with patch("rhmcp.tools.urban_design_language._current_design_language", _SAMPLE_DL):
-            with patch("rhmcp.tools.urban_renders._current_renders", {}):
+        with patch("rhmcp.tools_helpers.workflow_state._default.current_design_language", _SAMPLE_DL):
+            with patch("rhmcp.tools_helpers.workflow_state._default.current_renders", {}):
                 with patch("rhmcp.tools.urban._urban_get_metrics", return_value=_SAMPLE_METRICS):
                     r = tools["urban_preview_report"]()
         self.assertIn("Executive Summary", r["html_content"])

@@ -461,6 +461,7 @@ def register(mcp: FastMCP) -> None:
     def gh_migrate_to_gh2(
         confirm: bool = False,
         close_gh1: bool = False,
+        allow_partial: bool = False,
         rhino_id: str | None = None,
     ) -> dict[str, object]:
         """Migrate the active GH1 definition to a new GH2 canvas.
@@ -513,6 +514,10 @@ def register(mcp: FastMCP) -> None:
                     "reason":    "No GH2 equivalent in mapping table",
                 })
 
+        if unmapped and not allow_partial:
+            return {"ok": False, "error": "Unmapped components; inspect unmapped and set allow_partial=True to migrate a partial graph.",
+                    "error_code": "PARTIAL_MIGRATION_REQUIRES_APPROVAL", "unmapped": unmapped, "migrated": 0}
+
         # Build wires for mapped components only
         mapped_keys = {c["key"] for c in mapped}
         wires = []
@@ -557,12 +562,14 @@ def register(mcp: FastMCP) -> None:
 
         # Step 5: optionally close GH1
         gh1_closed = False
-        if close_gh1:
+        if close_gh1 and not unmapped and not gh2_errors:
             close_result = _gh_intel("gh_close_document", {}, rhino_id=rhino_id)
             gh1_closed = close_result.get("ok", False)
 
         return {
             "ok":        True,
+            "complete":  not unmapped and not gh2_errors,
+            "semantic_equivalence_verified": False,
             "migrated":  len(mapped),
             "unmapped":  unmapped,
             "gh2_errors": gh2_errors,

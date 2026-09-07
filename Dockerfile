@@ -1,7 +1,7 @@
 FROM python:3.13-slim
 
 LABEL org.opencontainers.image.title="rhino-mcp" \
-      org.opencontainers.image.version="0.16.0" \
+      org.opencontainers.image.version="0.17.0" \
       org.opencontainers.image.description="MCP server for Rhino 3D — 358 tools" \
       org.opencontainers.image.source="https://github.com/hov172/rhino_mcp"
 
@@ -25,13 +25,14 @@ COPY --from=ghcr.io/astral-sh/uv:latest /uv /uvx /usr/local/bin/
 WORKDIR /app
 
 # Copy dependency files first — layer cached until pyproject.toml or uv.lock changes
-COPY pyproject.toml uv.lock ./
+COPY pyproject.toml uv.lock README.md ./
 
 # Install dependencies without the project itself (cache layer)
 RUN uv sync --frozen --no-install-project
 
 # Copy source and install the project (includes data/, report_templates/)
 COPY src/ ./src/
+COPY grasshopper/ ./grasshopper/
 
 RUN uv sync --frozen
 
@@ -40,13 +41,15 @@ ENV RHINO_MCP_HOST=host.docker.internal
 ENV RHINO_MCP_PORT=1999
 ENV RHINO_MCP_BACKEND=auto
 ENV RHINO_MCP_ALLOW_REMOTE=1
+ENV RHINO_MCP_PLUGIN_TLS=1
 
 EXPOSE 8000
 
 HEALTHCHECK --interval=30s --timeout=3s --start-period=5s --retries=3 \
-    CMD python -c "import urllib.request; urllib.request.urlopen('http://localhost:8000/health')" || exit 1
+    CMD uv run python -m rhmcp.tools_helpers.healthcheck || exit 1
 
 # HTTP transport — multiple AI clients can connect simultaneously.
+# Mount certificates and set HTTP/plugin TLS variables per docs/secure-operation.md.
 # Pass API keys at runtime:
 #   docker run -e ANTHROPIC_API_KEY=... -e FAL_KEY=... -e DOCRAPTOR_API_KEY=... \
 #              -p 8000:8000 rhino-mcp

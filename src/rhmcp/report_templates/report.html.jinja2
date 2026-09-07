@@ -33,6 +33,10 @@
   {% if design_language.executive_summary %}
   <div class="exec-summary">{{ design_language.executive_summary }}</div>
   {% endif %}
+  {% if metrics.source == "unavailable" %}
+  <p>Metrics unavailable. Run a massing workflow before exporting metrics.</p>
+  {% else %}
+  {% if metrics.estimated %}<p>Estimated metrics from a heuristic model; not measured geometry.</p>{% endif %}
   <div class="stats-strip">
     <div class="stat-card">
       <div class="stat-value">{{ "{:,.0f}".format(metrics.gfa_m2) }}</div>
@@ -51,6 +55,7 @@
       <div class="stat-label">Open Space</div>
     </div>
   </div>
+  {% endif %}
 </div>
 
 <!-- ③ Massing Views -->

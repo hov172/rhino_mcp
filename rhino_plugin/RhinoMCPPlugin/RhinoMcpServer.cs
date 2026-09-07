@@ -1,5 +1,8 @@
 using System.Net;
 using System.Net.Sockets;
+using System.Net.Security;
+using System.Security.Authentication;
+using System.Security.Cryptography.X509Certificates;
 using System.Security.Cryptography;
 using System.Text;
 using System.Text.Json;
@@ -12,6 +15,8 @@ public sealed class RhinoMcpServer
     private TcpListener? _listener;
     private CancellationTokenSource? _cts;
     private Task? _acceptTask;
+    private X509Certificate2? _certificate;
+    private readonly SemaphoreSlim _clients = new(32);
 
     public int Port { get; }
     public IPAddress BindAddress { get; }
@@ -59,6 +64,13 @@ public sealed class RhinoMcpServer
                 "machine and the MCP server machine, or unset RHINO_MCP_BIND_HOST to " +
                 "listen on loopback only.");
         }
+        var certPath = Environment.GetEnvironmentVariable("RHINO_MCP_PLUGIN_TLS_CERT");
+        if (!IPAddress.IsLoopback(BindAddress) && string.IsNullOrWhiteSpace(certPath))
+            throw new InvalidOperationException("Remote plugin binding requires RHINO_MCP_PLUGIN_TLS_CERT (PFX).");
+        _certificate = string.IsNullOrWhiteSpace(certPath) ? null : new X509Certificate2(
+            certPath, Environment.GetEnvironmentVariable("RHINO_MCP_PLUGIN_TLS_PASSWORD"));
+        if (_certificate is not null && !_certificate.HasPrivateKey)
+            throw new InvalidOperationException("Plugin TLS certificate must include its private key.");
         var cts = new CancellationTokenSource();
         var listener = new TcpListener(BindAddress, Port);
         try
@@ -99,7 +111,18 @@ public sealed class RhinoMcpServer
                 var client = await listener.AcceptTcpClientAsync(token).ConfigureAwait(false);
                 // Fire-and-forget: handle each connection independently so new
                 // connections are accepted without waiting for the current one to close.
-                _ = Task.Run(() => HandleClient(client, token), token);
+                if (!_clients.Wait(0))
+                {
+                    client.Dispose();
+                    continue;
+                }
+                var certificate = _certificate;
+                _ = Task.Run(async () =>
+                {
+                    try { await HandleClient(client, token, certificate); }
+                    catch (Exception ex) { RhinoApp.WriteLine($"Rhino MCP client error: {ex.Message}"); }
+                    finally { client.Dispose(); _clients.Release(); }
+                });
             }
             catch (OperationCanceledException)
             {
@@ -112,11 +135,23 @@ public sealed class RhinoMcpServer
         }
     }
 
-    private static async Task HandleClient(TcpClient client, CancellationToken token)
+    private static async Task HandleClient(TcpClient client, CancellationToken token, X509Certificate2? certificate)
     {
         using (client)
         {
-            using var stream = client.GetStream();
+            using var network = client.GetStream();
+            using var tls = certificate is null ? null : new SslStream(network, leaveInnerStreamOpen: true);
+            if (tls is not null)
+            {
+                using var handshake = CancellationTokenSource.CreateLinkedTokenSource(token);
+                handshake.CancelAfter(TimeSpan.FromSeconds(10));
+                await tls.AuthenticateAsServerAsync(new SslServerAuthenticationOptions
+                {
+                    ServerCertificate = certificate,
+                    EnabledSslProtocols = SslProtocols.Tls12 | SslProtocols.Tls13
+                }, handshake.Token);
+            }
+            Stream stream = tls is null ? network : tls;
             var buffer = new byte[8192];
             const int maxBytes = 10 * 1024 * 1024;
 
@@ -128,6 +163,8 @@ public sealed class RhinoMcpServer
                 // decoding per-chunk corrupts multi-byte UTF-8 characters that
                 // straddle a read boundary.
                 using var accumulated = new System.IO.MemoryStream();
+                using var readDeadline = CancellationTokenSource.CreateLinkedTokenSource(token);
+                readDeadline.CancelAfter(TimeSpan.FromSeconds(60));
 
                 // Read one complete JSON object.
                 while (true)
@@ -135,7 +172,7 @@ public sealed class RhinoMcpServer
                     int read;
                     try
                     {
-                        read = await stream.ReadAsync(buffer.AsMemory(0, buffer.Length), token).ConfigureAwait(false);
+                        read = await stream.ReadAsync(buffer.AsMemory(0, buffer.Length), readDeadline.Token).ConfigureAwait(false);
                     }
                     catch (OperationCanceledException) { return; }
                     catch (Exception) { return; } // connection reset / closed

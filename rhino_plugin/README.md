@@ -1,6 +1,6 @@
 # RhinoMCPPlugin
 
-The Rhino-side TCP socket server for the Rhino MCP project. This plugin runs inside Rhino 3D and handles all incoming commands from the Python MCP server.
+Version **0.17.0**. The Rhino-side TCP socket server for the Rhino MCP project. This plugin runs inside Rhino 3D and handles all incoming commands from the Python MCP server.
 
 ---
 
@@ -25,7 +25,7 @@ The Python MCP server connects over a local TCP socket and sends newline-delimit
 {"type": "<command_type>", "params": { ... }, "secret": "<psk-or-omit>"}
 ```
 
-The `secret` field is optional. Include it when `RHINO_MCP_PLUGIN_SECRET` is configured on the plugin side — the plugin rejects requests with a missing or wrong secret.
+The `secret` field is optional only for an unconfigured loopback listener. Non-loopback listeners require both a shared secret and a TLS certificate. See [secure operation](../docs/secure-operation.md#tls). Include it when `RHINO_MCP_PLUGIN_SECRET` is configured on the plugin side — the plugin rejects requests with a missing or wrong secret.
 
 The plugin dispatches to a C# handler, executes on the Rhino main UI thread via `RhinoApp.InvokeOnUiThread`, and replies with:
 
@@ -137,7 +137,7 @@ All GH2 commands require **Rhino 9** with Grasshopper 2 loaded. Grasshopper 2 is
 |---|---|
 | `gh2_start` | Launch the Grasshopper 2 editor. |
 | `gh2_get_canvas_graph` | Full snapshot of the active GH2 canvas: components, wires, volatile data samples. `sample_size` controls how many data items to return per output. |
-| `gh2_apply_graph` | Atomically place components and wire them in one call. Accepts `components` (list of `{key, type_name, x, y}`) and `wires` (list of `{from_key, from_output, to_key, to_input}`). Returns `{ok, placed: {key: instanceGuid}, wired: N, errors: [...]}`. |
+| `gh2_apply_graph` | Place components and wire them in one call; inspect returned errors for incomplete operations. Accepts `components` (list of `{key, type_name, x, y}`) and `wires` (list of `{from_key, from_output, to_key, to_input}`). Returns `{ok, placed: {key: instanceGuid}, wired: N, errors: [...]}`. |
 | `gh2_place_component` | Place a GH2 component by `name` (type name) or `component_guid`. Returns `instance_guid`. |
 | `gh2_place_slider` | Place a GH2 Number Slider with `min`, `max`, `value`, `decimals`, and canvas `x`/`y`. Returns `instance_guid`. |
 | `gh2_connect` | Wire a single output to an input. `from_output` and `to_input` can be index (int) or param name (str). |
@@ -175,6 +175,8 @@ All command handlers that touch Rhino or Grasshopper state run on the Rhino main
 ---
 
 ## Upgrading
+
+Follow the [0.17.0 upgrade guide](../docs/upgrade-0.17.0.md) for matching Python, plugin, and Docker versions. Quit Rhino completely before replacing an installed plugin.
 
 Having two copies of the plugin installed simultaneously causes a **port conflict** — both attempt to bind port 1999 on load, the second one fails silently, and all MCP calls go to the wrong version or return `connection refused`. Rhino does not warn you.
 
@@ -222,14 +224,16 @@ Restart Rhino. You should see `Rhino MCP listening on 127.0.0.1:1999` in the com
 
 ## Building
 
+Run these commands from the repository root; packaging requires Rhino 8 installed on macOS.
+
 ```bash
 # Requires .NET 8 SDK
 ./scripts/build-plugin.sh
 ```
 
-On macOS, the PostBuild step in `RhinoMCPPlugin.csproj` copies the built `rhino-mcp.rhp` to `/Applications/Rhino 8.app/Contents/PlugIns/` automatically. Restart Rhino after each build.
+Builds do not install the plugin. Install the packaged artifact explicitly, then fully restart Rhino. The legacy macOS post-build copy is opt-in with `dotnet build rhino_plugin/RhinoMCPPlugin/RhinoMCPPlugin.csproj -c Release -p:InstallPluginAfterBuild=true`.
 
-> **If you previously installed via Yak or PackageManager**, remove the Yak package before building from source — otherwise both copies will try to load and the build copy will lose the port race. Run `rm -rf "$HOME/Library/Application Support/McNeel/Rhinoceros/packages/8.0/rhino-mcp"` (macOS) first.
+> Before installing, check for an existing manual or Yak installation and replace that installation. Building alone does not create a second installed copy.
 
 ```bash
 # Package for Yak distribution
@@ -245,13 +249,17 @@ The repository also includes `.github/workflows/release-plugin.yml` for automate
 
 | Setting | Default | Description |
 |---|---|---|
-| Bind address | `127.0.0.1` | Set via `RHINO_MCP_BIND_HOST` env var. Use `0.0.0.0` for network access. |
+| Bind address | `127.0.0.1` | Set via `RHINO_MCP_BIND_HOST` env var. Network binding also requires a shared secret and TLS PFX certificate. |
 | Port | `1999` | TCP port the plugin listens on |
-| Protocol | TCP, JSON (one request per connection) | |
-| Rhino versions | Rhino 7 and Rhino 8 | |
+| Protocol | TCP, newline-delimited JSON (persistent connections supported) | |
+| Packaged target | Rhino 8.17+ | The `rh8_17` Yak artifact targets Rhino 8; GH2 operations require Rhino 9 with GH2 loaded. |
 | Target framework | `net8.0` | |
-| `RHINO_MCP_BIND_HOST` | `127.0.0.1` | Bind address. `0.0.0.0` = any interface. |
+| `RHINO_MCP_BIND_HOST` | `127.0.0.1` | Bind address. `0.0.0.0` = any interface; requires TLS and a secret. |
 | `RHINO_MCP_PLUGIN_SECRET` | *(unset)* | Pre-shared key for authentication. Required when binding to a non-loopback address — the server refuses to start listening without it. |
+| `RHINO_MCP_PLUGIN_TLS_CERT` | *(unset)* | PFX certificate with private key; required for non-loopback binding. |
+| `RHINO_MCP_PLUGIN_TLS_PASSWORD` | *(unset)* | PFX password. |
+
+Set execution gates in Rhino as well as the MCP process; see [execution controls](../docs/secure-operation.md#execution-controls).
 
 **Slot Announcement**
 

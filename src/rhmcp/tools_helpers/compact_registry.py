@@ -4,7 +4,7 @@ import importlib
 import pkgutil
 from typing import Any
 
-from mcp.server.fastmcp import FastMCP
+from rhmcp.tools_helpers.tool_runtime import RuntimeMCP as FastMCP
 
 
 class _ToolProxy:
@@ -15,6 +15,8 @@ class _ToolProxy:
         self.name: str = tool.name
         self.description: str = tool.description or ""
         self.parameters: dict = tool.parameters
+        self.annotations = tool.annotations.model_dump(exclude_none=True) if tool.annotations else {}
+        self.category = tool.fn.__module__.rsplit(".", 1)[-1]
 
     async def run(self, arguments: dict) -> Any:
         return await self._tool.run(arguments)
@@ -48,19 +50,23 @@ class CompactRegistry:
 
     def list_tools(self, category: str = "") -> list[dict]:
         results = []
+        from rhmcp.tools_helpers.tool_runtime import permitted
         for name, proxy in self._tools.items():
-            if category and category.lower() not in name.lower():
+            if not permitted(name):
+                continue
+            if category and category.lower() != proxy.category.lower() and category.lower() not in name.lower():
                 continue
             first_line = next(
                 (l.strip() for l in (proxy.description or "").split("\n") if l.strip()), ""
             )
-            results.append({"name": name, "description": first_line})
+            results.append({"name": name, "description": first_line, "category": proxy.category, "annotations": proxy.annotations})
         results.sort(key=lambda t: t["name"])
         return results
 
     def describe_tool(self, name: str) -> dict:
         proxy = self._tools.get(name)
-        if not proxy:
+        from rhmcp.tools_helpers.tool_runtime import permitted
+        if not proxy or not permitted(name):
             return {
                 "error": f"Tool '{name}' not found. Call list_rhino_tools() to see available tools."
             }
@@ -68,6 +74,8 @@ class CompactRegistry:
             "name": name,
             "description": proxy.description,
             "input_schema": proxy.parameters,
+            "annotations": proxy.annotations,
+            "category": proxy.category,
         }
 
     async def call_tool(self, name: str, arguments: dict) -> Any:

@@ -615,7 +615,8 @@ public static class RhinoHandlers
                 string[] rhinoLines = Array.Empty<string>();
                 try
                 {
-                    py.ExecuteScript(code);
+                    if (!py.ExecuteScript(code))
+                        throw new InvalidOperationException("Python execution failed; inspect captured output.");
                     rhinoLines = RhinoApp.CapturedCommandWindowStrings(true) ?? Array.Empty<string>();
                     doc.Views.Redraw();
                     var combined = output.ToString();
@@ -655,7 +656,11 @@ public static class RhinoHandlers
                 }
             }
         }
-        catch { /* fall through to RunScript */ }
+        catch (Exception ex)
+        {
+            // Never rerun a script after an exception from the in-process path.
+            return new { success = false, message = ex.Message, method = "python_script_api" };
+        }
 
         // Fallback: temp file via RunScript
         var scriptPath = Path.Combine(Path.GetTempPath(), $"rhino_mcp_{Guid.NewGuid():N}.py");

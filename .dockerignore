@@ -10,10 +10,10 @@ __pycache__
 tests/
 docs/
 scripts/
-grasshopper/
 rhino_plugin/
 test_*.py
 *.md
+!README.md
 *.png
 *.jpg
 *.json
@@ -26,3 +26,12 @@ live_results.txt
 *.rhp
 .mcp.json
 .pytest_cache
+build/
+dist/
+.ruff_cache/
+.env
+.env.*
+*.pem
+*.key
+*.pfx
+*.p12

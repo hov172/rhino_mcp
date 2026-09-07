@@ -145,6 +145,10 @@ def register(mcp: FastMCP) -> None:
 
 def _gh(command: str, params: dict[str, object], rhino_id: str | None = None) -> dict[str, object]:
     """Plugin-only dispatch — GH has no rhinocode fallback."""
+    from rhmcp.tools_helpers.security import command_execution_gate
+    error = command_execution_gate(command, params)
+    if error:
+        return error
     try:
         return rhino.plugin_result(command, params, rhino_id=rhino_id)
     except OSError:

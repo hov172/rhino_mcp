@@ -6,7 +6,6 @@ from __future__ import annotations
 
 import json
 import os
-import shlex
 import shutil
 import subprocess
 import tempfile
@@ -63,6 +62,8 @@ def find_rhinocode() -> str:
 
 
 def _base_args(rhino_id: str | None = None) -> list[str]:
+    from rhmcp.tools_helpers.workflow_state import rhino_id as scoped_rhino_id
+    rhino_id = rhino_id or scoped_rhino_id()
     args = [find_rhinocode()]
     if rhino_id:
         args.extend(["--rhino", rhino_id])
@@ -119,6 +120,10 @@ def run_command(command_text: str, rhino_id: str | None = None) -> dict[str, Any
     """
     Run a Rhino command string in a running Rhino instance.
     """
+    from rhmcp.tools_helpers.security import command_execution_gate
+    error = command_execution_gate("run_command", {"command": command_text})
+    if error:
+        return error
     return run_rhinocode(["command", command_text], rhino_id=rhino_id)
 
 
@@ -129,6 +134,10 @@ def execute_script(code: str, suffix: str, rhino_id: str | None = None) -> dict[
     if suffix == ".py":
         return execute_python(code, rhino_id=rhino_id)
 
+    from rhmcp.tools_helpers.security import command_execution_gate
+    error = command_execution_gate("execute_rhinocommon_csharp_code", {"code": code})
+    if error:
+        return error
     with tempfile.TemporaryDirectory(prefix="rhino_mcp_", dir=_TEMP_DIR) as temp_dir:
         script_path = os.path.join(temp_dir, "script" + suffix)
         with open(script_path, "w", encoding="utf-8") as fh:
@@ -153,6 +162,10 @@ def execute_python(code: str, rhino_id: str | None = None) -> dict[str, Any]:
     captures stdout/stderr and writes an execution report to a temp file because
     ``rhinocode script`` is not a structured RPC channel.
     """
+    from rhmcp.tools_helpers.security import command_execution_gate
+    error = command_execution_gate("execute_rhinoscript_python_code", {"code": code})
+    if error:
+        return error
     with tempfile.TemporaryDirectory(prefix="rhino_mcp_", dir=_TEMP_DIR) as temp_dir:
         script_path = os.path.join(temp_dir, "script.py")
         result_path = os.path.join(temp_dir, "result.json")
@@ -164,28 +177,22 @@ def execute_python(code: str, rhino_id: str | None = None) -> dict[str, Any]:
         proc = run_rhinocode(["script", script_path], rhino_id=rhino_id)
         report = _read_result_when_ready(result_path, wait_seconds=2.0)
 
-        # Rhino 8.30 on macOS may accept `rhinocode script` but never dispatch
-        # the file to the Python runner. Fall back to Rhino's command runner,
-        # which is the same path a user would invoke from the command line.
-        if report is None and _RUNPYTHON_FALLBACK:
-            command_text = '_-RunPythonScript {:s} _Enter'.format(shlex.quote(script_path))
-            command_proc = run_command(command_text, rhino_id=rhino_id)
-            report = _read_result_when_ready(result_path, wait_seconds=_TIMEOUT)
-            proc = {
-                **proc,
-                "fallback_command": command_proc,
-                "ok": proc["ok"] and command_proc["ok"],
-            }
+        # An accepted CLI dispatch with no result is ambiguous. Never issue a
+        # second RunPythonScript command: the first may still be queued.
 
         if report is None:
             report = {
                 "status": "error" if not proc["ok"] else "unknown",
-                "message": "Rhino script did not write a result payload.",
+                "message": "Rhino execution outcome unknown; inspect the document before retrying.",
+                "error_code": "EXECUTION_OUTCOME_UNKNOWN",
+                "retry_safe": False,
             }
 
         return {
             "ok": proc["ok"] and report.get("status") == "ok",
             "rhinocode": proc,
+            "error_code": report.get("error_code"),
+            "retry_safe": report.get("retry_safe", False),
             "status": report.get("status"),
             "result": report.get("result"),
             "message": report.get("message"),
@@ -231,6 +238,8 @@ import traceback
 __mcp_stdout = io.StringIO()
 __mcp_stderr = io.StringIO()
 __mcp_payload = None
+__mcp_doc = None
+__mcp_undo = 0
 
 def __mcp_json_default(value):
     try:
@@ -240,6 +249,13 @@ def __mcp_json_default(value):
 
 try:
     with contextlib.redirect_stdout(__mcp_stdout), contextlib.redirect_stderr(__mcp_stderr):
+        import Rhino
+        __mcp_doc = Rhino.RhinoDoc.ActiveDoc
+        if __mcp_doc is not None:
+            __mcp_undo = __mcp_doc.BeginUndoRecord("MCP Python")
+            if not __mcp_undo:
+                raise RuntimeError("Cannot start an isolated undo record")
+            __mcp_doc.AddCustomUndoEvent("MCP transaction", lambda sender, event: None)
         result = None
         exec(compile({code}, "<rhino_mcp_script>", "exec"))
         __mcp_payload = {{
@@ -249,13 +265,23 @@ try:
             "stderr": __mcp_stderr.getvalue(),
         }}
 except Exception as ex:
+    restored = False
+    if __mcp_doc is not None and __mcp_undo:
+        __mcp_doc.EndUndoRecord(__mcp_undo)
+        __mcp_undo = 0
+        restored = __mcp_doc.Undo()
     __mcp_payload = {{
+        "rollback": {{"scope": "Rhino document undo", "restored": restored}},
         "status": "error",
         "message": str(ex),
         "traceback": traceback.format_exc(),
         "stdout": __mcp_stdout.getvalue(),
         "stderr": __mcp_stderr.getvalue(),
     }}
+
+finally:
+    if __mcp_doc is not None and __mcp_undo:
+        __mcp_doc.EndUndoRecord(__mcp_undo)
 
 __mcp_tmp = {result_path} + ".tmp"
 with open(__mcp_tmp, "w", encoding="utf-8") as __mcp_fh:

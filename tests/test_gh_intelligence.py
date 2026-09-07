@@ -310,7 +310,7 @@ class TestGhMigrateToGh2(unittest.TestCase):
             return {"ok": False, "error": f"unexpected: {command}"}
 
         with patch("rhmcp.tools_helpers.backend.plugin_result", side_effect=mock_plugin):
-            result = fn(confirm=True)
+            result = fn(confirm=True, allow_partial=True)
 
         self.assertTrue(result.get("ok"))
         self.assertIsInstance(result.get("unmapped"), list)

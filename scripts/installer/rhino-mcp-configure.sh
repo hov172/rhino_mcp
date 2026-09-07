@@ -38,6 +38,10 @@ if [ -f "$PLUGIN_SRC" ]; then
             PLUGIN_DST="$HOME/Library/Application Support/McNeel/Rhinoceros/${RHINO_VER}.0/Plug-ins/rhino-mcp.rhp"
             mkdir -p "$(dirname "$PLUGIN_DST")"
             cp "$PLUGIN_SRC" "$PLUGIN_DST"
+            for SUPPORT_FILE in "$SHARED_DIR/plugin/"*.json "$SHARED_DIR/plugin/"*.dll; do
+                [ -f "$SUPPORT_FILE" ] || continue
+                cp "$SUPPORT_FILE" "$(dirname "$PLUGIN_DST")/"
+            done
             log "Rhino plugin installed: $PLUGIN_DST"
         fi
     done
