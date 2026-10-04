@@ -36,8 +36,17 @@ def register(mcp: FastMCP) -> None:
     ) -> dict[str, object]:
         """Atomically place components and wire them in one call.
 
-        components: list of {key, type_name, x, y} or {key, type="slider", min, max, value, x, y}
-        wires: list of {from_key,..."""
+        components: list of component items, each with a unique `key` used by wires:
+          - {key, type_name, x, y} or {key, component_guid, x, y} places a component
+            (`name` is accepted as an alias of `type_name`).
+          - {key, type: "slider", min, max, value, decimals, x, y} places a Number Slider.
+        wires: list of {from_key, from_output, to_key, to_input}. `from_key`/`to_key`
+          reference keys placed in this call; `from_guid`/`to_guid` may be used instead
+          to reference components already on the canvas. `from_output`/`to_input` accept
+          a param nickname (str) or a 0-based index (int).
+        Returns {ok, placed: {key: instance_guid}, wired: N, errors: [...]}.
+        ok is False if any placement or wire failed; successful items are kept.
+        """
         params: dict[str, object] = {"components": components}
         if wires:
             params["wires"] = wires
@@ -53,7 +62,10 @@ def register(mcp: FastMCP) -> None:
     ) -> dict[str, object]:
         """Place a Grasshopper 2 component on the canvas.
         type_name: component name (e.g. "Point", "Circle"). Either type_name or component_guid required.
-        component_guid: component type GUID..."""
+        component_guid: component type GUID (use when the name is ambiguous).
+        x, y: canvas pivot position.
+        Returns {ok, instance_guid}.
+        """
         if not type_name and not component_guid:
             return {"ok": False, "error": "Either type_name or component_guid is required."}
         params: dict[str, object] = {"x": x, "y": y}
@@ -89,12 +101,15 @@ def register(mcp: FastMCP) -> None:
     ) -> dict[str, object]:
         """Wire a single output to an input in Grasshopper 2.
         from_instance: source component instance GUID.
-        from_output: output index (int) or param name (str).
-        to_instance: target..."""
+        from_output: output param nickname (str) or 0-based index (int).
+        to_instance: target component instance GUID.
+        to_input: input param nickname (str) or 0-based index (int).
+        Returns {ok} or {ok: False, error}.
+        """
         return _gh2("gh2_connect", {
-            "from_instance": from_instance,
+            "from_guid": from_instance,
             "from_output": from_output,
-            "to_instance": to_instance,
+            "to_guid": to_instance,
             "to_input": to_input,
         }, rhino_id=rhino_id)
 
@@ -103,9 +118,11 @@ def register(mcp: FastMCP) -> None:
         """
         Wire multiple connections at once. Continues past individual failures.
         wires: list of {from_instance, from_output, to_instance, to_input}
-        Returns {ok, wired: N, errors: [...]}
+          (from_guid/to_guid accepted as aliases). from_output/to_input accept a
+          param nickname (str) or 0-based index (int).
+        Returns {ok, connected: N, errors: [{wire, errors: [...]}]}
         """
-        return _gh2("gh2_connect_many", {"wires": wires}, rhino_id=rhino_id)
+        return _gh2("gh2_connect_many", {"wires": [_normalize_wire(w) for w in wires]}, rhino_id=rhino_id)
 
     @mcp.tool(annotations=ToolAnnotations(title="Describe GH2 Component", readOnlyHint=True))
     def gh2_describe_component(
@@ -114,7 +131,10 @@ def register(mcp: FastMCP) -> None:
         rhino_id: str | None = None,
     ) -> dict[str, object]:
         """Get metadata for a Grasshopper 2 component: category, description, input/output param names and types.
-        instance_guid: instance GUID of a placed component. Either instance_guid or name..."""
+        instance_guid: instance GUID of a placed component (describes that instance, including its
+          current input/output nicknames). Either instance_guid or name is required.
+        name: component type name to look up in the component library.
+        """
         if not instance_guid and not name:
             return {"ok": False, "error": "Either instance_guid or name is required."}
         params: dict[str, object] = {}
@@ -156,6 +176,18 @@ def register(mcp: FastMCP) -> None:
         if not confirm:
             return {"ok": False, "error": "Set confirm=True to clear the canvas."}
         return _gh2("gh2_clear_canvas", {"confirm": confirm}, rhino_id=rhino_id)
+
+
+def _normalize_wire(wire: object) -> object:
+    """Map from_instance/to_instance to the from_guid/to_guid keys the plugin reads."""
+    if not isinstance(wire, dict):
+        return wire
+    out = {k: v for k, v in wire.items() if k not in ("from_instance", "to_instance")}
+    if "from_instance" in wire and "from_guid" not in wire:
+        out["from_guid"] = wire["from_instance"]
+    if "to_instance" in wire and "to_guid" not in wire:
+        out["to_guid"] = wire["to_instance"]
+    return out
 
 
 def _gh2(command: str, params: dict[str, object], rhino_id: str | None = None) -> dict[str, object]:

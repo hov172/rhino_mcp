@@ -41,19 +41,20 @@ def register(mcp: FastMCP) -> None:
     def export_3mf(
         path: str,
         object_ids: list[str] | None = None,
-        mesh_quality: str = "normal",
         rhino_id: str | None = None,
     ) -> dict[str, object]:
-        """Export geometry to a 3MF file (Rhino 8 natively supports this format)."""
+        """Export geometry to a 3MF file (Rhino 8 natively supports this format).
+
+        Meshing uses the document's current render-mesh settings; Rhino's
+        ``File3mfWriteOptions`` exposes no mesh-quality option, so none is
+        offered here."""
         code = (
             "_mcp_path = {path}\n"
             "_mcp_object_ids = {ids}\n"
-            "_mcp_mesh_quality = {quality}\n"
             "{script}"
         ).format(
             path=json.dumps(path),
             ids=repr(object_ids),
-            quality=json.dumps(mesh_quality),
             script=_3MF_SCRIPT,
         )
         return rhino.execute_python(code, rhino_id=rhino_id)
@@ -170,8 +171,8 @@ else:
     result = {
         "path": _mcp_path,
         "format": "3MF",
-        "mesh_quality": _mcp_mesh_quality,
         "ok": bool(_wrote_ok),
+        "note": "Meshed with the document's current render-mesh settings.",
     }
     if not _wrote_ok:
         result["error"] = "Export produced no output file at: {}".format(_mcp_path)

@@ -256,6 +256,71 @@ class TestGH2ApplyGraph(unittest.TestCase):
         self.assertNotIn("wires", params)
 
 
+    def test_forwards_inline_slider_and_key_wires_untouched(self) -> None:
+        """Inline {type: slider} items and from_key/to_key wires are forwarded verbatim."""
+        fn = self.tools["gh2_apply_graph"]
+        components = [
+            {"key": "s", "type": "slider", "min": 0, "max": 10, "value": 5, "decimals": 1, "x": 0, "y": 0},
+            {"key": "c", "type_name": "Circle", "x": 200, "y": 0},
+        ]
+        wires = [{"from_key": "s", "from_output": 0, "to_key": "c", "to_input": "R"}]
+        with patch("rhmcp.tools_helpers.backend.plugin_result", return_value=_PLUGIN_OK) as mock_pr:
+            fn(components=components, wires=wires)
+        cmd, params = mock_pr.call_args[0]
+        self.assertEqual(cmd, "gh2_apply_graph")
+        self.assertEqual(params, {"components": components, "wires": wires})
+
+
+# ---------------------------------------------------------------------------
+# gh2_connect / gh2_connect_many — payload keys match the C# handler contract
+# ---------------------------------------------------------------------------
+
+class TestGH2ConnectPayload(unittest.TestCase):
+
+    @classmethod
+    def setUpClass(cls) -> None:
+        with patch("rhmcp.tools_helpers.backend.plugin_result", return_value=_PLUGIN_OK):
+            cls.tools = _register_gh2()
+
+    def test_connect_sends_from_guid_to_guid(self) -> None:
+        """gh2_connect must send from_guid/to_guid (not from_instance/to_instance) to the plugin."""
+        fn = self.tools["gh2_connect"]
+        with patch("rhmcp.tools_helpers.backend.plugin_result", return_value=_PLUGIN_OK) as mock_pr:
+            fn(from_instance="aaa", to_instance="bbb", from_output=0, to_input="R")
+        cmd, params = mock_pr.call_args[0]
+        self.assertEqual(cmd, "gh2_connect")
+        self.assertEqual(params, {"from_guid": "aaa", "from_output": 0, "to_guid": "bbb", "to_input": "R"})
+        self.assertNotIn("from_instance", params)
+        self.assertNotIn("to_instance", params)
+
+    def test_connect_int_port_stays_int(self) -> None:
+        """Integer port indices must reach the plugin as JSON numbers, not strings."""
+        fn = self.tools["gh2_connect"]
+        with patch("rhmcp.tools_helpers.backend.plugin_result", return_value=_PLUGIN_OK) as mock_pr:
+            fn(from_instance="aaa", to_instance="bbb", from_output=1, to_input=2)
+        _, params = mock_pr.call_args[0]
+        self.assertIs(type(params["from_output"]), int)
+        self.assertIs(type(params["to_input"]), int)
+
+    def test_connect_many_normalizes_instance_keys(self) -> None:
+        """gh2_connect_many maps from_instance/to_instance to from_guid/to_guid per wire."""
+        fn = self.tools["gh2_connect_many"]
+        wires = [
+            {"from_instance": "a", "from_output": 0, "to_instance": "b", "to_input": 0},
+            {"from_guid": "c", "from_output": "P", "to_guid": "d", "to_input": 1},
+        ]
+        with patch("rhmcp.tools_helpers.backend.plugin_result", return_value=_PLUGIN_OK) as mock_pr:
+            fn(wires=wires)
+        cmd, params = mock_pr.call_args[0]
+        self.assertEqual(cmd, "gh2_connect_many")
+        self.assertEqual(params["wires"], [
+            {"from_guid": "a", "from_output": 0, "to_guid": "b", "to_input": 0},
+            {"from_guid": "c", "from_output": "P", "to_guid": "d", "to_input": 1},
+        ])
+        # input list must not be mutated
+        self.assertIn("from_instance", wires[0])
+
+
 # ---------------------------------------------------------------------------
 # OSError handling — plugin-only dispatch must never raise
 # ---------------------------------------------------------------------------

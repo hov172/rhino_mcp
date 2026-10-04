@@ -62,7 +62,16 @@ def register(mcp: FastMCP) -> None:
         code = "__mcp_capture = {!r}\n{}".format(payload, _CAPTURE_SCRIPT)
         raw = rhino.execute_python(code, rhino_id=rhino_id)
 
-        r = raw.get("result") if isinstance(raw, dict) else None
+        # backend.execute_python puts the script's ``result`` under
+        # ``script_result``; ``result`` is the plugin's {success, output, method}
+        # envelope (or the rhinocode payload). Check script_result first.
+        r = None
+        if isinstance(raw, dict):
+            for key in ("script_result", "result"):
+                candidate = raw.get(key)
+                if isinstance(candidate, dict) and candidate.get("b64"):
+                    r = candidate
+                    break
         b64 = r.get("b64") if isinstance(r, dict) else None
 
         if not b64:

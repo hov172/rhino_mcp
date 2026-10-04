@@ -96,6 +96,7 @@ Control Rhino 3D from Claude, Cursor, Codex, and any other MCP-capable AI tool. 
   - [Extended View Tools](#extended-view-tools)
   - [Extended Document Tools](#extended-document-tools)
   - [Reference-Compatible Aliases](#reference-compatible-aliases)
+- [Skills (prompt packages for ChatGPT, Codex, Claude)](#skills)
 - [Studio Pipeline Env Vars](#studio-pipeline-env-vars)
 - [Building the Plugin from Source](#building-the-plugin-from-source)
 - [Running Tests](#running-tests)
@@ -105,7 +106,7 @@ Control Rhino 3D from Claude, Cursor, Codex, and any other MCP-capable AI tool. 
 
 ## Quick Start
 
-**Version 0.18.0:** replaces PyMuPDF with PDFium/pdfplumber, corrects PDF geometry scaling, and isolates PDF processing with resource limits. See the [0.18.0 upgrade guide](docs/upgrade-0.18.0.md). The [secure-operation requirements](docs/secure-operation.md) and macOS registration fixes remain in effect.
+**Version 0.19.0:** fixes the Grasshopper 2 wiring and graph contracts, makes script components honour requested ports, implements environment maps, derives the studio pipeline's solar inputs from the baked massing, and removes every parameter that was accepted but never applied. Tools now report `applied` / `not_applied`. Ships a `skills/` folder of Agent Skills. See the [0.19.0 upgrade guide](docs/upgrade-0.19.0.md). The [secure-operation requirements](docs/secure-operation.md) and macOS registration fixes remain in effect.
 
 > **Two separate pieces — both are required:**
 >
@@ -359,14 +360,14 @@ The `.pkg` installer is the fastest way to get up and running on macOS. It requi
 - The `rhino` MCP server entry into Claude Desktop and Claude Code automatically
 
 **Steps:**
-1. Download the [signed and notarized 0.18.0 installer](https://github.com/hov172/rhino_mcp/releases/download/v0.18.0/rhino-mcp-0.18.0-universal-signed.pkg)
+1. Download the [signed and notarized 0.19.0 installer](https://github.com/hov172/rhino_mcp/releases/download/v0.19.0/rhino-mcp-0.19.0-universal-signed.pkg)
 2. Quit Rhino completely, then double-click the `.pkg` and follow the installer prompts
 3. Launch Rhino — the plugin loads automatically
 4. Launch your AI client — the MCP server is already configured
 
 > The installer backs up conflicting legacy copies and repairs cached plugin paths. If no GUI user is logged in during installation, run `/usr/local/bin/rhino-mcp-configure` after login with Rhino closed. See the [upgrade guide](docs/upgrade-0.17.1.md) for backup locations and verification.
 
-The [signed 0.18.0 uninstaller](https://github.com/hov172/rhino_mcp/releases/download/v0.18.0/rhino-mcp-0.18.0-universal-uninstaller-signed.pkg) is available in the same release.
+The [signed 0.19.0 uninstaller](https://github.com/hov172/rhino_mcp/releases/download/v0.19.0/rhino-mcp-0.19.0-universal-uninstaller-signed.pkg) is available in the same release.
 
 ---
 
@@ -1215,6 +1216,7 @@ When debugging connection failures, set `RHINO_MCP_BACKEND=plugin` temporarily. 
 | `launch_rhino` | Launch a new Rhino process and wait for it to announce its slot (up to 60 s). Finds the Rhino executable via `RHINO_MCP_RHINO_PATH` or standard install paths. Returns `{ok, id, pid}` of the new instance. |
 | `get_rhinocode_instances` | List all running Rhino processes via the rhinocode CLI. Returns `id`, `name`, and `version`. Use when the plugin is not loaded and you only need the rhinocode backend. |
 | `get_rhino_backend_status` | Report which backends are currently reachable: plugin socket (port 1999) and rhinocode CLI. Shows the selected backend mode and any connection errors. |
+| `health_check` | Ping the Rhino plugin socket and report `ok`, `latency_ms`, and the Rhino version. Call it first in any session to confirm Rhino and the plugin are up. |
 | `get_rhino_commands` | List all available Rhino command names, optionally filtered by substring (e.g. `filter="circle"`). `loaded_only=true` (default) restricts to currently loaded plugins; set `false` to include unloaded plugins. Use this before `run_rhino_command` to discover exact spellings. |
 | `list_rhino_plugins` | List plugins loaded in the current Rhino session, routed through the active backend. |
 | `load_rhino_plugin` | Load a Rhino plugin by GUID or file path. Use when a plugin is installed but not yet loaded in the current Rhino session. |
@@ -1658,11 +1660,11 @@ Every GH2 tool accepts an optional `rhino_id` parameter (from `get_rhino_instanc
 |---|---|
 | `gh2_start` | Launch the Grasshopper 2 editor. |
 | `gh2_get_canvas_graph` | Get a full snapshot of the active GH2 canvas: components, wires, and volatile data samples. `sample_size` (default 3) controls how many data items are returned per output port. |
-| `gh2_apply_graph` | Atomically place components and wire them in one call. `components`: list of `{key, type_name, x, y}` or `{key, type="slider", min, max, value, x, y}`. `wires`: list of `{from_key, from_output, to_key, to_input}`. Returns `{ok, placed: {key: instanceGuid}, wired: N, errors: [...]}`. |
+| `gh2_apply_graph` | Atomically place components and wire them in one call. `components`: list of `{key, type_name|component_guid, x, y}` or `{key, type="slider", min, max, value, decimals, x, y}`. `wires`: list of `{from_key|from_guid, from_output, to_key|to_guid, to_input}` with ports by nickname or index. Returns `{ok, placed: {key: instanceGuid}, wired: N, errors: [...]}`. |
 | `gh2_place_component` | Place a GH2 component by `type_name` (e.g. `"Point"`, `"Circle"`) or `component_guid`. Returns `instance_guid`. |
 | `gh2_place_slider` | Place a GH2 Number Slider with `min`, `max`, `value`, `decimals`, and canvas `x`/`y`. Returns `instance_guid`. |
 | `gh2_connect` | Wire a single output to an input. `from_output` / `to_input` can be index (int) or param name (str). |
-| `gh2_connect_many` | Wire multiple connections in one call; continues past individual failures. `wires`: list of `{from_instance, from_output, to_instance, to_input}`. Returns `{ok, wired: N, errors: [...]}`. |
+| `gh2_connect_many` | Wire multiple connections in one call; continues past individual failures. `wires`: list of `{from_guid, from_output, to_guid, to_input}` (ports by nickname or index). Returns `{ok, connected: N, errors: [...]}`. |
 | `gh2_describe_component` | Get metadata for a component: category, description, input/output param names and types. Accepts `instance_guid` (placed instance) or `name` (component type lookup). |
 | `gh2_search_components` | Search available GH2 components by name, nickname, or description. Optional `category` filter. |
 | `gh2_solve_graph` | Expire and re-solve the active GH2 canvas. Returns list of errors. |
@@ -1910,46 +1912,46 @@ Ladybug handles climate visualisation (weather data, sun, wind, radiation). Hone
 
 | Tool | Description |
 |---|---|
-| `create_pbr_material` | Create a physically-based material with base color, metallic, roughness, opacity, and texture maps (albedo, roughness, metallic, normal, displacement, AO). |
+| `create_pbr_material` | Create a physically-based material with base color, metallic, roughness, opacity, optional `ior` (applied via `OpacityIOR`), emission, and texture maps (albedo, roughness, metallic, normal, displacement, AO, opacity). Textures attach at default amount; Rhino exposes no bump/displacement scale. Reports `applied` / `not_applied`. |
 | `assign_pbr_material_to_objects` | Assign a named PBR material to one or more objects by GUID. |
 | `get_pbr_material_info` | Return the PBR properties and texture paths of a named material. |
 | `list_pbr_materials` | List all PBR materials in the document. |
 | `set_environment_map` | Load an HDR or EXR file as the render environment (background, lighting, reflections). |
-| `set_render_settings` | Configure render resolution, background color, transparent background, ambient occlusion, ground plane, and shadows. |
+| `set_render_settings` | Configure background color, transparent background, ground plane on/off and ground plane altitude (altitude applies independently). Renderer choice, samples, shadows and AO have no cross-engine Rhino API and are not offered. Reports `applied` / `not_applied`. |
 | `render_to_image` | Trigger a Rhino render and save/return the result as a file path and optional base-64 PNG. |
 
 ---
 
 ### V-Ray Rendering
 
-Requires [V-Ray for Rhino](https://www.chaos.com/vray/rhino) to be installed and licensed. Each tool checks that V-Ray is loaded and returns `{"success": false, "message": "..."}` if it is not.
+Requires [V-Ray for Rhino](https://www.chaos.com/vray/rhino) to be installed and licensed. Each tool checks that V-Ray is loaded and returns `{"success": false, "message": "..."}` if it is not. Render size, quality preset and rendering use V-Ray's documented Python module (`rh8VRay` / `rhVRay`); when it is not importable the result lists those settings under `not_applied`. Lights and the environment are interactive commands/dialogs.
 
 | Tool | Parameters | Description |
 |---|---|---|
-| `vray_start_ipr` | — | Start V-Ray **Interactive Production Rendering** in the active viewport. IPR updates the render bucket live as you modify the scene. |
-| `vray_stop_ipr` | — | Stop the running IPR session. |
-| `vray_render` | `output_path`, `width=1920`, `height=1080`, `quality_preset="medium"` | Trigger a full V-Ray render and save the result to `output_path`. `quality_preset`: `low` \| `medium` \| `high` \| `ultra`. |
-| `vray_create_material` | `name`, `diffuse_color=[r,g,b]`, `roughness=0.5`, `metalness=0.0`, `ior=1.5`, `opacity=1.0` | Create a V-Ray material via RhinoCommon. `diffuse_color` values are 0–255. |
+| `vray_start_ipr` | — | Run `_vrayRender _Interactive` to start V-Ray interactive rendering. |
+| `vray_stop_ipr` | — | Run `_vrayRender _Stop`. |
+| `vray_render` | `output_path=None`, `width=1920`, `height=1080`, `quality_preset="medium"` | Set size and quality preset through the V-Ray Python module (`rh8VRay`/`rhVRay`) and run `vray.Render` synchronously. `quality_preset`: `low` \| `medium` \| `high` \| `ultra` (V-Ray Low/Medium/High/High+). Saving via `_-SaveRenderWindowAs` is attempted; check `saved`. Reports `applied` / `not_applied`. |
+| `vray_create_material` | `name`, `diffuse_color=[r,g,b]`, `opacity=1.0` | Create a standard Rhino material (diffuse 0–255, opacity as transparency) that V-Ray converts on render. V-Ray documents no API for creating VRayMtl assets, so roughness/metalness/IOR are not offered. |
 | `vray_apply_material` | `object_ids=[...]`, `material_name` | Assign a named V-Ray material to a list of Rhino objects by GUID. |
-| `vray_add_light` | `light_type="Rectangle"`, `position=[x,y,z]`, `target=[x,y,z]`, `intensity=1.0`, `color=[r,g,b]` | Add a V-Ray light. `light_type`: `Rectangle` \| `Sphere` \| `IES` \| `Dome` \| `Sun`. |
-| `vray_set_environment` | `hdri_path`, `intensity=1.0`, `rotation_degrees=0.0` | Set the V-Ray dome/environment light to an HDRI file. Opens the V-Ray Options dialog — `hdri_path`, `intensity`, and `rotation_degrees` are returned for reference. |
-| `vray_set_render_settings` | `width=1920`, `height=1080`, `aa_subdivs=4`, `gi_preset="interior"`, `time_limit_seconds=0` | Configure render resolution, AA subdivisions, and GI preset. `gi_preset`: `interior` \| `exterior` \| `studio`. `time_limit_seconds=0` disables the time limit. |
-| `vray_export_vrscene` | `output_path`, `compressed=False` | Export the current scene as a `.vrscene` file for V-Ray Standalone or distributed rendering. |
+| `vray_add_light` | `light_type="Rectangle"` | Launch the interactive `_vrayLight _Create <type>` command; placement is by mouse and intensity/colour are set in the Asset Editor. `light_type`: `Rectangle` \| `Sphere` \| `Directional` \| `Spot` \| `IES` \| `Omni` \| `Dome` \| `Sun`. |
+| `vray_set_environment` | — | Open the V-Ray Asset Editor (`_vrayShowAssetEditor`) to set the environment HDRI interactively. Nothing is applied programmatically. |
+| `vray_set_render_settings` | `width=None`, `height=None`, `quality_preset=None` | Set V-Ray output size and quality preset through the V-Ray Python module. AA subdivisions, GI presets and time limits have no documented scripting access and are not offered. Reports `applied` / `not_applied`. |
+| `vray_export_vrscene` | `output_path` | Run `_vrayExportVRScene` to export a `.vrscene` file. The command documents no compression option. |
 
 ---
 
 ### Enscape Real-Time Rendering
 
-Requires [Enscape](https://enscape3d.com) to be installed and licensed. Each tool checks that Enscape is loaded and returns `{"success": false, "message": "..."}` if it is not.
+Requires [Enscape](https://enscape3d.com) to be installed and licensed. Each tool checks that Enscape is loaded and returns `{"success": false, "message": "..."}` if it is not. Enscape has no scripting API beyond its Rhino commands, so these tools only launch those commands; image size, panorama resolution and atmosphere are set in Enscape's own dialogs.
 
 | Tool | Parameters | Description |
 |---|---|---|
 | `enscape_start` | — | Launch the Enscape real-time rendering window from the current Rhino viewport. |
-| `enscape_screenshot` | `output_path`, `width=1920`, `height=1080` | Capture a high-resolution screenshot from the current Enscape view and save it to `output_path`. |
-| `enscape_export_panorama` | `output_path`, `resolution="4K"` | Export a 360° equirectangular panorama. `resolution`: `2K` \| `4K` \| `8K`. |
+| `enscape_screenshot` | `output_path` | Run `Enscape_Screenshot`; may open a save dialog. Image size is an Enscape visual setting and cannot be scripted. |
+| `enscape_export_panorama` | `output_path` | Run `Enscape_ExportPanorama`; may open an export dialog. Resolution is an Enscape setting and cannot be scripted. |
 | `enscape_export_standalone` | `output_path` | Export the scene as a self-contained Enscape standalone executable (`.exe`) for sharing without requiring an Enscape license on the viewer's machine. |
 | `enscape_set_time_of_day` | `hour=12`, `minute=0` | Set the sun position by time of day. `hour`: 0–23, `minute`: 0–59. |
-| `enscape_set_atmosphere` | `cloud_density=0.3`, `wind_speed=0.0`, `precipitation_type="none"` | Configure atmosphere. `cloud_density`: 0.0–1.0. `precipitation_type`: `none` \| `rain` \| `snow`. Opens Visual Settings — values are passed for reference. |
+| `enscape_set_atmosphere` | — | Open Enscape's Visual Settings dialog (`Enscape_VisualSettings`); atmosphere is adjusted there. Nothing is applied programmatically. |
 | `enscape_create_view` | `name` | Save the current Enscape camera position as a named view that can be recalled later. |
 
 ---
@@ -1980,16 +1982,16 @@ Requires [Enscape](https://enscape3d.com) to be installed and licensed. Each too
 
 | Tool | Description |
 |---|---|
-| `export_step` | Export selected objects or entire model to STEP format with configurable application protocol (AP214/AP242) and tolerance settings. |
-| `export_iges` | Export to IGES format with surface tolerance and entity type controls for CAD interchange. |
-| `export_dwg` | Export to DWG/DXF format with Rhino version targeting and 2D/3D geometry control. |
-| `export_obj` | Export to OBJ/MTL with material and texture coordinate export controls. |
-| `export_fbx` | Export to FBX with animation, materials, and texture embedding options. |
-| `export_glb` | Export to GLB/glTF with embedded textures, Draco compression, and material export controls. |
+| `export_step` | Export selected objects or entire model to STEP with a configurable application protocol (`schema`: AP203/AP214/AP242). Uses the document tolerance (Rhino has no STEP tolerance option). Reports `applied` / `not_applied`. |
+| `export_iges` | Export to IGES with a configurable `tolerance` (`FileIgsWriteOptions.Tolerance`). Reports `applied` / `not_applied`. |
+| `export_dwg` | Export to DWG/DXF with AutoCAD version targeting (`autocad_version`: 2000–2018). Reports `applied` / `not_applied`. |
+| `export_obj` | Export to OBJ/MTL with material definition and texture coordinate export controls. Reports `applied` / `not_applied`. |
+| `export_fbx` | Export to FBX with `file_type` (`binary7` \| `binary6` \| `ascii7` \| `ascii6`). Textures are always external references. Reports `applied` / `not_applied`. |
+| `export_glb` | Export to GLB (textures embedded) or glTF (external resources) with Draco compression and material export controls. Reports `applied` / `not_applied`. |
 | `export_3dm` | Export to native Rhino 3DM with version targeting, selective object export by layer/type, and embedded metadata notes. |
 | `export_stl` | Export to STL with binary/ASCII format control and mesh tolerance settings. |
-| `export_3mf` | Export to 3MF with unit and tolerance settings for additive manufacturing. |
-| `convert_image` | Convert viewport or file images between PNG, JPG, BMP, TIFF formats with quality control. |
+| `export_3mf` | Export to 3MF using the document's current render-mesh settings (Rhino exposes no 3MF mesh-quality option). |
+| `convert_image` | Convert image files between PNG, JPG, BMP, TIFF, GIF with JPEG quality control; one of `width`/`height` resizes preserving aspect ratio. |
 | `export_viewport_image` | Capture the active viewport to an image file with display mode, resolution, and scale options. |
 
 ---
@@ -2196,18 +2198,18 @@ Requires env vars — see [Studio Pipeline Env Vars](#studio-pipeline-env-vars).
 
 Requires [VisualARQ](https://www.visualarq.com) to be installed and licensed. Each tool checks that VisualARQ is loaded. Install instructions: `install_plugin("VisualARQ")`.
 
-VisualARQ adds parametric BIM objects (walls, slabs, columns, stairs, etc.) directly inside Rhino. All VisualARQ objects are standard Rhino objects with embedded BIM data — no separate file format required.
+VisualARQ adds parametric BIM objects (walls, slabs, columns, stairs, etc.) directly inside Rhino. All VisualARQ objects are standard Rhino objects with embedded BIM data — no separate file format required. VisualARQ has no public scripting API: the creation tools below launch the interactive `va*` commands, which then expect mouse input, so geometry, dimensions and styles cannot be passed programmatically.
 
 | Tool | Parameters | Description |
 |---|---|---|
-| `varq_create_wall` | `start_pt=[x,y,z]`, `end_pt=[x,y,z]`, `height=3.0`, `style_name="Basic Wall"`, `layer=None` | Create a VisualARQ wall between two 3D points. `height` is in document units. The wall uses the named style from the VisualARQ style library. |
-| `varq_add_opening` | `wall_id`, `opening_type="window"`, `position_along_wall=0.5`, `width=1.0`, `height=2.0`, `style_name=None` | Add a window or door to an existing wall. `opening_type`: `window` \| `door`. `position_along_wall` is a 0.0–1.0 fraction of the wall's length from the start point. |
-| `varq_create_slab` | `boundary_curve_ids=[...]`, `thickness=0.3`, `style_name="Basic Slab"`, `layer=None` | Create a VisualARQ floor or ceiling slab from one or more closed boundary curves. |
-| `varq_create_column` | `position=[x,y,z]`, `height=3.0`, `style_name="Basic Column"`, `layer=None` | Create a structural column at a 3D point with the specified height. |
-| `varq_create_stair` | `start_pt=[x,y,z]`, `direction=[x,y,z]`, `width=1.2`, `rise=0.175`, `run=0.28`, `story_count=1`, `style_name="Basic Stair"` | Create a stair. `rise` is the vertical step height (m), `run` is the horizontal tread depth (m), `direction` is a unit vector for stair direction. |
-| `varq_create_railing` | `path_curve_id`, `height=1.0`, `style_name="Basic Railing"` | Create a railing along a curve path. The curve can be straight, curved, or follow a stair profile. |
-| `varq_set_level` | `name`, `elevation=0.0` | Create or update a VisualARQ building level (floor/storey). Levels control visibility, object assignment, and IFC storey export. |
-| `varq_export_ifc` | `output_path`, `ifc_version="IFC4"` | Export the entire model to IFC format. `ifc_version`: `IFC2x3` \| `IFC4`. VisualARQ objects export with full IFC type mappings (IfcWall, IfcSlab, IfcColumn, etc.). |
+| `varq_create_wall` | — | Launch the interactive `_vaWall` command. VisualARQ has no scripting API; points, height and style are chosen with the mouse. |
+| `varq_add_opening` | `opening_type="window"` | Launch the interactive `_vaWindow` or `_vaDoor` command. `opening_type`: `window` \| `door`. Wall, position, size and style are chosen with the mouse. |
+| `varq_create_slab` | — | Launch the interactive `_vaSlab` command; boundary, thickness and style are chosen with the mouse. |
+| `varq_create_column` | — | Launch the interactive `_vaColumn` command; position, height and style are chosen with the mouse. |
+| `varq_create_stair` | — | Launch the interactive `_vaStair` command; geometry and style are chosen with the mouse. |
+| `varq_create_railing` | — | Launch the interactive `_vaRailing` command; path, height and style are chosen with the mouse. |
+| `varq_set_level` | — | Open the interactive `_vaLevels` dialog; levels are edited there. |
+| `varq_export_ifc` | `output_path` | Export the model to IFC via `_vaExportIFC`. The IFC schema version comes from VisualARQ's IFC Export Options dialog; the command documents no version option. |
 | `varq_get_object_properties` | `object_id` | Get VisualARQ type, style, level assignment, and IFC properties for any object by GUID. Returns `{"type": "...", "style": "...", "level": "..."}`. |
 | `varq_list_styles` | `object_type="wall"` | List available VisualARQ styles for a given object type. `object_type`: `wall` \| `door` \| `window` \| `slab` \| `column` \| `stair` \| `railing`. |
 
@@ -2217,18 +2219,18 @@ VisualARQ adds parametric BIM objects (walls, slabs, columns, stairs, etc.) dire
 
 Requires [Lands Design](https://www.lands-design.com) to be installed and licensed. Each tool checks that Lands Design is loaded. Install instructions: `install_plugin("Lands Design")`.
 
-Lands Design adds landscape-specific objects (plants, terrain, paths, water) directly inside Rhino, with a built-in plant species database and seasonal display.
+Lands Design adds landscape-specific objects (plants, terrain, paths, water) directly inside Rhino, with a built-in plant species database and seasonal display. Lands Design has no public scripting API: the placement tools below launch the interactive `la*` commands, which then expect mouse input, so plants, positions and geometry cannot be passed programmatically.
 
 | Tool | Parameters | Description |
 |---|---|---|
-| `lands_place_plant` | `plant_name`, `position=[x,y,z]`, `rotation_degrees=0.0`, `scale=1.0` | Place a plant from the Lands Design library at a position. `plant_name` must match a name from the Lands Design plant database. |
-| `lands_place_tree` | `species_name`, `position=[x,y,z]`, `trunk_height=2.0`, `canopy_radius=3.0` | Place a tree from the Lands Design species library. `trunk_height` and `canopy_radius` are in document units. |
-| `lands_create_terrain` | `boundary_curve_id`, `source_type="contours"`, `source_id=None` | Generate a terrain surface from existing geometry. `source_type`: `contours` (interpolates from contour curves) \| `points` (from a point cloud). `source_id` is the GUID of the source geometry. |
-| `lands_create_path` | `centerline_curve_id`, `width=2.0`, `surface_type="Asphalt"` | Create a path or road surface along a curve. `surface_type` controls the material display (e.g. `Asphalt`, `Gravel`, `Grass`, `Paving`). |
-| `lands_create_water` | `boundary_curve_id`, `water_level_z=0.0` | Create a Lands Design water surface within a closed boundary curve. `water_level_z` sets the elevation of the water plane. |
-| `lands_get_plant_database` | `search_query=""`, `category=""` | Browse the Lands Design plant species database. Filter by search term and/or category (e.g. `"Trees"`, `"Shrubs"`, `"Groundcovers"`). Use this to find exact plant names before calling `lands_place_plant`. |
+| `lands_place_plant` | — | Launch the interactive `_laPlant` command. Lands Design has no scripting API; species, position and size are chosen with the mouse. |
+| `lands_place_tree` | — | Launch the interactive `_laPlant` command (trees are plants); species and placement are chosen with the mouse. |
+| `lands_create_terrain` | — | Launch the interactive `_laTerrain` command; boundary and source geometry are picked with the mouse. |
+| `lands_create_path` | — | Launch the interactive `_laPath` command; centerline, width and surface are chosen with the mouse. |
+| `lands_create_water` | — | Launch the interactive `_laWater` command; boundary and level are chosen with the mouse. |
+| `lands_get_plant_database` | — | Open the interactive `_laPlantDatabase` window. No plant list is returned and no filtering can be scripted. |
 | `lands_set_season` | `season="summer"` | Set the display season for all Lands Design plants and trees in the scene. `season`: `spring` \| `summer` \| `autumn` \| `winter`. Affects 3D representation and texture. |
-| `lands_export_plant_list` | `output_path`, `format="csv"` | Export a plant schedule (quantity takeoff) from the current model. `format`: `csv` \| `xlsx`. The schedule includes species name, count, size parameters, and location data. |
+| `lands_export_plant_list` | `output_path` | Export a plant schedule via `_laExportPlantList`; the format follows the file extension (`.csv`, `.xlsx`). |
 
 ---
 
@@ -2421,6 +2423,25 @@ Lands Design adds landscape-specific objects (plants, terrain, paths, water) dir
 These tools use the public RhinoMCP wire protocol names so agents trained on other MCP servers work without prompting:
 
 `create_object`, `create_objects`, `get_objects`, `get_object_info`, `get_selected_objects_info`, `modify_object`, `modify_objects`, `delete_object`, `select_objects`, `create_layer`, `delete_layer`, `get_or_set_current_layer`, `capture_viewport`, `undo`, `redo`, `execute_rhinoscript_python_code`, `execute_rhinocommon_csharp_code`, `get_document_summary`, `send_rhinomcp_plugin_command`, `get_commands`, `run_command`
+
+---
+
+## Skills
+
+The [`skills/`](skills/README.md) folder holds ready-made prompt packages in the Agent Skills format for Claude Code, Codex CLI, and ChatGPT Skill Creator. Each one was written against the tool source, so it carries the real parameter names, return keys, and the `applied` / `not_applied` reporting each tool returns.
+
+| Skill | Covers |
+|---|---|
+| `rhino-mcp-basics` | Response shapes, units, risky defaults, undo, scripting rules |
+| `rhino-text-to-3d` | Brief to model, with the full `create_rhino_scene` type table |
+| `rhino-image-to-3d` | Trace plans and PDFs to scale, or generate meshes from photos |
+| `rhino-document-reading` | PDFs, drawings, spreadsheets, SVG, Word, images |
+| `rhino-grasshopper-parametric` | GH1 and GH2 build loops, script components, plugin helpers |
+| `rhino-landscape-site-plan` | Terrain, paths, water, planting blocks, schedules |
+| `rhino-urban-massing-studio` | Typologies, FAR, solar, AI renders, reports |
+| `rhino-rendering-and-export` | Materials, HDRI, views, image capture, file export |
+
+Install by copying the folders into `~/.claude/skills/` or `~/.codex/skills/`, or paste a `SKILL.md` into ChatGPT Skill Creator. `uv run python scripts/check_skill_tools.py` verifies every tool name a skill mentions exists in the code.
 
 ---
 

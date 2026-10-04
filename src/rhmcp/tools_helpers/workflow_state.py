@@ -10,6 +10,7 @@ import threading
 @dataclass
 class WorkflowState:
     current_typology: str | None = None
+    current_massing_layer: str | None = None
     current_slider_guids: dict = field(default_factory=dict)
     current_metrics_guid: str | None = None
     current_bake_guid: str | None = None

@@ -5,6 +5,29 @@ Versioning follows [Semantic Versioning](https://semver.org/).
 
 ---
 
+## [0.19.0] — 2026-10-04
+
+### Added
+- `skills/` folder: eight Agent Skills (basics, text-to-3d, image-to-3d, document-reading, grasshopper-parametric, landscape-site-plan, urban-massing-studio, rendering-and-export) for Claude Code, Codex CLI, and ChatGPT Skill Creator, plus `scripts/check_skill_tools.py` to verify the tool names they reference.
+- `set_environment_map` now creates a render environment from a local HDR/EXR and assigns it to background, skylighting, and reflections, reporting anything unsupported under `not_applied`.
+- `export_fbx` gains `file_type` (binary7 | binary6 | ascii7 | ascii6). `export_dwg` accepts `2000`. `create_pbr_material` applies `ior` as opacity IOR. V-Ray render resolution and `quality_preset` apply through the V-Ray Python module when present.
+- `health_check` is documented in the README tool table.
+
+### Fixed
+- `gh2_connect` always failed: the server now sends `from_guid`/`to_guid`, and GH2 ports accept a nickname or an integer index everywhere.
+- `gh2_apply_graph` honours its documented contract: `type_name`, inline `{type: "slider"}` items, and `from_key`/`to_key` wires resolved against components placed in the same call. `gh_migrate_to_gh2` works as a result. Placement verifies the object was added to the document.
+- `gh2_describe_component` accepts `instance_guid` and returns live port names.
+- `gh_add_script_component` reshapes the component's input and output ports to the requested names and returns the final lists; failure to inject code is an explicit error.
+- `capture_rhino_view` reads the image from `script_result`, which the backend actually populates.
+- `urban_run_studio_pipeline` derives the solar layer from the baked massing layer, the climate zone from the brief, and the FAR from current metrics instead of hard-coded values. `workflow_state` gains `current_massing_layer`.
+- `convert_image` preserves aspect ratio when only one dimension is given. `set_render_settings` applies `ground_plane_altitude` independently.
+- All GH, GH2, and intelligence tool docstrings that were truncated mid-sentence are complete.
+
+### Changed
+- Every tool that accepted parameters it never applied either applies them or no longer accepts them, and reports `applied` / `not_applied`. Removed: `export_fbx` version and texture flags, `export_obj` `weld_angle`, `export_step` `tolerance`, `export_iges` `trim_type`, `export_dwg` `export_layout`, `export_3mf` `mesh_quality`, `export_glb` `embed_textures`, PBR `bump_scale` / `displacement_scale`, render `engine` / `samples` / `enable_shadows` / `ambient_occlusion`, V-Ray material physics, light placement, environment, and `compressed` params, Enscape sizes and atmosphere params, and every Lands Design and VisualARQ geometric parameter. Lands Design and VisualARQ placement tools are documented as interactive launchers; season, plant list export, and IFC export remain headless.
+- V-Ray command macros use the current documented names (`vrayRender`, `vrayLight`, `vrayShowAssetEditor`, `vrayExportVRScene`).
+- Tool count remains 358.
+
 ## [0.18.0] — 2026-09-07
 
 ### Changed

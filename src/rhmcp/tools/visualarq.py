@@ -1,4 +1,10 @@
-"""VisualARQ architectural BIM tools for Rhino."""
+"""VisualARQ architectural BIM tools for Rhino.
+
+VisualARQ has no public scripting API and its ``va*`` commands are
+interactive: the creation tools below only launch the command, which then
+expects mouse input.  Geometry, dimensions and styles cannot be passed
+programmatically, so those parameters are not offered.
+"""
 
 from __future__ import annotations
 
@@ -84,201 +90,117 @@ else:
     return _py(code)
 
 
+def _interactive(command: str, **extra: object) -> dict[str, object]:
+    result = _run(command)
+    ok, error = _outcome(result)
+    out: dict[str, object] = {
+        "success": ok,
+        "command": command,
+        "note": (
+            f"{command} is an interactive VisualARQ command that expects mouse "
+            "input; nothing can be applied programmatically."
+        ),
+        "result": result,
+    }
+    out.update(extra)
+    if error:
+        out["error"] = error
+    return out
+
+
 def register(mcp: FastMCP) -> None:
     @mcp.tool(annotations=ToolAnnotations(title="VisualARQ: Create Wall", destructiveHint=True))
-    def varq_create_wall(
-        start_pt: list[float],
-        end_pt: list[float],
-        height: float = 3.0,
-        style_name: str = "Basic Wall",
-        layer: str | None = None,
-    ) -> dict[str, object]:
-        """
-        Create a VisualARQ wall between two points.
-        start_pt / end_pt: [x, y, z]. height in document units.
+    def varq_create_wall() -> dict[str, object]:
+        """Launch the interactive ``_vaWall`` command.
+
+        VisualARQ has no scripting API: wall points, height and style are
+        chosen with the mouse; nothing can be passed programmatically.
         """
         err = _check()
         if err:
             return {"success": False, "message": err}
-        res = _va_script_result("creating walls")
-        ok, error = _outcome(res)
-        out: dict[str, object] = {
-            "success": ok,
-            "requested": {"start_pt": start_pt, "end_pt": end_pt, "height": height, "style": style_name},
-            "result": res,
-        }
-        if error:
-            out["error"] = error
-        return out
+        return _interactive("_vaWall", applied={}, not_applied={})
 
     @mcp.tool(annotations=ToolAnnotations(title="VisualARQ: Add Opening (Window/Door)", destructiveHint=True))
-    def varq_add_opening(
-        wall_id: str,
-        opening_type: str = "window",
-        position_along_wall: float = 0.5,
-        width: float = 1.0,
-        height: float = 2.0,
-        style_name: str | None = None,
-    ) -> dict[str, object]:
-        """
-        Add a window or door to a VisualARQ wall.
-        opening_type: window | door.
-        position_along_wall: 0.0-1.0 (fraction along wall length).
+    def varq_add_opening(opening_type: str = "window") -> dict[str, object]:
+        """Launch the interactive ``_vaWindow`` or ``_vaDoor`` command.
+
+        opening_type: window | door. The host wall, position, size and style
+        are chosen with the mouse; nothing can be passed programmatically.
         """
         err = _check()
         if err:
             return {"success": False, "message": err}
-        cmd = "vaWindow" if opening_type.lower() == "window" else "vaDoor"
-        result = _run(f"_{cmd}")
-        ok, error = _outcome(result)
-        out: dict[str, object] = {
-            "success": ok,
-            "opening_type": opening_type,
-            "note": (
-                f"_{cmd} is an interactive VisualARQ command that expects mouse "
-                "input; wall_id, position_along_wall, width, height, and "
-                "style_name could not be applied programmatically."
-            ),
-            "result": result,
-        }
-        if error:
-            out["error"] = error
-        return out
+        cmd = "_vaWindow" if opening_type.lower() == "window" else "_vaDoor"
+        return _interactive(cmd, opening_type=opening_type)
 
     @mcp.tool(annotations=ToolAnnotations(title="VisualARQ: Create Slab", destructiveHint=True))
-    def varq_create_slab(
-        boundary_curve_ids: list[str],
-        thickness: float = 0.3,
-        style_name: str = "Basic Slab",
-        layer: str | None = None,
-    ) -> dict[str, object]:
-        """Create a VisualARQ floor slab from closed boundary curves."""
+    def varq_create_slab() -> dict[str, object]:
+        """Launch the interactive ``_vaSlab`` command.
+
+        Boundary curves, thickness and style are chosen with the mouse;
+        nothing can be passed programmatically.
+        """
         err = _check()
         if err:
             return {"success": False, "message": err}
-        result = _run("_vaSlab")
-        ok, error = _outcome(result)
-        out: dict[str, object] = {
-            "success": ok,
-            "note": (
-                "_vaSlab is an interactive VisualARQ command that expects mouse "
-                "input; boundary_curve_ids, thickness, and style_name could not "
-                "be applied programmatically."
-            ),
-            "result": result,
-        }
-        if error:
-            out["error"] = error
-        return out
+        return _interactive("_vaSlab")
 
     @mcp.tool(annotations=ToolAnnotations(title="VisualARQ: Create Column", destructiveHint=True))
-    def varq_create_column(
-        position: list[float],
-        height: float = 3.0,
-        style_name: str = "Basic Column",
-        layer: str | None = None,
-    ) -> dict[str, object]:
-        """Create a VisualARQ structural column at a point."""
+    def varq_create_column() -> dict[str, object]:
+        """Launch the interactive ``_vaColumn`` command.
+
+        Position, height and style are chosen with the mouse; nothing can be
+        passed programmatically.
+        """
         err = _check()
         if err:
             return {"success": False, "message": err}
-        result = _run("_vaColumn")
-        ok, error = _outcome(result)
-        out: dict[str, object] = {
-            "success": ok,
-            "note": (
-                "_vaColumn is an interactive VisualARQ command that expects mouse "
-                "input; position, height, and style_name could not be applied "
-                "programmatically."
-            ),
-            "result": result,
-        }
-        if error:
-            out["error"] = error
-        return out
+        return _interactive("_vaColumn")
 
     @mcp.tool(annotations=ToolAnnotations(title="VisualARQ: Create Stair", destructiveHint=True))
-    def varq_create_stair(
-        start_pt: list[float],
-        direction: list[float],
-        width: float = 1.2,
-        rise: float = 0.175,
-        run: float = 0.28,
-        story_count: int = 1,
-        style_name: str = "Basic Stair",
-    ) -> dict[str, object]:
-        """Create a VisualARQ stair. direction: [x,y,z] unit vector for stair direction."""
+    def varq_create_stair() -> dict[str, object]:
+        """Launch the interactive ``_vaStair`` command.
+
+        Start point, direction, width, rise/run and style are chosen with the
+        mouse; nothing can be passed programmatically.
+        """
         err = _check()
         if err:
             return {"success": False, "message": err}
-        result = _run("_vaStair")
-        ok, error = _outcome(result)
-        out: dict[str, object] = {
-            "success": ok,
-            "note": (
-                "_vaStair is an interactive VisualARQ command that expects mouse "
-                "input; start_pt, direction, width, rise, run, story_count, and "
-                "style_name could not be applied programmatically."
-            ),
-            "result": result,
-        }
-        if error:
-            out["error"] = error
-        return out
+        return _interactive("_vaStair")
 
     @mcp.tool(annotations=ToolAnnotations(title="VisualARQ: Create Railing", destructiveHint=True))
-    def varq_create_railing(
-        path_curve_id: str,
-        height: float = 1.0,
-        style_name: str = "Basic Railing",
-    ) -> dict[str, object]:
-        """Create a VisualARQ railing along a curve path."""
+    def varq_create_railing() -> dict[str, object]:
+        """Launch the interactive ``_vaRailing`` command.
+
+        Path curve, height and style are chosen with the mouse; nothing can
+        be passed programmatically.
+        """
         err = _check()
         if err:
             return {"success": False, "message": err}
-        result = _run("_vaRailing")
-        ok, error = _outcome(result)
-        out: dict[str, object] = {
-            "success": ok,
-            "note": (
-                "_vaRailing is an interactive VisualARQ command that expects mouse "
-                "input; path_curve_id, height, and style_name could not be "
-                "applied programmatically."
-            ),
-            "result": result,
-        }
-        if error:
-            out["error"] = error
-        return out
+        return _interactive("_vaRailing")
 
     @mcp.tool(annotations=ToolAnnotations(title="VisualARQ: Set Level", destructiveHint=True))
-    def varq_set_level(name: str, elevation: float = 0.0) -> dict[str, object]:
-        """Create or update a VisualARQ building level."""
+    def varq_set_level() -> dict[str, object]:
+        """Open the interactive ``_vaLevels`` dialog.
+
+        Level names and elevations are edited in the dialog; nothing can be
+        passed programmatically.
+        """
         err = _check()
         if err:
             return {"success": False, "message": err}
-        result = _run("_vaLevels")
-        ok, error = _outcome(result)
-        out: dict[str, object] = {
-            "success": ok,
-            "note": (
-                "_vaLevels opens the interactive Levels dialog; name and elevation "
-                "could not be applied programmatically."
-            ),
-            "result": result,
-        }
-        if error:
-            out["error"] = error
-        return out
+        return _interactive("_vaLevels")
 
     @mcp.tool(annotations=ToolAnnotations(title="VisualARQ: Export IFC", destructiveHint=True))
-    def varq_export_ifc(
-        output_path: str,
-        ifc_version: str = "IFC4",
-    ) -> dict[str, object]:
-        """
-        Export the model to IFC format.
-        ifc_version: IFC2x3 | IFC4.
+    def varq_export_ifc(output_path: str) -> dict[str, object]:
+        """Export the model to IFC via ``_vaExportIFC``.
+
+        The IFC schema version (IFC2x3 / IFC4) is taken from VisualARQ's IFC
+        Export Options dialog; the command documents no version option, so
+        none is offered here.
         """
         err = _check()
         if err:
@@ -289,7 +211,6 @@ def register(mcp: FastMCP) -> None:
         out: dict[str, object] = {
             "success": ok,
             "output_path": output_path,
-            "ifc_version": ifc_version,
             "result": result,
         }
         if error:

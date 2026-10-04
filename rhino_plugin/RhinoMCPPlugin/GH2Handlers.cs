@@ -247,7 +247,12 @@ public static class GH2Handlers
         return result;
     }
 
-    /// <summary>gh2_apply_graph — atomic: place components + sliders + wires in one call.</summary>
+    /// <summary>
+    /// gh2_apply_graph — place components + sliders + wires in one call.
+    /// components: [{key, type_name|name|component_guid, x, y} | {key, type:"slider", min, max, value, decimals, x, y}]
+    /// wires: [{from_key|from_guid, from_output, to_key|to_guid, to_input}] — ports are nickname or index.
+    /// Returns {ok, placed: {key: instance_guid}, wired, errors}.
+    /// </summary>
     public static object ApplyGraph(Dictionary<string, JsonElement> p)
     {
         if (!Gh2Available()) return NotAvailable();
@@ -274,17 +279,20 @@ public static class GH2Handlers
                             var compDict = compEl.EnumerateObject()
                                 .ToDictionary(kv => kv.Name, kv => kv.Value);
                             string compKey = compDict.TryGetValue("key", out var keyEl) ? keyEl.GetString() ?? "" : "";
-                            var placed = PlaceComponentInternal(doc, compDict);
-                            if (placed is string guid)
+                            bool isSlider = compDict.TryGetValue("type", out var typeEl)
+                                && typeEl.ValueKind == JsonValueKind.String
+                                && string.Equals(typeEl.GetString(), "slider", StringComparison.OrdinalIgnoreCase);
+                            var placed = isSlider ? PlaceSliderInternal(doc, compDict) : PlaceComponentInternal(doc, compDict);
+                            if (placed is string guid && !guid.StartsWith("ERROR:", StringComparison.Ordinal))
                                 placedMap[compKey] = guid;
                             else
-                                errors.Add(placed?.ToString() ?? "unknown error placing component");
+                                errors.Add($"{compKey}: {placed?.ToString() ?? "unknown error placing component"}");
                         }
                         catch (Exception ex) { errors.Add(ex.Message); }
                     }
                 }
 
-                // Place sliders
+                // Legacy: separate top-level sliders array (inline {type:"slider"} items are preferred)
                 if (p.TryGetValue("sliders", out var slidersEl) && slidersEl.ValueKind == JsonValueKind.Array)
                 {
                     foreach (var sliderEl in slidersEl.EnumerateArray())
@@ -295,10 +303,10 @@ public static class GH2Handlers
                                 .ToDictionary(kv => kv.Name, kv => kv.Value);
                             string sliderKey = sliderDict.TryGetValue("key", out var keyEl) ? keyEl.GetString() ?? "" : "";
                             var placed = PlaceSliderInternal(doc, sliderDict);
-                            if (placed is string guid)
+                            if (placed is string guid && !guid.StartsWith("ERROR:", StringComparison.Ordinal))
                                 placedMap[sliderKey] = guid;
                             else
-                                errors.Add(placed?.ToString() ?? "unknown error placing slider");
+                                errors.Add($"{sliderKey}: {placed?.ToString() ?? "unknown error placing slider"}");
                         }
                         catch (Exception ex) { errors.Add(ex.Message); }
                     }
@@ -316,7 +324,7 @@ public static class GH2Handlers
                             var wireDict = wireEl.EnumerateObject()
                                 .ToDictionary(kv => kv.Name, kv => kv.Value);
                             int prevErrorCount = wireErrors.Count;
-                            ConnectInternal(doc, wireDict, wireErrors);
+                            ConnectInternal(doc, wireDict, wireErrors, placedMap);
                             if (wireErrors.Count == prevErrorCount)
                                 wiredCount++;
                         }
@@ -350,7 +358,7 @@ public static class GH2Handlers
                     throw new InvalidOperationException("No active GH2 document");
 
                 var placed = PlaceComponentInternal(doc, p);
-                if (placed is string guid)
+                if (placed is string guid && !guid.StartsWith("ERROR:", StringComparison.Ordinal))
                     result = new { ok = true, instance_guid = guid };
                 else
                     result = new { ok = false, error = placed?.ToString() ?? "Failed to place component" };
@@ -378,7 +386,7 @@ public static class GH2Handlers
                     throw new InvalidOperationException("No active GH2 document");
 
                 var placed = PlaceSliderInternal(doc, p);
-                if (placed is string guid)
+                if (placed is string guid && !guid.StartsWith("ERROR:", StringComparison.Ordinal))
                     result = new { ok = true, instance_guid = guid };
                 else
                     result = new { ok = false, error = placed?.ToString() ?? "Failed to place slider" };
@@ -482,6 +490,39 @@ public static class GH2Handlers
         {
             try
             {
+                // Placed instance: describe the live object (name, nickname, current params)
+                var instanceStr = p.String("instance_guid");
+                if (!string.IsNullOrWhiteSpace(instanceStr))
+                {
+                    if (!Guid.TryParse(instanceStr, out var instanceGuid))
+                    {
+                        result = new { ok = false, error = $"Invalid instance_guid: {instanceStr}" };
+                        return;
+                    }
+                    var doc = GetActiveGH2Doc();
+                    if (doc == null)
+                        throw new InvalidOperationException("No active GH2 document");
+                    var obj = FindDocObject(doc, instanceGuid);
+                    if (obj == null)
+                    {
+                        result = new { ok = false, error = $"Component {instanceGuid} not found on the active GH2 canvas" };
+                        return;
+                    }
+                    var objType = obj.GetType();
+                    result = new
+                    {
+                        ok            = true,
+                        instance_guid = instanceGuid.ToString(),
+                        name          = objType.GetProperty("Name")?.GetValue(obj)?.ToString() ?? "",
+                        nick_name     = objType.GetProperty("NickName")?.GetValue(obj)?.ToString() ?? "",
+                        type          = objType.Name,
+                        description   = objType.GetProperty("Description")?.GetValue(obj)?.ToString() ?? "",
+                        inputs        = DescribeParams(GetParams(obj, "Input")),
+                        outputs       = DescribeParams(GetParams(obj, "Output"))
+                    };
+                    return;
+                }
+
                 // Try to find a component server or proxy for describing by GUID/name
                 var guidStr = p.String("component_guid");
                 var name    = p.String("name");
@@ -822,6 +863,8 @@ public static class GH2Handlers
 
             var guidStr = cp.TryGetValue("component_guid", out var cgEl) ? cgEl.GetString() : null;
             var name    = cp.TryGetValue("name",           out var cnEl) ? cnEl.GetString() : null;
+            if (string.IsNullOrEmpty(name) && cp.TryGetValue("type_name", out var tnEl))
+                name = tnEl.GetString();
 
             object? compObj = null;
 
@@ -940,8 +983,9 @@ public static class GH2Handlers
                 catch { try { addMethod.Invoke(doc, new object[] { compObj }); } catch { } }
             }
 
-            var instanceGuid = compType.GetProperty("InstanceGuid")?.GetValue(compObj)?.ToString()
-                               ?? Guid.NewGuid().ToString();
+            var instanceGuid = compType.GetProperty("InstanceGuid")?.GetValue(compObj)?.ToString();
+            if (instanceGuid == null || !Guid.TryParse(instanceGuid, out var placedGuid) || FindDocObject(doc, placedGuid) == null)
+                return "ERROR: GH2 doc.AddObject did not add the component";
             return instanceGuid;
         }
         catch (Exception ex)
@@ -1032,8 +1076,9 @@ public static class GH2Handlers
                 catch { try { addMethod.Invoke(doc, new object[] { slider }); } catch { } }
             }
 
-            var instanceGuid = sliderType2.GetProperty("InstanceGuid")?.GetValue(slider)?.ToString()
-                               ?? Guid.NewGuid().ToString();
+            var instanceGuid = sliderType2.GetProperty("InstanceGuid")?.GetValue(slider)?.ToString();
+            if (instanceGuid == null || !Guid.TryParse(instanceGuid, out var placedGuid) || FindDocObject(doc, placedGuid) == null)
+                return "ERROR: GH2 doc.AddObject did not add the slider";
             return instanceGuid;
         }
         catch (Exception ex)
@@ -1042,46 +1087,119 @@ public static class GH2Handlers
         }
     }
 
+    /// <summary>Finds a placed object in the GH2 doc by instance GUID via FindObject, or null.</summary>
+    private static object? FindDocObject(object doc, Guid guid)
+    {
+        var docType = doc.GetType();
+        var findMethod = docType.GetMethod("FindObject", new[] { typeof(Guid), typeof(bool) })
+                      ?? docType.GetMethod("FindObject", new[] { typeof(Guid) });
+        if (findMethod == null)
+            throw new InvalidOperationException("GH2 FindObject API not available in this build");
+        return findMethod.GetParameters().Length == 2
+            ? findMethod.Invoke(doc, new object[] { guid, false })
+            : findMethod.Invoke(doc, new object[] { guid });
+    }
+
+    /// <summary>Returns obj.Params.{Input|Output} as a list, or an empty list.</summary>
+    private static List<object> GetParams(object obj, string side)
+    {
+        var paramsObj = obj.GetType().GetProperty("Params")?.GetValue(obj);
+        var list = paramsObj?.GetType().GetProperty(side)?.GetValue(paramsObj) as System.Collections.IEnumerable;
+        return list?.Cast<object>().ToList() ?? new List<object>();
+    }
+
+    private static List<object> DescribeParams(List<object> parameters) =>
+        parameters.Select((prm, i) =>
+        {
+            var t = prm.GetType();
+            return (object)new
+            {
+                index     = i,
+                name      = t.GetProperty("Name")?.GetValue(prm)?.ToString() ?? "",
+                nick_name = t.GetProperty("NickName")?.GetValue(prm)?.ToString() ?? "",
+                type      = t.GetProperty("TypeName")?.GetValue(prm)?.ToString() ?? t.Name
+            };
+        }).ToList();
+
+    /// <summary>
+    /// Resolves a wire endpoint to a GUID string: {prefix}_guid, {prefix}_instance, or
+    /// {prefix}_key looked up in placedMap. Returns null (with an error) when unresolvable.
+    /// </summary>
+    private static string? ResolveEndpointGuid(IDictionary<string, JsonElement> wp, string prefix,
+        IReadOnlyDictionary<string, string>? placedMap, List<string> errors)
+    {
+        foreach (var suffix in new[] { "_guid", "_instance" })
+        {
+            if (wp.TryGetValue(prefix + suffix, out var el) && el.ValueKind == JsonValueKind.String
+                && !string.IsNullOrWhiteSpace(el.GetString()))
+                return el.GetString();
+        }
+        if (wp.TryGetValue(prefix + "_key", out var keyEl) && keyEl.ValueKind == JsonValueKind.String)
+        {
+            var key = keyEl.GetString() ?? "";
+            if (placedMap != null && placedMap.TryGetValue(key, out var guid))
+                return guid;
+            errors.Add(placedMap == null
+                ? $"{prefix}_key is only valid inside gh2_apply_graph; use {prefix}_guid"
+                : $"{prefix}_key '{key}' was not placed in this call");
+            return null;
+        }
+        errors.Add($"{prefix}_guid is required");
+        return null;
+    }
+
+    /// <summary>
+    /// Resolves a port reference (JSON number = 0-based index, string = nickname, or a
+    /// numeric string = index) against a param list. Returns null if not found.
+    /// </summary>
+    private static object? ResolvePort(List<object> parameters, JsonElement portEl, out string label)
+    {
+        label = portEl.ToString();
+        if (portEl.ValueKind == JsonValueKind.Number && portEl.TryGetInt32(out var idx))
+            return idx >= 0 && idx < parameters.Count ? parameters[idx] : null;
+        if (portEl.ValueKind != JsonValueKind.String) return null;
+
+        var text = portEl.GetString() ?? "";
+        label = text;
+        var byName = parameters.FirstOrDefault(prm =>
+            string.Equals(prm.GetType().GetProperty("NickName")?.GetValue(prm)?.ToString(), text, StringComparison.OrdinalIgnoreCase)
+            || string.Equals(prm.GetType().GetProperty("Name")?.GetValue(prm)?.ToString(), text, StringComparison.OrdinalIgnoreCase));
+        if (byName != null) return byName;
+        if (int.TryParse(text, out var strIdx) && strIdx >= 0 && strIdx < parameters.Count)
+            return parameters[strIdx];
+        return null;
+    }
+
     /// <summary>
     /// Wires output→input in the GH2 doc. Appends error messages to errors list.
+    /// Endpoints: from_guid|from_instance|from_key and to_guid|to_instance|to_key
+    /// (keys resolve against placedMap). Ports: nickname string or 0-based index.
     /// </summary>
-    private static void ConnectInternal(object doc, IDictionary<string, JsonElement> wp, List<string> errors)
+    private static void ConnectInternal(object doc, IDictionary<string, JsonElement> wp, List<string> errors,
+        IReadOnlyDictionary<string, string>? placedMap = null)
     {
-        var fromGuidStr  = wp.TryGetValue("from_guid",   out var fgEl)  ? fgEl.GetString()  : null;
-        var toGuidStr    = wp.TryGetValue("to_guid",     out var tgEl)  ? tgEl.GetString()  : null;
-        var fromOutput   = wp.TryGetValue("from_output", out var foEl)  ? foEl.GetString()  : null;
-        var toInput      = wp.TryGetValue("to_input",    out var tiEl)  ? tiEl.GetString()  : null;
+        var fromGuidStr = ResolveEndpointGuid(wp, "from", placedMap, errors);
+        if (fromGuidStr == null) return;
+        var toGuidStr = ResolveEndpointGuid(wp, "to", placedMap, errors);
+        if (toGuidStr == null) return;
 
-        if (string.IsNullOrWhiteSpace(fromGuidStr)) { errors.Add("from_guid is required");   return; }
-        if (string.IsNullOrWhiteSpace(toGuidStr))   { errors.Add("to_guid is required");     return; }
-        if (string.IsNullOrWhiteSpace(fromOutput))  { errors.Add("from_output is required"); return; }
-        if (string.IsNullOrWhiteSpace(toInput))     { errors.Add("to_input is required");    return; }
+        if (!wp.TryGetValue("from_output", out var fromOutputEl) || fromOutputEl.ValueKind == JsonValueKind.Null)
+        { errors.Add("from_output is required"); return; }
+        if (!wp.TryGetValue("to_input", out var toInputEl) || toInputEl.ValueKind == JsonValueKind.Null)
+        { errors.Add("to_input is required"); return; }
 
         if (!Guid.TryParse(fromGuidStr, out var fromGuid)) { errors.Add($"Invalid from_guid: {fromGuidStr}"); return; }
         if (!Guid.TryParse(toGuidStr,   out var toGuid))   { errors.Add($"Invalid to_guid: {toGuidStr}");    return; }
 
-        var docType = doc.GetType();
-
-        // Find objects by GUID
-        var findMethod = docType.GetMethod("FindObject", new[] { typeof(Guid), typeof(bool) })
-                      ?? docType.GetMethod("FindObject", new[] { typeof(Guid) });
-        if (findMethod == null)
-        {
-            errors.Add("GH2 wire connection API not available in this build");
-            return;
-        }
-
         object? fromObj, toObj;
         try
         {
-            fromObj = findMethod.Invoke(doc, new object[] { fromGuid, false })
-                   ?? findMethod.Invoke(doc, new object[] { fromGuid });
-            toObj   = findMethod.Invoke(doc, new object[] { toGuid,   false })
-                   ?? findMethod.Invoke(doc, new object[] { toGuid   });
+            fromObj = FindDocObject(doc, fromGuid);
+            toObj   = FindDocObject(doc, toGuid);
         }
-        catch
+        catch (Exception ex)
         {
-            errors.Add("GH2 FindObject API not available in this build");
+            errors.Add(ex.Message);
             return;
         }
 
@@ -1090,23 +1208,11 @@ public static class GH2Handlers
 
         try
         {
-            // Get output param from fromObj
-            var fromParams  = fromObj.GetType().GetProperty("Params")?.GetValue(fromObj);
-            var fromOutputs = fromParams?.GetType().GetProperty("Output")?.GetValue(fromParams) as System.Collections.IEnumerable;
-            object? outParam = fromOutputs?.Cast<object>().FirstOrDefault(op =>
-                string.Equals(op.GetType().GetProperty("NickName")?.GetValue(op)?.ToString(),
-                    fromOutput, StringComparison.OrdinalIgnoreCase));
+            var outParam = ResolvePort(GetParams(fromObj, "Output"), fromOutputEl, out var outLabel);
+            if (outParam == null) { errors.Add($"Output '{outLabel}' not found on {fromGuid}"); return; }
 
-            if (outParam == null) { errors.Add($"Output '{fromOutput}' not found on {fromGuid}"); return; }
-
-            // Get input param from toObj
-            var toParams  = toObj.GetType().GetProperty("Params")?.GetValue(toObj);
-            var toInputs  = toParams?.GetType().GetProperty("Input")?.GetValue(toParams) as System.Collections.IEnumerable;
-            object? inParam = toInputs?.Cast<object>().FirstOrDefault(ip =>
-                string.Equals(ip.GetType().GetProperty("NickName")?.GetValue(ip)?.ToString(),
-                    toInput, StringComparison.OrdinalIgnoreCase));
-
-            if (inParam == null) { errors.Add($"Input '{toInput}' not found on {toGuid}"); return; }
+            var inParam = ResolvePort(GetParams(toObj, "Input"), toInputEl, out var inLabel);
+            if (inParam == null) { errors.Add($"Input '{inLabel}' not found on {toGuid}"); return; }
 
             // Connect: inParam.AddSource(outParam)
             var addSourceMethod = inParam.GetType().GetMethod("AddSource");

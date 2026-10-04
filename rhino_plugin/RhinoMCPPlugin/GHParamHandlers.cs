@@ -276,24 +276,39 @@ public static class GHParamHandlers
 
                 var obj = Instances.ComponentServer.EmitObject(scriptGuid)
                     ?? throw new InvalidOperationException($"Could not create script component for language '{language}'. Ensure Rhino 8 scripting is installed.");
+                if (obj is not IGH_Component comp)
+                    throw new InvalidOperationException($"Script object for '{language}' is not a GH component");
 
                 obj.CreateAttributes();
                 obj.Attributes.Pivot = new PointF(x, y);
-                doc.AddObject(obj, false);
 
-                // Set the source code via the first string persistent param
-                if (!string.IsNullOrWhiteSpace(code) && obj is IGH_Component comp)
+                // Configure before AddObject so a failure leaves nothing on the canvas.
+                var srcParam = comp.Params.Input.OfType<GH_PersistentParam<GH_String>>().FirstOrDefault();
+                if (p.ContainsKey("inputs"))
+                    ReshapeVariableParams(comp, GH_ParameterSide.Input, inputs, srcParam);
+                if (p.ContainsKey("outputs"))
+                    ReshapeVariableParams(comp, GH_ParameterSide.Output, outputs, null);
+
+                if (!string.IsNullOrWhiteSpace(code))
                 {
-                    var srcParam = comp.Params.Input.OfType<GH_PersistentParam<GH_String>>().FirstOrDefault();
-                    if (srcParam != null)
-                    {
-                        var tree = new GH_Structure<GH_String>();
-                        tree.Append(new GH_String(code), new GH_Path(0));
-                        srcParam.SetPersistentData(tree);
-                    }
+                    if (srcParam == null)
+                        throw new InvalidOperationException(
+                            "Code could not be injected: the script component exposes no string-typed source input. Use gh_set_script_code after editing the component manually.");
+                    var tree = new GH_Structure<GH_String>();
+                    tree.Append(new GH_String(code), new GH_Path(0));
+                    srcParam.SetPersistentData(tree);
                 }
 
-                result = new { ok = true, instance_guid = obj.InstanceGuid.ToString() };
+                doc.AddObject(obj, false);
+                comp.ExpireSolution(true);
+
+                result = new
+                {
+                    ok            = true,
+                    instance_guid = obj.InstanceGuid.ToString(),
+                    inputs        = comp.Params.Input.Select(q => q.NickName).ToList(),
+                    outputs       = comp.Params.Output.Select(q => q.NickName).ToList(),
+                };
             }
             catch (Exception ex)
             {
@@ -341,6 +356,105 @@ public static class GHParamHandlers
     // -----------------------------------------------------------------------
     // Private helpers
     // -----------------------------------------------------------------------
+
+    /// <summary>
+    /// Renames/adds/removes the removable variable params on one side so their nicknames
+    /// match <paramref name="names"/> in order. Params the component refuses to remove
+    /// (e.g. the script source input or `out`) are left untouched. Throws when the
+    /// component exposes no variable-parameter API.
+    /// </summary>
+    private static void ReshapeVariableParams(IGH_Component comp, GH_ParameterSide side, List<string> names, IGH_Param? keep)
+    {
+        var vpc = VariableParams.For(comp)
+            ?? throw new InvalidOperationException("Script component does not support variable parameters; inputs/outputs cannot be reshaped");
+
+        IList<IGH_Param> Side() => side == GH_ParameterSide.Input ? comp.Params.Input : comp.Params.Output;
+        List<IGH_Param> Variable() => Side()
+            .Where(q => !ReferenceEquals(q, keep) && vpc.CanRemove(side, Side().IndexOf(q)))
+            .ToList();
+
+        // Rename existing variable params, then add missing ones at the end.
+        var existing = Variable();
+        for (int i = 0; i < names.Count; i++)
+        {
+            IGH_Param target;
+            if (i < existing.Count)
+                target = existing[i];
+            else
+            {
+                int insertAt = Side().Count;
+                if (!vpc.CanInsert(side, insertAt))
+                    throw new InvalidOperationException($"Script component refused to add {side.ToString().ToLowerInvariant()} '{names[i]}'");
+                target = vpc.Create(side, insertAt)
+                    ?? throw new InvalidOperationException($"Script component returned no param for {side.ToString().ToLowerInvariant()} '{names[i]}'");
+                if (side == GH_ParameterSide.Input) comp.Params.RegisterInputParam(target, insertAt);
+                else comp.Params.RegisterOutputParam(target, insertAt);
+            }
+            target.Name = names[i];
+            target.NickName = names[i];
+        }
+
+        // Remove surplus variable params (from the end).
+        var surplus = Variable().Skip(names.Count).Reverse().ToList();
+        foreach (var prm in surplus)
+        {
+            int idx = Side().IndexOf(prm);
+            if (!vpc.Destroy(side, idx))
+                throw new InvalidOperationException($"Script component refused to remove {side.ToString().ToLowerInvariant()} '{prm.NickName}'");
+            if (side == GH_ParameterSide.Input) comp.Params.UnregisterInputParameter(prm);
+            else comp.Params.UnregisterOutputParameter(prm);
+        }
+
+        vpc.Maintain();
+        comp.Params.OnParametersChanged();
+    }
+
+    /// <summary>
+    /// IGH_VariableParameterComponent access with reflection fallback for script
+    /// component types that expose the same methods without the interface.
+    /// </summary>
+    private sealed class VariableParams
+    {
+        private readonly IGH_VariableParameterComponent? _iface;
+        private readonly object _target;
+        private readonly System.Reflection.MethodInfo? _canInsert, _canRemove, _create, _destroy, _maintain;
+
+        private VariableParams(IGH_Component comp)
+        {
+            _target = comp;
+            _iface  = comp as IGH_VariableParameterComponent;
+            if (_iface != null) return;
+            var t = comp.GetType();
+            var sig = new[] { typeof(GH_ParameterSide), typeof(int) };
+            _canInsert = t.GetMethod("CanInsertParameter", sig);
+            _canRemove = t.GetMethod("CanRemoveParameter", sig);
+            _create    = t.GetMethod("CreateParameter", sig);
+            _destroy   = t.GetMethod("DestroyParameter", sig);
+            _maintain  = t.GetMethod("VariableParameterMaintenance", Type.EmptyTypes);
+        }
+
+        /// <summary>Returns null when neither the interface nor the reflected methods exist.</summary>
+        public static VariableParams? For(IGH_Component comp)
+        {
+            var vp = new VariableParams(comp);
+            bool reflected = vp._canInsert != null && vp._canRemove != null && vp._create != null && vp._destroy != null;
+            return vp._iface != null || reflected ? vp : null;
+        }
+
+        public bool CanInsert(GH_ParameterSide side, int i) =>
+            _iface?.CanInsertParameter(side, i) ?? (bool)_canInsert!.Invoke(_target, new object[] { side, i })!;
+        public bool CanRemove(GH_ParameterSide side, int i) =>
+            _iface?.CanRemoveParameter(side, i) ?? (bool)_canRemove!.Invoke(_target, new object[] { side, i })!;
+        public IGH_Param? Create(GH_ParameterSide side, int i) =>
+            _iface != null ? _iface.CreateParameter(side, i) : _create!.Invoke(_target, new object[] { side, i }) as IGH_Param;
+        public bool Destroy(GH_ParameterSide side, int i) =>
+            _iface?.DestroyParameter(side, i) ?? (bool)_destroy!.Invoke(_target, new object[] { side, i })!;
+        public void Maintain()
+        {
+            if (_iface != null) _iface.VariableParameterMaintenance();
+            else _maintain?.Invoke(_target, Array.Empty<object>());
+        }
+    }
 
     private static Guid ParseGuid(string? s, string paramName)
     {

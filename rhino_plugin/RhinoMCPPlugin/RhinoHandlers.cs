@@ -993,7 +993,98 @@ public static class RhinoHandlers
         if (!System.IO.File.Exists(filepath))
             return new { success = false, message = "File not found: " + filepath };
 
-        return new { success = false, message = "set_environment_map requires Rhino 8 with a compatible render plugin installed. Use RhinoApp.RunScript to apply HDR environments via the Rhino command line." };
+        double rotation  = p.Double("rotation", 0.0);
+        double intensity = p.Double("intensity", 1.0);
+        bool forBackground  = p.Bool("use_for_background", true);
+        bool forLighting    = p.Bool("use_for_lighting", true);
+        bool forReflections = p.Bool("use_for_reflections", true);
+        var notApplied = new List<string>();
+
+        var simTex = new Rhino.Render.SimulatedTexture(doc) { Filename = filepath };
+        var texture = Rhino.Render.RenderTexture.NewBitmapTexture(simTex, doc);
+        if (texture == null)
+            return new { success = false, message = "Could not create a bitmap texture for " + filepath };
+
+        var env = Rhino.Render.RenderEnvironment.NewBasicEnvironment(null, doc);
+        if (env == null)
+            return new { success = false, message = "Could not create a basic render environment." };
+
+        var ctx = Rhino.Render.RenderContent.ChangeContexts.Program;
+        string slot = env.TextureChildSlotName;
+        env.Name = "MCP " + System.IO.Path.GetFileNameWithoutExtension(filepath);
+        env.SetChild(texture, slot);
+        if (!doc.RenderEnvironments.Add(env))
+            return new { success = false, message = "doc.RenderEnvironments.Add failed." };
+
+        try
+        {
+        // Rotation lives on the texture mapping (degrees about Z); the basic
+        // environment has no rotation parameter of its own.
+        var child = env.FindChild(slot) as Rhino.Render.RenderTexture;
+        if (rotation != 0.0)
+        {
+            if (child == null) notApplied.Add("rotation");
+            else child.SetRotation(new Vector3d(0, 0, rotation), ctx);
+        }
+        if (intensity != 1.0)
+        {
+            bool ok = false;
+            if (child != null)
+            {
+                child.BeginChange(ctx);
+                ok = child.SetParameter("multiplier", intensity) || child.SetParameter("rdk-texture-adjust-multiplier", intensity);
+                child.EndChange();
+            }
+            if (!ok) notApplied.Add("intensity");
+        }
+
+        var usages = new (bool on, Rhino.Render.RenderSettings.EnvironmentUsage usage, string name)[]
+        {
+            (forBackground,  Rhino.Render.RenderSettings.EnvironmentUsage.Background, "use_for_background"),
+            (forLighting,    Rhino.Render.RenderSettings.EnvironmentUsage.Skylighting, "use_for_lighting"),
+            (forReflections, Rhino.Render.RenderSettings.EnvironmentUsage.Reflection, "use_for_reflections"),
+        };
+        var rs = doc.RenderSettings;
+        if (forBackground)
+            rs.BackgroundStyle = Rhino.Display.BackgroundStyle.Environment;
+        foreach (var (on, usage, name) in usages)
+        {
+            if (!on) continue;
+            try
+            {
+                rs.SetRenderEnvironment(usage, env);
+                if (usage != Rhino.Render.RenderSettings.EnvironmentUsage.Background)
+                    rs.SetRenderEnvironmentOverride(usage, true);
+                if (rs.RenderEnvironmentId(usage, Rhino.Render.RenderSettings.EnvironmentPurpose.Standard) != env.Id)
+                    notApplied.Add(name);
+            }
+            catch (Exception) { notApplied.Add(name); }
+        }
+        doc.RenderSettings = rs;
+        if (forLighting)
+            doc.Lights.Skylight.Enabled = true;
+        }
+        catch (Exception)
+        {
+            // Do not leave a half-configured environment in the document.
+            try { doc.RenderEnvironments.Remove(env); } catch (Exception) { }
+            throw;
+        }
+
+        doc.Views.Redraw();
+        return new
+        {
+            success = true,
+            filepath,
+            environment_id = env.Id.ToString(),
+            rotation,
+            intensity,
+            use_for_background = forBackground,
+            use_for_lighting = forLighting,
+            use_for_reflections = forReflections,
+            not_applied = notApplied,
+            message = notApplied.Count == 0 ? "Environment applied." : "Environment applied; not applied: " + string.Join(", ", notApplied),
+        };
     }
 
     /// <summary>

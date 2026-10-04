@@ -25,7 +25,10 @@ def register(mcp: FastMCP) -> None:
         """Convert an existing image file from one format to another.
 
         Supports PNG, JPG, BMP, TIFF, and GIF as input and output formats.
-        EXR and WebP are not natively supported by..."""
+        EXR and WebP are not natively supported by System.Drawing.  Passing
+        only ``width`` or only ``height`` resizes while preserving the
+        source aspect ratio; passing both resizes to exactly that size.
+        ``quality`` applies to JPEG output only."""
         code = (
             "_mcp_source = {source}\n"
             "_mcp_output = {output}\n"
@@ -134,9 +137,17 @@ else:
         orig_w = bitmap.Width
         orig_h = bitmap.Height
 
-        # Resize if requested
-        target_w = int(_mcp_width)  if _mcp_width  is not None else orig_w
-        target_h = int(_mcp_height) if _mcp_height is not None else orig_h
+        # Resize if requested; a single dimension preserves aspect ratio
+        if _mcp_width is not None and _mcp_height is not None:
+            target_w, target_h = int(_mcp_width), int(_mcp_height)
+        elif _mcp_width is not None:
+            target_w = int(_mcp_width)
+            target_h = max(1, int(round(orig_h * target_w / float(orig_w))))
+        elif _mcp_height is not None:
+            target_h = int(_mcp_height)
+            target_w = max(1, int(round(orig_w * target_h / float(orig_h))))
+        else:
+            target_w, target_h = orig_w, orig_h
 
         if target_w != orig_w or target_h != orig_h:
             resized = System.Drawing.Bitmap(target_w, target_h)

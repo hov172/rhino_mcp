@@ -724,6 +724,17 @@ class TestGHParamTools(unittest.TestCase):
             cmd = mock_plugin.call_args[0][0]
             self.assertEqual(cmd, "gh_add_script_component")
 
+    def test_add_script_component_forwards_inputs_outputs(self) -> None:
+        """gh_add_script_component forwards inputs/outputs lists and code verbatim."""
+        fn = self.tools["gh_add_script_component"]
+        with patch("rhmcp.tools_helpers.backend.plugin_result", return_value={"ok": True}) as mock_plugin:
+            fn(language="python", code="a = x + y", inputs=["x", "y"], outputs=["a"], x=10, y=20)
+        params = mock_plugin.call_args[0][1]
+        self.assertEqual(params["inputs"], ["x", "y"])
+        self.assertEqual(params["outputs"], ["a"])
+        self.assertEqual(params["code"], "a = x + y")
+        self.assertEqual((params["x"], params["y"]), (10, 20))
+
     def test_set_point_param_flattens_3d_points(self) -> None:
         """gh_set_point_param flattens [[x,y,z],...] to [x,y,z,...] for the C# handler."""
         fn = self.tools["gh_set_point_param"]
@@ -1024,7 +1035,7 @@ class TestVisualARQTools(unittest.TestCase):
         fn = self.tools["varq_create_wall"]
         with patch("rhmcp.tools_helpers.plugin_client.send_command") as mock:
             mock.return_value = {"result": {"plugins": []}}
-            result = fn(start_pt=[0,0,0], end_pt=[5,0,0])
+            result = fn()
         self.assertFalse(result["success"])
         self.assertIn("VisualARQ", result["message"])
 
@@ -1049,7 +1060,7 @@ class TestLandsDesignTools(unittest.TestCase):
         fn = self.tools["lands_place_plant"]
         with patch("rhmcp.tools_helpers.plugin_client.send_command") as mock:
             mock.return_value = {"result": {"plugins": []}}
-            result = fn(plant_name="Rosa", position=[0,0,0])
+            result = fn()
         self.assertFalse(result["success"])
         self.assertIn("Lands Design", result["message"])
 
@@ -1582,3 +1593,186 @@ class TestGeometryValidation(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class TestViewCaptureScriptResultShape(unittest.TestCase):
+    """backend.execute_python returns the script's ``result`` under ``script_result``;
+    ``result`` holds the plugin's {success, output, method} envelope."""
+
+    _PNG_1X1 = (
+        b"\x89PNG\r\n\x1a\n\x00\x00\x00\rIHDR\x00\x00\x00\x01"
+        b"\x00\x00\x00\x01\x08\x06\x00\x00\x00\x1f\x15\xc4\x89"
+        b"\x00\x00\x00\nIDATx\x9cc\x00\x01\x00\x00\x05\x00\x01"
+        b"\r\n-\xb4\x00\x00\x00\x00IEND\xaeB`\x82"
+    )
+
+    def test_reads_b64_from_script_result_on_plugin_backend(self) -> None:
+        import base64
+        from mcp.server.fastmcp import Image
+
+        tools = _register_module("rhmcp.tools.view")
+        b64 = base64.b64encode(self._PNG_1X1).decode()
+        raw = {
+            "ok": True, "backend": "plugin",
+            "result": {"success": True, "output": "", "method": "plugin"},
+            "script_result": {"b64": b64, "path": "/tmp/v.png", "saved": True, "width": 640, "height": 480},
+        }
+        with patch("rhmcp.tools_helpers.backend.execute_python", return_value=raw):
+            result = tools["capture_rhino_view"](path="/tmp/v.png", width=640, height=480)
+
+        self.assertEqual(len(result), 2)
+        meta, img = result
+        self.assertIsInstance(img, Image)
+        self.assertEqual(meta, {"path": "/tmp/v.png", "saved": True, "width": 640, "height": 480})
+
+    def test_plugin_envelope_without_script_result_returns_raw(self) -> None:
+        tools = _register_module("rhmcp.tools.view")
+        raw = {"ok": True, "backend": "plugin",
+               "result": {"success": True, "output": "no image", "method": "plugin"}}
+        with patch("rhmcp.tools_helpers.backend.execute_python", return_value=raw):
+            result = tools["capture_rhino_view"]()
+        self.assertEqual(result, [raw])
+
+
+# ---------------------------------------------------------------------------
+# applied / not_applied reporting for parameters that previously were ignored
+# ---------------------------------------------------------------------------
+
+class TestAppliedReporting(unittest.TestCase):
+    """Tools must report what they applied and what they could not apply."""
+
+    def test_export_fbx_rejects_unknown_file_type(self) -> None:
+        tools = _register_module("rhmcp.tools.export_visual")
+        with patch("rhmcp.tools_helpers.backend.execute_python") as mock:
+            result = tools["export_fbx"](path="/tmp/a.fbx", file_type="FBX202000")
+        self.assertFalse(result["ok"])
+        self.assertIn("file_type", result["error"])
+        mock.assert_not_called()
+
+    def test_export_fbx_injects_enum_name_for_file_type(self) -> None:
+        tools = _register_module("rhmcp.tools.export_visual")
+        captured: list[str] = []
+
+        def fake_execute_python(code: str, rhino_id=None, **kw):
+            captured.append(code)
+            return {"ok": True, "backend": "rhinocode", "script_result": {"ok": True}}
+
+        with patch("rhmcp.tools_helpers.backend.execute_python", side_effect=fake_execute_python):
+            tools["export_fbx"](path="/tmp/a.fbx", file_type="ascii6")
+        self.assertIn('_mcp_file_type = "Ascii6"', captured[0])
+        self.assertNotIn("fbx_version", captured[0])
+
+    def test_set_render_settings_altitude_applies_without_enable_flag(self) -> None:
+        tools = _register_module("rhmcp.tools.pbr_materials")
+        plugin_calls: list[tuple[str, dict]] = []
+        scripts: list[str] = []
+
+        def fake_plugin_result(command_type, params=None, rhino_id=None):
+            plugin_calls.append((command_type, dict(params or {})))
+            return {"ok": True, "result": {"success": True, "settings": dict(params or {})}}
+
+        def fake_execute_python(code: str, rhino_id=None, **kw):
+            scripts.append(code)
+            return {"ok": True, "script_result": {"ok": True}}
+
+        with patch("rhmcp.tools_helpers.backend.preferred_backend", return_value="plugin"), \
+             patch("rhmcp.tools_helpers.backend.plugin_result", side_effect=fake_plugin_result), \
+             patch("rhmcp.tools_helpers.backend.execute_python", side_effect=fake_execute_python):
+            result = tools["set_render_settings"](ground_plane_altitude=2.5)
+
+        self.assertTrue(result["ok"])
+        self.assertEqual(result["applied"], {"ground_plane_altitude": 2.5})
+        self.assertEqual(result["not_applied"], {})
+        self.assertEqual(plugin_calls, [], "altitude alone must not round-trip the plugin")
+        self.assertIn("GroundPlane", scripts[0])
+        self.assertIn("_mcp_altitude = 2.5", scripts[0])
+
+    def test_set_render_settings_reports_not_applied_when_script_fails(self) -> None:
+        tools = _register_module("rhmcp.tools.pbr_materials")
+
+        def fake_plugin_result(command_type, params=None, rhino_id=None):
+            return {"ok": True, "result": {"success": True, "settings": {"enable_ground_plane": True}}}
+
+        with patch("rhmcp.tools_helpers.backend.preferred_backend", return_value="plugin"), \
+             patch("rhmcp.tools_helpers.backend.plugin_result", side_effect=fake_plugin_result), \
+             patch("rhmcp.tools_helpers.backend.execute_python",
+                   return_value={"ok": True, "script_result": {"ok": False}}):
+            result = tools["set_render_settings"](enable_ground_plane=True, ground_plane_altitude=1.0)
+
+        self.assertFalse(result["ok"])
+        self.assertEqual(result["applied"], {"enable_ground_plane": True})
+        self.assertEqual(result["not_applied"], {"ground_plane_altitude": 1.0})
+
+    def test_set_render_settings_drops_unscriptable_params(self) -> None:
+        tools = _register_module("rhmcp.tools.pbr_materials")
+        with self.assertRaises(TypeError):
+            tools["set_render_settings"](samples=64)
+
+    def test_create_pbr_material_reports_ior(self) -> None:
+        tools = _register_module("rhmcp.tools.pbr_materials")
+        scripts: list[str] = []
+
+        def fake_plugin_result(command_type, params=None, rhino_id=None):
+            self.assertNotIn("ior", params)
+            self.assertNotIn("bump_scale", params)
+            return {"ok": True, "result": {"success": True, "material_index": 3, "material_name": "glass"}}
+
+        def fake_execute_python(code: str, rhino_id=None, **kw):
+            scripts.append(code)
+            return {"ok": True, "script_result": {"ok": True}}
+
+        with patch("rhmcp.tools_helpers.backend.preferred_backend", return_value="plugin"), \
+             patch("rhmcp.tools_helpers.backend.plugin_result", side_effect=fake_plugin_result), \
+             patch("rhmcp.tools_helpers.backend.execute_python", side_effect=fake_execute_python):
+            result = tools["create_pbr_material"](name="glass", ior=1.45)
+
+        self.assertTrue(result["ok"])
+        self.assertEqual(result["applied"], {"ior": 1.45})
+        self.assertIn("OpacityIOR", scripts[0])
+        self.assertIn("_mcp_index = 3", scripts[0])
+
+    def test_vray_set_render_settings_reports_not_applied_without_module(self) -> None:
+        tools = _register_module("rhmcp.tools.vray")
+        script_result = {
+            "ok": False,
+            "applied": {},
+            "not_applied": {"width": 800, "quality_preset": "high"},
+            "error": "V-Ray Python module (rh8VRay / rhVRay) is not importable in this Rhino.",
+        }
+        with patch("rhmcp.tools_helpers.plugin_client.send_command",
+                   return_value={"result": {"plugins": [{"name": "V-Ray for Rhino", "loaded": True}]}}), \
+             patch("rhmcp.tools_helpers.backend.execute_python",
+                   return_value={"ok": True, "script_result": script_result}):
+            result = tools["vray_set_render_settings"](width=800, quality_preset="high")
+        self.assertFalse(result["success"])
+        self.assertEqual(result["applied"], {})
+        self.assertEqual(result["not_applied"], {"width": 800, "quality_preset": "high"})
+        self.assertIn("rh8VRay", result["error"])
+
+    def test_vray_set_render_settings_maps_quality_preset(self) -> None:
+        tools = _register_module("rhmcp.tools.vray")
+        captured: list[str] = []
+
+        def fake_execute_python(code: str, rhino_id=None, **kw):
+            captured.append(code)
+            return {"ok": True, "script_result": {"ok": True, "applied": {"quality_preset": "ultra"}, "not_applied": {}}}
+
+        with patch("rhmcp.tools_helpers.plugin_client.send_command",
+                   return_value={"result": {"plugins": [{"name": "V-Ray for Rhino", "loaded": True}]}}), \
+             patch("rhmcp.tools_helpers.backend.execute_python", side_effect=fake_execute_python):
+            result = tools["vray_set_render_settings"](quality_preset="ultra")
+        self.assertTrue(result["success"])
+        self.assertIn("_mcp_quality_value = 5", captured[0])
+        self.assertIn("quality_preset", captured[0])
+
+    def test_lands_place_plant_launches_interactive_command(self) -> None:
+        tools = _register_module("rhmcp.tools.lands_design")
+        with patch("rhmcp.tools_helpers.plugin_client.send_command",
+                   return_value={"result": {"plugins": [{"name": "Lands Design", "loaded": True}]}}), \
+             patch("rhmcp.tools_helpers.backend.run_command", return_value={"ok": True}) as run:
+            result = tools["lands_place_plant"]()
+        self.assertTrue(result["success"])
+        self.assertEqual(result["applied"], {})
+        self.assertEqual(result["not_applied"], {})
+        self.assertIn("interactive", result["note"])
+        self.assertIn("_laPlant", run.call_args.args[0])

@@ -410,3 +410,79 @@ def test_initialize_metadata_uses_application_version():
     options = server._mcp_server.create_initialization_options()
     assert options.server_name == "rhino-mcp"
     assert options.server_version == version("rhino-mcp")
+
+
+def _pbr_tools():
+    from mcp.server.fastmcp import FastMCP
+    from rhmcp.tools import pbr_materials
+    mcp = FastMCP('pbr')
+    pbr_materials.register(mcp)
+    return {name: tool.fn for name, tool in mcp._tool_manager._tools.items()}
+
+
+def test_set_environment_map_forwards_flags_and_reports_not_applied():
+    plugin_resp = {'ok': True, 'result': {
+        'success': True, 'filepath': '/tmp/sky.hdr', 'message': 'Environment applied; not applied: intensity',
+        'not_applied': ['intensity']}}
+    with patch.object(backend, 'preferred_backend', return_value='auto'), \
+         patch.object(backend, 'plugin_result', return_value=plugin_resp) as sent:
+        result = _pbr_tools()['set_environment_map'](
+            '/tmp/sky.hdr', rotation=390, intensity=2.0, use_for_lighting=False)
+    assert result['ok'] is True
+    assert result['not_applied'] == ['intensity']
+    params = sent.call_args[0][1]
+    assert params['rotation'] == 30.0
+    assert params['intensity'] == 2.0
+    assert params['use_for_lighting'] is False
+    assert params['use_for_background'] is True
+
+
+def test_set_environment_map_failure_carries_error():
+    plugin_resp = {'ok': False, 'result': {'success': False, 'message': 'File not found: /nope.hdr'}}
+    with patch.object(backend, 'preferred_backend', return_value='auto'), \
+         patch.object(backend, 'plugin_result', return_value=plugin_resp):
+        result = _pbr_tools()['set_environment_map']('/nope.hdr')
+    assert result['ok'] is False
+    assert result['error'] == 'File not found: /nope.hdr'
+    assert result['not_applied'] == []
+
+
+# ---------------------------------------------------------------------------
+# Export scripts must report applied/not_applied instead of silently ignoring
+# options.
+# ---------------------------------------------------------------------------
+
+def test_visual_export_scripts_use_applied_not_applied():
+    from rhmcp.tools import export_visual, export_cad
+    for script in (
+        export_visual._OBJ_SCRIPT,
+        export_visual._FBX_SCRIPT,
+        export_visual._GLB_SCRIPT,
+        export_cad._STEP_SCRIPT,
+        export_cad._IGES_SCRIPT,
+        export_cad._DWG_SCRIPT,
+    ):
+        assert '"applied"' in script
+        assert '"not_applied"' in script
+        assert "requested_not_applied" not in script
+
+
+def test_removed_export_parameters_are_gone_from_signatures():
+    import inspect
+    from mcp.server.fastmcp import FastMCP
+    from rhmcp.tools import export_visual, export_cad, export_print
+    mcp = FastMCP("regress-export")
+    for mod in (export_visual, export_cad, export_print):
+        mod.register(mcp)
+    tools = {name: tool.fn for name, tool in mcp._tool_manager._tools.items()}
+    gone = {
+        "export_obj": "weld_angle",
+        "export_fbx": "fbx_version",
+        "export_glb": "embed_textures",
+        "export_step": "tolerance",
+        "export_iges": "trim_type",
+        "export_dwg": "export_layout",
+        "export_3mf": "mesh_quality",
+    }
+    for tool, param in gone.items():
+        assert param not in inspect.signature(tools[tool]).parameters, tool

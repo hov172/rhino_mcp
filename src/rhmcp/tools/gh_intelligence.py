@@ -37,7 +37,9 @@ def _compute_layout(
 
     components: list of {id, x, y, name}
     connections: list of {from_id, to_id}
-    Returns dict of {id: {x: float, y: float}} with..."""
+    Returns dict of {id: {x: float, y: float}} with sources in the leftmost layer and
+    sinks in the rightmost; isolated nodes are placed in layer 0.
+    """
     ids    = [c["id"] for c in components]
     id_set = set(ids)
 
@@ -190,7 +192,9 @@ def register(mcp: FastMCP) -> None:
         """Analyze the active Grasshopper canvas and return complexity metrics.
 
         Returns component_count, connection_count, wire_crossing_estimate,
-        cluster_count, ungrouped_component_count,..."""
+        cluster_count, ungrouped_component_count, isolated_component_count, complexity_score,
+        canvas_bounds, clusters (member_ids + label), and suggestions.
+        """
         return _gh_intel("gh_get_canvas_analysis", {}, rhino_id=rhino_id)
 
     @mcp.tool(annotations=ToolAnnotations(title="Refactor GH1 Canvas Layout", destructiveHint=True))
@@ -202,7 +206,11 @@ def register(mcp: FastMCP) -> None:
         """Reorganise the active GH1 canvas to reduce wire crossings and add logical groups.
 
         apply: False (default) returns the layout plan without touching the canvas.
-               True executes..."""
+               True executes the plan: moves components and (optionally) adds groups.
+        group_clusters: When applying, wrap each detected cluster in a named group.
+        Returns {ok, preview, moves, groups_to_add, estimated_crossings_after} when previewing,
+        or {ok, moved, groups_added, crossings_before, crossings_after} when applied.
+        """
         analysis = _gh_intel("gh_get_canvas_analysis", {}, rhino_id=rhino_id)
         if not analysis.get("ok"):
             return analysis
@@ -312,7 +320,11 @@ def register(mcp: FastMCP) -> None:
         """Reorganise the active GH2 canvas to reduce wire crossings and add logical groups.
         Requires Rhino 9 — returns GH2_NOT_AVAILABLE on Rhino 8.
 
-        apply: False (default) returns layout..."""
+        apply: False (default) returns layout plan only. True moves components and adds groups.
+        group_clusters: When applying, wrap each detected cluster in a named group.
+        Returns {ok, preview, moves, groups_to_add, estimated_crossings_after} when previewing,
+        or {ok, moved, groups_added, crossings_before, crossings_after} when applied.
+        """
         # Read GH2 canvas (GH2 graph already exposes positions + connections)
         graph = _gh_intel("gh2_get_canvas_graph", {"sample_size": 0}, rhino_id=rhino_id)  # 0 = return all components
         if not graph.get("ok"):
@@ -467,7 +479,14 @@ def register(mcp: FastMCP) -> None:
         """Migrate the active GH1 definition to a new GH2 canvas.
         Requires Rhino 9 — GH2 is not available in stable Rhino 8.
 
-        confirm: Must be True to execute (safety guard against accidental..."""
+        confirm: Must be True to execute (safety guard against accidental migration).
+        close_gh1: Close the GH1 document after a complete, error-free migration.
+        allow_partial: Migrate the mapped subset when some components have no GH2 equivalent;
+                       otherwise unmapped components abort with PARTIAL_MIGRATION_REQUIRES_APPROVAL.
+        Places mapped components via gh2_apply_graph using {key, type_name, x, y} items and
+        {from_key, from_output, to_key, to_input} wires keyed by the GH1 instance GUIDs.
+        Returns {ok, complete, migrated, unmapped, gh2_errors, gh1_closed}.
+        """
         if not confirm:
             return {
                 "ok":         False,
@@ -587,7 +606,8 @@ def register(mcp: FastMCP) -> None:
         Requires Rhino 9 — returns GH2_NOT_AVAILABLE on Rhino 8.
 
         instance_guid: UUID of the GH2 component to move.
-        x, y: Target..."""
+        x, y: Target canvas coordinates for the component pivot.
+        """
         return _gh_intel(
             "gh2_move_component",
             {"instance_guid": instance_guid, "x": x, "y": y},
@@ -603,7 +623,10 @@ def register(mcp: FastMCP) -> None:
         """Add a group containing the specified GH2 components.
         Requires Rhino 9 — returns GH2_NOT_AVAILABLE on Rhino 8.
 
-        instance_guids: List of GH2 component UUIDs to include in the..."""
+        instance_guids: List of GH2 component UUIDs to include in the group.
+        label: Optional group label.
+        Returns {ok, group_id}.
+        """
         return _gh_intel(
             "gh2_add_group",
             {"instance_guids": instance_guids, "label": label},

@@ -1,4 +1,9 @@
-"""Enscape real-time rendering tools for Rhino."""
+"""Enscape real-time rendering tools for Rhino.
+
+Enscape exposes no scripting API beyond its Rhino commands, so these tools
+only launch those commands.  Values such as image size, panorama
+resolution and atmosphere are configured in Enscape's own dialogs.
+"""
 
 from __future__ import annotations
 
@@ -45,12 +50,13 @@ def register(mcp: FastMCP) -> None:
         return out
 
     @mcp.tool(annotations=ToolAnnotations(title="Enscape: Screenshot", destructiveHint=True))
-    def enscape_screenshot(
-        output_path: str,
-        width: int = 1920,
-        height: int = 1080,
-    ) -> dict[str, object]:
-        """Capture a screenshot from the current Enscape view."""
+    def enscape_screenshot(output_path: str) -> dict[str, object]:
+        """Run ``Enscape_Screenshot`` for the current Enscape view.
+
+        The command may open an interactive save dialog. Image size is an
+        Enscape visual setting and cannot be scripted, so no size parameters
+        are offered.
+        """
         err = _check()
         if err:
             return {"success": False, "message": err}
@@ -59,12 +65,8 @@ def register(mcp: FastMCP) -> None:
         ok, error = _outcome(result)
         out: dict[str, object] = {
             "success": ok,
-            "requested": {"output_path": output_path, "width": width, "height": height},
-            "note": (
-                "Enscape_Screenshot may open an interactive save dialog; width and "
-                "height are configured in Enscape's visual settings and were not "
-                "applied programmatically."
-            ),
+            "requested": {"output_path": output_path},
+            "note": "Enscape_Screenshot may open an interactive save dialog.",
             "result": result,
         }
         if error:
@@ -72,11 +74,13 @@ def register(mcp: FastMCP) -> None:
         return out
 
     @mcp.tool(annotations=ToolAnnotations(title="Enscape: Export Panorama", destructiveHint=True))
-    def enscape_export_panorama(
-        output_path: str,
-        resolution: str = "4K",
-    ) -> dict[str, object]:
-        """Export a 360° panorama image from Enscape. resolution: 2K | 4K | 8K."""
+    def enscape_export_panorama(output_path: str) -> dict[str, object]:
+        """Run ``Enscape_ExportPanorama`` to export a 360° panorama.
+
+        The command may open an interactive export dialog. Panorama
+        resolution is an Enscape setting and cannot be scripted, so no
+        resolution parameter is offered.
+        """
         err = _check()
         if err:
             return {"success": False, "message": err}
@@ -85,11 +89,8 @@ def register(mcp: FastMCP) -> None:
         ok, error = _outcome(result)
         out: dict[str, object] = {
             "success": ok,
-            "requested": {"output_path": output_path, "resolution": resolution},
-            "note": (
-                "Enscape_ExportPanorama may open an interactive export dialog; the "
-                "resolution setting was not applied programmatically."
-            ),
+            "requested": {"output_path": output_path},
+            "note": "Enscape_ExportPanorama may open an interactive export dialog.",
             "result": result,
         }
         if error:
@@ -133,14 +134,12 @@ def register(mcp: FastMCP) -> None:
         return out
 
     @mcp.tool(annotations=ToolAnnotations(title="Enscape: Set Atmosphere", destructiveHint=True))
-    def enscape_set_atmosphere(
-        cloud_density: float = 0.3,
-        wind_speed: float = 0.0,
-        precipitation_type: str = "none",
-    ) -> dict[str, object]:
-        """
-        Configure Enscape atmosphere settings.
-        cloud_density: 0.0-1.0. precipitation_type: none | rain | snow.
+    def enscape_set_atmosphere() -> dict[str, object]:
+        """Open Enscape's Visual Settings dialog (``Enscape_VisualSettings``).
+
+        Atmosphere values (clouds, wind, precipitation) have no scripting
+        interface and must be adjusted in the dialog, so no parameters are
+        offered and nothing is applied programmatically.
         """
         err = _check()
         if err:
@@ -149,11 +148,7 @@ def register(mcp: FastMCP) -> None:
         ok, error = _outcome(result)
         out: dict[str, object] = {
             "success": ok,
-            "note": (
-                "Enscape_VisualSettings opens an interactive dialog; cloud_density, "
-                "wind_speed, and precipitation_type could not be applied "
-                "programmatically. Adjust them in the dialog."
-            ),
+            "note": "Enscape_VisualSettings opens an interactive dialog; adjust atmosphere there.",
             "result": result,
         }
         if error:

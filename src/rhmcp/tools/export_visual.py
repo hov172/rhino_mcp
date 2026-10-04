@@ -18,26 +18,26 @@ def register(mcp: FastMCP) -> None:
         path: str,
         export_materials: bool = True,
         export_textures: bool = True,
-        weld_angle: float = 30.0,
         object_ids: list[str] | None = None,
         rhino_id: str | None = None,
     ) -> dict[str, object]:
         """Export geometry to a Wavefront OBJ file.
 
         When ``export_materials`` is True an accompanying ``.mtl`` file is
-        written beside the OBJ.  ``export_textures`` controls whether..."""
+        written beside the OBJ.  ``export_textures`` controls whether texture
+        coordinates are written.  Rhino's ``FileObjWriteOptions`` has no
+        weld-angle setting, so none is offered here.  The result reports
+        ``applied`` / ``not_applied`` for each option."""
         code = (
             "_mcp_path = {}\n"
             "_mcp_export_materials = {}\n"
             "_mcp_export_textures = {}\n"
-            "_mcp_weld_angle = {}\n"
             "_mcp_object_ids = {}\n"
             "{}"
         ).format(
             json.dumps(path),
             repr(export_materials),
             repr(export_textures),
-            json.dumps(weld_angle),
             repr(object_ids),
             _OBJ_SCRIPT,
         )
@@ -46,28 +46,31 @@ def register(mcp: FastMCP) -> None:
     @mcp.tool(annotations=ToolAnnotations(title="Export FBX", destructiveHint=True))
     def export_fbx(
         path: str,
-        fbx_version: str = "FBX202000",
-        embed_textures: bool = True,
-        save_textures_as_references: bool = False,
+        file_type: str = "binary7",
         object_ids: list[str] | None = None,
         rhino_id: str | None = None,
     ) -> dict[str, object]:
         """Export geometry to an FBX file for game engines and DCC tools.
 
-        ``fbx_version`` must be one of ``FBX201400``, ``FBX201600``,
-        ``FBX201800``, or ``FBX202000``.  When ``embed_textures``..."""
+        ``file_type`` selects ``FileFbxWriteOptions.FileType``: ``binary7``
+        (default), ``binary6``, ``ascii7`` or ``ascii6`` (FBX format
+        version 7.x / 6.x).  Rhino exposes no FBX SDK year version and no
+        texture embedding switch; textures are always written as external
+        references.  The result reports ``applied`` / ``not_applied``."""
+        file_type = file_type.strip().lower()
+        if file_type not in _FBX_FILE_TYPES:
+            return {
+                "ok": False,
+                "error": "file_type must be one of: {}".format(", ".join(sorted(_FBX_FILE_TYPES))),
+            }
         code = (
             "_mcp_path = {}\n"
-            "_mcp_fbx_version = {}\n"
-            "_mcp_embed_textures = {}\n"
-            "_mcp_save_textures_as_references = {}\n"
+            "_mcp_file_type = {}\n"
             "_mcp_object_ids = {}\n"
             "{}"
         ).format(
             json.dumps(path),
-            json.dumps(fbx_version),
-            repr(embed_textures),
-            repr(save_textures_as_references),
+            json.dumps(_FBX_FILE_TYPES[file_type]),
             repr(object_ids),
             _FBX_SCRIPT,
         )
@@ -76,7 +79,6 @@ def register(mcp: FastMCP) -> None:
     @mcp.tool(annotations=ToolAnnotations(title="Export GLB / glTF", destructiveHint=True))
     def export_glb(
         path: str,
-        embed_textures: bool = True,
         draco_compression: bool = False,
         export_materials: bool = True,
         object_ids: list[str] | None = None,
@@ -84,24 +86,33 @@ def register(mcp: FastMCP) -> None:
     ) -> dict[str, object]:
         """Export geometry to a GLB or glTF file.
 
-        Use a ``.glb`` extension for a single self-contained binary file or
-        ``.gltf`` for a JSON-based file with external resources...."""
+        The extension decides texture handling: ``.glb`` always embeds
+        textures in one binary file, ``.gltf`` always writes a JSON file with
+        external resources.  There is no separate embed switch.  The result
+        reports ``applied`` / ``not_applied`` for ``draco_compression`` and
+        ``export_materials``."""
         code = (
             "_mcp_path = {}\n"
-            "_mcp_embed_textures = {}\n"
             "_mcp_draco_compression = {}\n"
             "_mcp_export_materials = {}\n"
             "_mcp_object_ids = {}\n"
             "{}"
         ).format(
             json.dumps(path),
-            repr(embed_textures),
             repr(draco_compression),
             repr(export_materials),
             repr(object_ids),
             _GLB_SCRIPT,
         )
         return rhino.execute_python(code, rhino_id=rhino_id)
+
+
+_FBX_FILE_TYPES = {
+    "binary7": "Binary7",
+    "binary6": "Binary6",
+    "ascii7": "Ascii7",
+    "ascii6": "Ascii6",
+}
 
 
 # ---------------------------------------------------------------------------
@@ -127,6 +138,7 @@ else:
 
 # Attempt RhinoCommon FileObjWriteOptions --------------------------------
 _ok = False
+_options_applied = False
 try:
     _fwo = Rhino.FileIO.FileWriteOptions()
     _fwo.SuppressDialogBoxes = True
@@ -139,6 +151,7 @@ try:
     opts.ExportTcs = _mcp_export_textures
     _rc = Rhino.FileIO.FileObj.Write(_mcp_path, doc, opts)
     _ok = (_rc == Rhino.PlugIns.WriteFileResult.Success)
+    _options_applied = _ok
 except Exception:
     _ok = False
 
@@ -150,15 +163,23 @@ if not _ok:
     _ok = os.path.isfile(_mcp_path)
 
 rs.UnselectAllObjects()
+_requested = {
+    "export_materials": _mcp_export_materials,
+    "export_texture_coordinates": _mcp_export_textures,
+}
 result = {
     "path": _mcp_path,
     "format": "OBJ",
-    "export_materials": _mcp_export_materials,
-    "export_texture_coordinates": _mcp_export_textures,
     "ok": bool(_ok),
-    "requested_not_applied": {"weld_angle": _mcp_weld_angle},
-    "note": "FileObjWriteOptions has no weld-angle option; weld_angle was not applied.",
+    "requested": _requested,
+    "applied": _requested if _options_applied else {},
+    "not_applied": {} if _options_applied else _requested,
 }
+if _ok and not _options_applied:
+    result["note"] = (
+        "Exported via the _-Export command using Rhino's current OBJ "
+        "settings; the requested options were not applied."
+    )
 '''
 
 _FBX_SCRIPT = r'''
@@ -180,15 +201,22 @@ else:
 
 # Attempt RhinoCommon FileFbxWriteOptions --------------------------------
 _ok = False
+_file_type_applied = False
 try:
     opts = Rhino.FileIO.FileFbxWriteOptions()
+    _ft = getattr(Rhino.FileIO.FileFbxWriteOptions.FileType, _mcp_file_type, None)
+    if _ft is not None:
+        opts.SaveFileAs = _ft
+        _file_type_applied = True
     if _mcp_object_ids:
         # ExportSelected honours the selection made above.
         _ok = bool(doc.ExportSelected(_mcp_path, opts.ToDictionary()))
     else:
-        _ok = bool(Rhino.FileIO.FileFbx.Write(_mcp_path, doc, opts))
+        _ok = bool(doc.Export(_mcp_path, opts.ToDictionary()))
+    _file_type_applied = _file_type_applied and _ok
 except Exception:
     _ok = False
+    _file_type_applied = False
 
 # Fallback to command export ---------------------------------------------
 if not _ok:
@@ -202,17 +230,15 @@ result = {
     "path": _mcp_path,
     "format": "FBX",
     "ok": bool(_ok),
-    "requested_not_applied": {
-        "fbx_version": _mcp_fbx_version,
-        "embed_textures": _mcp_embed_textures,
-        "save_textures_as_references": _mcp_save_textures_as_references,
-    },
-    "note": (
-        "FileFbxWriteOptions exposes no FBX version or texture-embedding "
-        "options (only SaveFileAs binary/ascii 6/7, SaveMaterialsAs, "
-        "SaveObjectsAs, etc.); these requested settings were not applied."
-    ),
+    "requested": {"file_type": _mcp_file_type},
+    "applied": {"file_type": _mcp_file_type} if _file_type_applied else {},
+    "not_applied": {} if _file_type_applied else {"file_type": _mcp_file_type},
 }
+if _ok and not _file_type_applied:
+    result["note"] = (
+        "Exported via the _-Export command using Rhino's current FBX "
+        "settings; file_type was not applied."
+    )
 '''
 
 _GLB_SCRIPT = r'''
@@ -239,6 +265,7 @@ _fmt = "GLTF" if _ext == ".gltf" else "GLB"
 
 # Attempt RhinoCommon FileGltfWriteOptions -------------------------------
 _ok = False
+_options_applied = False
 try:
     opts = Rhino.FileIO.FileGltfWriteOptions()
     opts.UseDracoCompression = _mcp_draco_compression
@@ -248,7 +275,8 @@ try:
         # ExportSelected honours the selection made above.
         _ok = bool(doc.ExportSelected(_mcp_path, opts.ToDictionary()))
     else:
-        _ok = bool(Rhino.FileIO.FileGltf.Write(_mcp_path, doc, opts))
+        _ok = bool(doc.Export(_mcp_path, opts.ToDictionary()))
+    _options_applied = _ok
 except Exception:
     _ok = False
 
@@ -259,16 +287,22 @@ if not _ok:
     _ok = os.path.isfile(_mcp_path)
 
 rs.UnselectAllObjects()
+_requested = {
+    "draco_compression": _mcp_draco_compression,
+    "export_materials": _mcp_export_materials,
+}
 result = {
     "path": _mcp_path,
     "format": _fmt,
-    "draco_compression": _mcp_draco_compression,
-    "export_materials": _mcp_export_materials,
+    "textures": "embedded" if _fmt == "GLB" else "external",
     "ok": bool(_ok),
-    "requested_not_applied": {"embed_textures": _mcp_embed_textures},
-    "note": (
-        "FileGltfWriteOptions has no texture-embedding switch; .glb always "
-        "embeds textures and .gltf writes external resources."
-    ),
+    "requested": _requested,
+    "applied": _requested if _options_applied else {},
+    "not_applied": {} if _options_applied else _requested,
 }
+if _ok and not _options_applied:
+    result["note"] = (
+        "Exported via the _-Export command using Rhino's current glTF "
+        "settings; the requested options were not applied."
+    )
 '''

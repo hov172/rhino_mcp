@@ -78,6 +78,45 @@ def _step_render_views(views: list[str], strength: float) -> list[dict[str, Any]
     return results
 
 
+_DEFAULT_LAYER = "Urban::Massing::Tower"
+_DEFAULT_CLIMATE = "London"
+_DEFAULT_FAR = 3.5
+
+
+def _current_massing_layer() -> str:
+    """Layer urban_generate_massing baked to; falls back to typology, then default."""
+    st = state()
+    if st.current_massing_layer:
+        return st.current_massing_layer
+    if st.current_typology:
+        return f"Urban::Massing::{st.current_typology}"
+    return _DEFAULT_LAYER
+
+
+def _current_climate_zone(brief: str) -> str:
+    """Climate zone parsed from the brief, else the default."""
+    if brief:
+        try:
+            from rhmcp.tools.urban import _parse_urban_prompt_text
+            zone = _parse_urban_prompt_text(brief).get("climate_zone")
+            if zone:
+                return str(zone)
+        except Exception:
+            pass
+    return _DEFAULT_CLIMATE
+
+
+def _current_far() -> float:
+    """FAR from live/cached massing metrics, else the default."""
+    try:
+        from rhmcp.tools.urban import _urban_get_metrics
+        metrics = _urban_get_metrics()
+        far = float(metrics.get("far") or 0.0) if metrics.get("ok") else 0.0
+        return far if far > 0 else _DEFAULT_FAR
+    except Exception:
+        return _DEFAULT_FAR
+
+
 def _step_run_solar(geometry_layer: str, climate_zone: str) -> dict[str, Any]:
     try:
         from rhmcp.tools.urban import _urban_run_solar_internal
@@ -167,6 +206,7 @@ def register(mcp: FastMCP) -> None:
 
         state().current_run = {"run_id": run_id, "running": True, "current_step": "design_language",
                         "steps_done": 0, "steps_total": 4}
+        climate_zone = _current_climate_zone(brief_text)
 
         # Step 1 — Design Language (aborting on failure)
         t0 = time.time()
@@ -175,14 +215,9 @@ def register(mcp: FastMCP) -> None:
                              "duration_s": 0.0, "summary": "reusing existing design language"})
         else:
             try:
-                typology = "tower"
-                far = 3.5
-                try:
-                    typology = state().current_typology or "tower"
-                except (ImportError, AttributeError):
-                    pass
+                typology = state().current_typology or "tower"
                 dl_result = _step_generate_design_language(
-                    brief_text, typology, far, "London", style_hints)
+                    brief_text, typology, _current_far(), climate_zone, style_hints)
                 if not dl_result.get("ok"):
                     err = dl_result.get("error", "design language generation failed")
                     step_log.append({"step": "design_language", "status": "failed",
@@ -237,8 +272,7 @@ def register(mcp: FastMCP) -> None:
                              "duration_s": 0.0, "summary": "solar analysis skipped"})
         else:
             try:
-                layer = "Urban::Massing::Tower"
-                solar = _step_run_solar(layer, "London")
+                solar = _step_run_solar(_current_massing_layer(), climate_zone)
                 solar_status = "ok" if solar.get("ok") else "failed"
                 step_log.append({"step": "solar", "status": solar_status,
                                  "duration_s": round(time.time() - t0, 2),

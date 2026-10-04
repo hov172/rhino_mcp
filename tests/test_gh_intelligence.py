@@ -369,6 +369,43 @@ class TestGhMigrateToGh2(unittest.TestCase):
         self.assertEqual(len(close_calls), 1)
 
 
+    def test_apply_graph_payload_matches_gh2_contract(self):
+        """Migration must send {key, type_name, x, y} components and {from_key, from_output, to_key, to_input} wires."""
+        fn = self.tools["gh_migrate_to_gh2"]
+        point_guid = "3581f42a-9592-4549-bd6b-1c0fc39d067b"  # GH1 Point, present in gh1_to_gh2_map.yml
+        export = {
+            "ok": True, "count": 2,
+            "components": [
+                {"instance_guid": "c1", "type_guid": point_guid, "nick_name": "Pt", "type_name": "GH_Point",
+                 "x": 10.0, "y": 20.0, "inputs": [], "outputs": [], "values": {},
+                 "connections": [{"from_output": "Pt", "to_id": "c2", "to_input": "P"}]},
+                {"instance_guid": "c2", "type_guid": point_guid, "nick_name": "Pt2", "type_name": "GH_Point",
+                 "x": 200.0, "y": 20.0, "inputs": [], "outputs": [], "values": {}, "connections": []},
+            ],
+        }
+        calls = {}
+
+        def mock_plugin(command, params, rhino_id=None):
+            calls[command] = params
+            if command == "gh1_export_migration_data":
+                return export
+            return {"ok": True, "placed": {"c1": "g1", "c2": "g2"}, "wired": 1, "errors": []}
+
+        with patch("rhmcp.tools_helpers.backend.plugin_result", side_effect=mock_plugin):
+            result = fn(confirm=True)
+
+        self.assertTrue(result["ok"])
+        self.assertEqual(result["migrated"], 2)
+        payload = calls["gh2_apply_graph"]
+        self.assertEqual(set(payload), {"components", "wires"})
+        for comp in payload["components"]:
+            self.assertEqual(set(comp), {"key", "type_name", "x", "y"})
+        self.assertEqual(payload["components"][0]["key"], "c1")
+        self.assertEqual(payload["wires"], [
+            {"from_key": "c1", "from_output": "Pt", "to_key": "c2", "to_input": "P"},
+        ])
+
+
 class TestGh2IntelligenceTools(unittest.TestCase):
     @classmethod
     def setUpClass(cls):

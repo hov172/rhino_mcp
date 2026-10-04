@@ -27,31 +27,33 @@ def register(mcp: FastMCP) -> None:
         metallic: float = 0.0,
         roughness: float = 0.5,
         opacity: float = 1.0,
-        ior: float = 1.5,
+        ior: float | None = None,
         emission: list[float] | None = None,
         emission_multiplier: float = 0.0,
         base_color_texture: str | None = None,
         roughness_texture: str | None = None,
         metallic_texture: str | None = None,
         normal_texture: str | None = None,
-        bump_scale: float = 1.0,
         displacement_texture: str | None = None,
-        displacement_scale: float = 1.0,
         ao_texture: str | None = None,
         opacity_texture: str | None = None,
     ) -> dict[str, object]:
         """Create a Physically-Based Rendering (PBR) material in the active Rhino document.
 
         PBR materials produce photorealistic results when rendered with Rhino's
-        Cycles engine. All color..."""
+        Cycles engine. All color components are 0.0-1.0 floats. ``ior`` (index
+        of refraction, >= 1.0) is applied through
+        ``PhysicallyBasedMaterial.OpacityIOR`` after creation; Rhino exposes
+        no bump or displacement amount on these texture slots, so textures
+        are attached at their default amount. The result reports
+        ``applied`` / ``not_applied`` for ``ior``."""
         # Validate numeric ranges
         metallic = max(0.0, min(1.0, float(metallic)))
         roughness = max(0.0, min(1.0, float(roughness)))
         opacity = max(0.0, min(1.0, float(opacity)))
-        ior = max(1.0, float(ior))
+        if ior is not None:
+            ior = max(1.0, float(ior))
         emission_multiplier = max(0.0, float(emission_multiplier))
-        bump_scale = float(bump_scale)
-        displacement_scale = float(displacement_scale)
 
         if base_color is not None and len(base_color) < 3:
             return {"ok": False, "error": "base_color must have at least 3 elements [r, g, b]."}
@@ -63,10 +65,7 @@ def register(mcp: FastMCP) -> None:
             "metallic": metallic,
             "roughness": roughness,
             "opacity": opacity,
-            "ior": ior,
             "emission_multiplier": emission_multiplier,
-            "bump_scale": bump_scale,
-            "displacement_scale": displacement_scale,
         }
         if base_color is not None:
             params["base_color"] = [max(0.0, min(1.0, float(v))) for v in base_color[:3]]
@@ -90,11 +89,18 @@ def register(mcp: FastMCP) -> None:
                 return {"ok": False, "error": "Plugin backend unavailable and no fallback script."}
             raw = result.get("result", result)
             ok = bool(raw.get("success", False)) if isinstance(raw, dict) else False
-            return {
+            index = int(raw.get("material_index", -1)) if isinstance(raw, dict) else -1
+            out: dict[str, object] = {
                 "ok": ok,
-                "material_index": int(raw.get("material_index", -1)) if isinstance(raw, dict) else -1,
+                "material_index": index,
                 "material_name": str(raw.get("material_name", name)) if isinstance(raw, dict) else name,
+                "applied": {},
+                "not_applied": {},
             }
+            if ior is not None:
+                ior_ok = ok and index >= 0 and _apply_opacity_ior(index, ior)
+                out["applied" if ior_ok else "not_applied"] = {"ior": ior}
+            return out
         except Exception as e:
             return {"ok": False, "error": str(e)}
 
@@ -132,12 +138,18 @@ def register(mcp: FastMCP) -> None:
             if result is None:
                 return {"ok": False, "error": "Plugin backend unavailable."}
             raw = result.get("result", result)
-            ok = bool(raw.get("success", False)) if isinstance(raw, dict) else False
-            return {
+            if not isinstance(raw, dict):
+                return {"ok": False, "error": "Unexpected response from plugin.", "filepath": filepath}
+            ok = bool(raw.get("success", False))
+            out: dict[str, object] = {
                 "ok": ok,
-                "filepath": str(raw.get("filepath", filepath)) if isinstance(raw, dict) else filepath,
-                "message": str(raw.get("message", "")) if isinstance(raw, dict) else "",
+                "filepath": str(raw.get("filepath", filepath)),
+                "message": str(raw.get("message", "")),
+                "not_applied": list(raw.get("not_applied") or []),
             }
+            if not ok:
+                out["error"] = out["message"] or result.get("error") or "set_environment_map failed"
+            return out
         except Exception as e:
             return {"ok": False, "error": str(e)}
 
@@ -292,50 +304,51 @@ def register(mcp: FastMCP) -> None:
 
     @mcp.tool(annotations=ToolAnnotations(title="Set Render Settings", destructiveHint=True))
     def set_render_settings(
-        engine: str | None = None,
-        samples: int | None = None,
         background_color: list[int] | None = None,
         use_transparent_background: bool | None = None,
-        enable_shadows: bool | None = None,
-        ambient_occlusion: bool | None = None,
         enable_ground_plane: bool | None = None,
         ground_plane_altitude: float | None = None,
     ) -> dict[str, object]:
         """Update document-level render settings.
 
         Only the parameters explicitly passed are modified; all others retain
-        their current values."""
+        their current values. ``background_color`` and
+        ``use_transparent_background`` map to ``RenderSettings``;
+        ``enable_ground_plane`` and ``ground_plane_altitude`` map to the
+        document ``GroundPlane`` (altitude also disables auto-altitude and
+        works on its own). Rhino has no cross-engine API for renderer
+        selection, sample counts, shadows or ambient occlusion, so none are
+        offered. The result reports ``applied`` / ``not_applied``."""
         if background_color is not None and len(background_color) < 3:
             return {"ok": False, "error": "background_color must have at least 3 elements [r, g, b]."}
 
         params: dict[str, object] = {}
-        if engine is not None:
-            params["engine"] = str(engine).lower()
-        if samples is not None:
-            params["samples"] = max(1, int(samples))
         if background_color is not None:
             params["background_color"] = [max(0, min(255, int(v))) for v in background_color[:3]]
         if use_transparent_background is not None:
             params["use_transparent_background"] = bool(use_transparent_background)
-        if enable_shadows is not None:
-            params["enable_shadows"] = bool(enable_shadows)
-        if ambient_occlusion is not None:
-            params["ambient_occlusion"] = bool(ambient_occlusion)
         if enable_ground_plane is not None:
             params["enable_ground_plane"] = bool(enable_ground_plane)
-        if ground_plane_altitude is not None:
-            params["ground_plane_altitude"] = float(ground_plane_altitude)
+        if not params and ground_plane_altitude is None:
+            return {"ok": False, "error": "Pass at least one setting to change."}
 
+        applied: dict[str, object] = {}
+        not_applied: dict[str, object] = {}
         try:
-            result = _plugin("set_render_settings", params)
-            if result is None:
-                return {"ok": False, "error": "Plugin backend unavailable."}
-            raw = result.get("result", result)
-            ok = bool(raw.get("success", False)) if isinstance(raw, dict) else False
-            return {
-                "ok": ok,
-                "settings": raw.get("settings", params) if isinstance(raw, dict) else params,
-            }
+            if params:
+                result = _plugin("set_render_settings", params)
+                if result is None:
+                    return {"ok": False, "error": "Plugin backend unavailable."}
+                raw = result.get("result", result)
+                settings = raw.get("settings", {}) if isinstance(raw, dict) else {}
+                settings = settings if isinstance(settings, dict) else {}
+                for key, value in params.items():
+                    (applied if key in settings else not_applied)[key] = value
+            if ground_plane_altitude is not None:
+                altitude = float(ground_plane_altitude)
+                target = applied if _apply_ground_plane_altitude(altitude) else not_applied
+                target["ground_plane_altitude"] = altitude
+            return {"ok": not not_applied, "applied": applied, "not_applied": not_applied}
         except Exception as e:
             return {"ok": False, "error": str(e)}
 
@@ -343,6 +356,54 @@ def register(mcp: FastMCP) -> None:
 # ---------------------------------------------------------------------------
 # Private helpers
 # ---------------------------------------------------------------------------
+
+_SCRIPT_OPACITY_IOR = r'''
+import Rhino
+doc = Rhino.RhinoDoc.ActiveDoc
+_ok = False
+try:
+    mat = doc.Materials[_mcp_index]
+    pbr = mat.PhysicallyBased
+    if pbr is not None:
+        pbr.OpacityIOR = float(_mcp_ior)
+        mat.CommitChanges()
+        _ok = True
+except Exception:
+    _ok = False
+result = {"ok": _ok}
+'''
+
+_SCRIPT_GROUND_PLANE_ALTITUDE = r'''
+import Rhino
+doc = Rhino.RhinoDoc.ActiveDoc
+_ok = False
+try:
+    gp = doc.GroundPlane
+    gp.AutoAltitude = False
+    gp.Altitude = float(_mcp_altitude)
+    _ok = True
+except Exception:
+    _ok = False
+result = {"ok": _ok}
+'''
+
+
+def _script_ok(code: str) -> bool:
+    """Run *code* in Rhino and return whether its ``result["ok"]`` is true."""
+    res = rhino.execute_python(code)
+    script = res.get("script_result")
+    return bool(res.get("ok")) and isinstance(script, dict) and bool(script.get("ok"))
+
+
+def _apply_opacity_ior(material_index: int, ior: float) -> bool:
+    return _script_ok(
+        "_mcp_index = {}\n_mcp_ior = {}\n{}".format(int(material_index), float(ior), _SCRIPT_OPACITY_IOR)
+    )
+
+
+def _apply_ground_plane_altitude(altitude: float) -> bool:
+    return _script_ok("_mcp_altitude = {}\n{}".format(float(altitude), _SCRIPT_GROUND_PLANE_ALTITUDE))
+
 
 def _plugin(command_type: str, params: dict[str, object]) -> dict[str, object] | None:
     """

@@ -186,3 +186,71 @@ class TestUrbanListPipelineRuns(unittest.TestCase):
                                 project_name="P", scheme_name=f"V{i}")
         runs = tools["urban_list_pipeline_runs"]()
         self.assertEqual(len(runs), 3)
+
+
+class TestPipelineDerivesInputsFromState(unittest.TestCase):
+    """Solar layer / climate zone / FAR come from workflow state, not hard-coded values."""
+
+    def setUp(self):
+        from rhmcp.tools_helpers.workflow_state import current as state
+        self.state = state
+        state().current_massing_layer = None
+        state().current_typology = None
+
+    tearDown = setUp
+
+    def _run(self, **kw):
+        tools = _register()
+        defaults = dict(project_name="P", scheme_name="V1", render_views=["Perspective"])
+        defaults.update(kw)
+        with patch("rhmcp.tools.urban_pipeline._step_generate_design_language",
+                   return_value=_SAMPLE_DL_RESULT) as mock_dl, \
+             patch("rhmcp.tools.urban_pipeline._step_render_views", return_value=_SAMPLE_RENDERS), \
+             patch("rhmcp.tools.urban_pipeline._step_run_solar",
+                   return_value=_SAMPLE_ANALYSIS) as mock_solar, \
+             patch("rhmcp.tools.urban_pipeline._step_export_report", return_value=_SAMPLE_EXPORT):
+            tools["urban_run_studio_pipeline"](**defaults)
+        return mock_dl, mock_solar
+
+    def test_solar_uses_baked_layer_and_brief_climate_zone(self):
+        self.state().current_massing_layer = "Site::Massing::courtyard"
+        self.state().current_typology = "courtyard"
+        _, mock_solar = self._run(brief="Courtyard housing in Dubai, FAR 2.0")
+        mock_solar.assert_called_once_with("Site::Massing::courtyard", "Dubai")
+
+    def test_solar_layer_falls_back_to_typology_then_default(self):
+        self.state().current_typology = "podium_tower"
+        _, mock_solar = self._run(brief="")
+        mock_solar.assert_called_once_with("Urban::Massing::podium_tower", "London")
+
+        self.state().current_typology = None
+        _, mock_solar = self._run(brief="")
+        mock_solar.assert_called_once_with("Urban::Massing::Tower", "London")
+
+    def test_design_language_uses_metrics_far_and_brief_climate(self):
+        self.state().current_typology = "tower"
+        with patch("rhmcp.tools.urban._urban_get_metrics",
+                   return_value={"ok": True, "far": 4.2}):
+            mock_dl, _ = self._run(brief="Towers near the station in Tokyo")
+        mock_dl.assert_called_once_with("Towers near the station in Tokyo", "tower", 4.2, "Tokyo", None)
+
+    def test_design_language_far_falls_back_when_metrics_unavailable(self):
+        with patch("rhmcp.tools.urban._urban_get_metrics",
+                   return_value={"ok": False, "far": 0.0}):
+            mock_dl, _ = self._run(brief="")
+        self.assertEqual(mock_dl.call_args[0][2], 3.5)
+        self.assertEqual(mock_dl.call_args[0][3], "London")
+
+    def test_generate_massing_records_baked_layer(self):
+        import rhmcp.tools.urban as urban_mod
+        tools = {}
+        mcp = FastMCP("t"); urban_mod.register(mcp)
+        tools = {n: t.fn for n, t in mcp._tool_manager._tools.items()}
+        gh_ok = {"ok": True, "result": {}}
+        with patch.object(urban_mod, "_gh", return_value=gh_ok), \
+             patch.object(urban_mod, "_resolve_slider_guids", return_value=({"site_width": "g1"}, None, "bake")), \
+             patch.object(urban_mod, "_urban_get_metrics", return_value={"ok": False}), \
+             patch("rhmcp.tools_helpers.backend.execute_python", return_value={"ok": True}):
+            tools["urban_generate_massing"](typology="courtyard", site_origin=[0, 0, 0],
+                                            site_width=100, site_depth=80, layer_prefix="Site")
+        self.assertEqual(self.state().current_massing_layer, "Site::Massing::courtyard")

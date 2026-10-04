@@ -23,7 +23,9 @@ def register(mcp: FastMCP) -> None:
         """Retrieve computed output data from a Grasshopper component after solution.
 
         instance_guid: Instance GUID of the component.
-        output_name: NickName of the specific output param (e.g...."""
+        output_name: NickName of the specific output param (e.g. "Pt"). If omitted, all outputs are returned.
+        Returns {ok, outputs: [{name, data_type, path_count, value_count, values}]}.
+        """
         params: dict[str, object] = {"instance_guid": instance_guid}
         if output_name is not None:
             params["output_name"] = output_name
@@ -37,7 +39,9 @@ def register(mcp: FastMCP) -> None:
         """Retrieve runtime error and warning messages from Grasshopper components.
 
         instance_guid: If provided, get messages only from that component.
-                       If omitted, get messages..."""
+                       If omitted, get messages from every component in the active document.
+        Returns {ok, messages: [{component, message, level}], count} where level is "error" or "warning".
+        """
         params: dict[str, object] = {}
         if instance_guid is not None:
             params["instance_guid"] = instance_guid
@@ -52,7 +56,9 @@ def register(mcp: FastMCP) -> None:
         """Set the numeric value of a Grasshopper Number Slider component.
 
         instance_guid: Instance GUID of the slider component.
-        value: New slider value (will be clamped to the slider's..."""
+        value: New slider value (will be clamped to the slider's min/max range and rounded
+               to its decimal places). Triggers a re-solve.
+        """
         return _gh("gh_set_slider", {"instance_guid": instance_guid, "value": value}, rhino_id=rhino_id)
 
     @mcp.tool(annotations=ToolAnnotations(title="Set Panel Text", destructiveHint=True))
@@ -78,7 +84,9 @@ def register(mcp: FastMCP) -> None:
         """Set persistent numeric values on a Grasshopper Number parameter component.
 
         instance_guid: Instance GUID of the Number param.
-        values: One or more numeric values as a list (e.g. [1.0,..."""
+        values: One or more numeric values as a list (e.g. [1.0, 2.5, 3.0]). Replaces any
+                existing persistent data and triggers a re-solve.
+        """
         return _gh("gh_set_number_param", {"instance_guid": instance_guid, "values": values}, rhino_id=rhino_id)
 
     @mcp.tool(annotations=ToolAnnotations(title="Set Point Parameter Values", destructiveHint=True))
@@ -90,7 +98,9 @@ def register(mcp: FastMCP) -> None:
         """Set persistent point values on a Grasshopper Point parameter component.
 
         instance_guid: Instance GUID of the Point param.
-        points: List of points, each as [x, y, z] (e.g. [[0,0,0],..."""
+        points: List of points, each as [x, y, z] (e.g. [[0,0,0], [10,0,0]]). Two-element
+                points are treated as [x, y, 0]. Replaces existing persistent data and re-solves.
+        """
         # Flatten [[x,y,z],...] to [x,y,z,x,y,z,...] for C# handler
         flat: list[float] = []
         for i, pt in enumerate(points):
@@ -118,7 +128,16 @@ def register(mcp: FastMCP) -> None:
         """Add a script component (Python or C#) to the Grasshopper canvas. Requires Rhino 8.
 
         language: 'python' or 'csharp' (also accepts 'cs').
-        code: Source code string to pre-load into the..."""
+        code: Source code string to pre-load into the component. Must be non-empty; fails
+              with an error if the component exposes no string-typed source input.
+        inputs: Nicknames for the component's variable input params. Existing variable inputs
+                are renamed/added/removed so they match this list exactly, in order.
+        outputs: Nicknames for the variable output params, matched the same way. Fixed params
+                 the component does not allow removing (e.g. `out`) are kept and reported.
+        x, y: Canvas pivot position.
+        Returns {ok, instance_guid, inputs, outputs} with the final param nicknames, or an
+        explicit error if the component cannot be reshaped or the code cannot be injected.
+        """
         if language not in ("python", "csharp", "cs"):
             return {"ok": False, "error": "language must be 'python' or 'csharp'"}
         return _gh("gh_add_script_component", {
@@ -139,7 +158,8 @@ def register(mcp: FastMCP) -> None:
         """Replace the source code in an existing Grasshopper script component. Requires Rhino 8.
 
         instance_guid: Instance GUID of the script component.
-        code: New source code string...."""
+        code: New source code string. Replaces the existing source and triggers a re-solve.
+        """
         return _gh("gh_set_script_code", {"instance_guid": instance_guid, "code": code}, rhino_id=rhino_id)
 
 

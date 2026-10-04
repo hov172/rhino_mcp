@@ -17,24 +17,24 @@ def register(mcp: FastMCP) -> None:
     def export_step(
         path: str,
         schema: str = "AP214",
-        tolerance: float = 0.001,
         object_ids: list[str] | None = None,
         rhino_id: str | None = None,
     ) -> dict[str, object]:
         """Export selected objects (or all objects) to a STEP file.
 
         ``path`` must end in ``.step`` or ``.stp``.
-        ``schema`` controls the STEP application protocol: ``"AP203"``,..."""
+        ``schema`` controls the STEP application protocol: ``"AP203"``,
+        ``"AP214"`` (default) or ``"AP242"``.  Rhino's ``FileStpWriteOptions``
+        has no tolerance setting; the document absolute tolerance is used.
+        The result reports ``applied`` / ``not_applied`` for ``schema``."""
         code = (
             "_mcp_path = {}\n"
             "_mcp_schema = {}\n"
-            "_mcp_tolerance = {}\n"
             "_mcp_object_ids = {}\n"
             "{}"
         ).format(
             json.dumps(path),
             json.dumps(schema),
-            json.dumps(tolerance),
             repr(object_ids),
             _STEP_SCRIPT,
         )
@@ -44,25 +44,24 @@ def register(mcp: FastMCP) -> None:
     def export_iges(
         path: str,
         tolerance: float = 0.001,
-        trim_type: str = "parametric",
         object_ids: list[str] | None = None,
         rhino_id: str | None = None,
     ) -> dict[str, object]:
         """Export selected objects (or all objects) to an IGES file.
 
         ``path`` must end in ``.igs`` or ``.iges``.
-        ``tolerance`` is the export tolerance in document units.
-        ``trim_type``..."""
+        ``tolerance`` is the export tolerance in document units
+        (``FileIgsWriteOptions.Tolerance``).  Rhino exposes no trim-curve
+        type option, so none is offered.  The result reports ``applied`` /
+        ``not_applied`` for ``tolerance``."""
         code = (
             "_mcp_path = {}\n"
             "_mcp_tolerance = {}\n"
-            "_mcp_trim_type = {}\n"
             "_mcp_object_ids = {}\n"
             "{}"
         ).format(
             json.dumps(path),
             json.dumps(tolerance),
-            json.dumps(trim_type),
             repr(object_ids),
             _IGES_SCRIPT,
         )
@@ -72,24 +71,25 @@ def register(mcp: FastMCP) -> None:
     def export_dwg(
         path: str,
         autocad_version: str = "2018",
-        export_layout: bool = False,
         object_ids: list[str] | None = None,
         rhino_id: str | None = None,
     ) -> dict[str, object]:
         """Export selected objects (or all objects) to a DWG or DXF file.
 
         ``path`` must end in ``.dwg`` or ``.dxf``.
-        ``autocad_version`` selects the AutoCAD file format version:..."""
+        ``autocad_version`` selects the AutoCAD file format version:
+        ``2000``, ``2004``, ``2007``, ``2010``, ``2013`` or ``2018``.
+        Rhino's ``FileDwgWriteOptions`` has no layout-export switch, so none
+        is offered.  The result reports ``applied`` / ``not_applied`` for
+        ``autocad_version``."""
         code = (
             "_mcp_path = {}\n"
             "_mcp_autocad_version = {}\n"
-            "_mcp_export_layout = {}\n"
             "_mcp_object_ids = {}\n"
             "{}"
         ).format(
             json.dumps(path),
             json.dumps(autocad_version),
-            repr(export_layout),
             repr(object_ids),
             _DWG_SCRIPT,
         )
@@ -159,14 +159,15 @@ result = {
     "path": _mcp_path,
     "format": "STEP",
     "ok": _ok,
-    "requested": {"schema": _mcp_schema, "tolerance": _mcp_tolerance},
-    "applied": {"schema": _mcp_schema} if (_schema_applied and not _used_fallback) else {},
-    "note": "FileStpWriteOptions has no tolerance option; tolerance was not applied.",
+    "requested": {"schema": _mcp_schema},
 }
+_schema_ok = _schema_applied and not _used_fallback
+result["applied"] = {"schema": _mcp_schema} if _schema_ok else {}
+result["not_applied"] = {} if _schema_ok else {"schema": _mcp_schema}
 if _used_fallback:
     result["note"] = (
         "Exported via the _-Export command using Rhino's current STEP "
-        "settings; the requested schema and tolerance were not applied."
+        "settings; the requested schema was not applied."
     )
 if _error and not _ok:
     result["error"] = _error
@@ -224,14 +225,14 @@ result = {
     "path": _mcp_path,
     "format": "IGES",
     "ok": _ok,
-    "requested": {"tolerance": _mcp_tolerance, "trim_type": _mcp_trim_type},
+    "requested": {"tolerance": _mcp_tolerance},
     "applied": {"tolerance": _mcp_tolerance} if _tolerance_applied else {},
-    "note": "FileIgsWriteOptions has no trim-curve-type option; trim_type was not applied.",
+    "not_applied": {} if _tolerance_applied else {"tolerance": _mcp_tolerance},
 }
 if _used_fallback:
     result["note"] = (
         "Exported via the _-Export command using Rhino's current IGES "
-        "settings; the requested tolerance and trim_type were not applied."
+        "settings; the requested tolerance was not applied."
     )
 if _error and not _ok:
     result["error"] = _error
@@ -246,6 +247,7 @@ doc = Rhino.RhinoDoc.ActiveDoc
 
 # AutoCAD version -> RhinoCommon enum name mapping
 _VERSION_MAP = {
+    "2000": "Acad2000",
     "2004": "Acad2004",
     "2007": "Acad2007",
     "2010": "Acad2010",
@@ -301,14 +303,14 @@ result = {
     "path": _mcp_path,
     "format": "DWG" if _mcp_path.lower().endswith(".dwg") else "DXF",
     "ok": _ok,
-    "requested": {"autocad_version": _mcp_autocad_version, "export_layout": _mcp_export_layout},
+    "requested": {"autocad_version": _mcp_autocad_version},
     "applied": {"autocad_version": _mcp_autocad_version} if _version_applied else {},
-    "note": "FileDwgWriteOptions has no layout-export option; export_layout was not applied.",
+    "not_applied": {} if _version_applied else {"autocad_version": _mcp_autocad_version},
 }
 if _used_fallback:
     result["note"] = (
         "Exported via the _-Export command using Rhino's current DWG/DXF "
-        "settings; the requested autocad_version and export_layout were not applied."
+        "settings; the requested autocad_version was not applied."
     )
 if _error and not _ok:
     result["error"] = _error

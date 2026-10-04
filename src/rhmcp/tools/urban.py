@@ -741,6 +741,7 @@ def register(mcp: FastMCP) -> None:
             return {"ok": False, "error": f"Invalid layer_prefix: {layer_prefix!r}. Use only letters, digits, spaces, and _:.-"}
 
         layer = f"{layer_prefix}::Massing::{typology}"
+        state().current_massing_layer = layer
         if bake_guid:
             baked = _gh("gh_bake_component", {"instance_guid": bake_guid, "layer": layer})
             if not baked.get("ok"):
