@@ -36,3 +36,6 @@ release/*.zip
 
 # Verified locally built Intel dependency wheels and provenance
 release/intel-wheels/
+
+# Local MCP client config (machine-specific paths)
+.mcp.json

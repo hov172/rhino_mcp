@@ -22,7 +22,10 @@ from Grasshopper.Kernel.Types import GH_Brep
 from Rhino.Geometry import Box, Brep, Interval, Plane, Point3d, Vector3d
 
 
-ROOT = "/Users/helpdesk/Developer/GitHub/rhino_mcp/grasshopper/urban"
+# Output directory: RHINO_MCP_GH_DIR if set, else <repo>/grasshopper/urban relative to this script.
+ROOT = os.environ.get("RHINO_MCP_GH_DIR") or os.path.join(
+    os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "grasshopper", "urban"
+)
 
 
 def _decimal(value):
