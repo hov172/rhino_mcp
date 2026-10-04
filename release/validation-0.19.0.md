@@ -13,4 +13,4 @@
 - Installer and uninstaller: Apple notarization accepted; tickets stapled and validated; Gatekeeper accepted both as Notarized Developer ID.
 - Installer submission: 4ea63f4b-317b-442d-a0d3-41e73d9a522c.
 - Uninstaller submission: bd09a831-4ed6-445c-830e-9c44369fe0b2.
-- `SHA256SUMS-0.19.0` records the two stapled packages, the Yak package, and the plugin assembly.
+- `SHA256SUMS-0.19.0` records the two stapled packages, the plugin zip, the plugin assembly, the Yak package, the Python wheel and sdist, and the third-party notice/inventory archive. The third-party archive was extracted from the signed installer payload.
