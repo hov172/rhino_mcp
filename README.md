@@ -4,7 +4,7 @@
 
 # Rhino MCP
 
-Control Rhino 3D from Claude, Cursor, Codex, and any other MCP-capable AI tool. Create geometry, manipulate objects, run Grasshopper definitions, manage layers and materials, install plugins, bake results, generate AI 3D models, read design documents (PDFs, drawings, floor plans, spreadsheets, Word docs, SVGs, images), and more — all through natural language.
+Control Rhino 3D from Claude, Cursor, Codex, and any other MCP-capable AI tool. Create geometry, manipulate objects, run Grasshopper definitions, manage layers and materials, install plugins, bake results, generate AI 3D models, read design documents (PDFs, drawings, floor plans, spreadsheets, Word docs, SVGs, images), and more — all through natural language. Ready-made [Agent Skills](skills/README.md) teach Claude Code, Codex, and ChatGPT the workflows for text-to-3D, image-to-3D, Grasshopper, landscape, urban massing, and rendering.
 
 ---
 
@@ -465,7 +465,7 @@ urban_run_studio_pipeline(project_name, scheme_name, brief, render_views, includ
 | PDF export | `DOCRAPTOR_API_KEY` (optional — falls back to local HTML) |
 | Cloud storage | `URBAN_AGENT_S3_BUCKET` + AWS credentials (optional — falls back to `~/.urbanagent/reports/`) |
 
-All cloud services are optional. Without them, reports are saved locally and renders are skipped with raw Rhino captures used as fallback.
+All cloud services are optional. Without them, reports are saved locally as HTML and each requested render view fails with an explicit error; there is no raw-capture fallback. Generate massing with `urban_generate_massing` before running the pipeline, or metrics are empty and renders show an empty scene.
 
 ### Tools
 
@@ -548,6 +548,8 @@ A `rhinocode` fallback path (Rhino 8.11+ only) is also available for most non-Gr
 ## Installation
 
 ### Upgrading from a Previous Version
+
+> **Upgrading to 0.19.0:** the plugin changed and several tools lost parameters that were never applied. Install the matching plugin, then read the [0.19.0 upgrade guide](docs/upgrade-0.19.0.md) for the table of removed parameters and changed result keys. On macOS the login LaunchAgent re-installs the plugin from `/Users/Shared/rhino_mcp/plugin`, so a hand-copied bundle must also be copied there or it is rolled back.
 
 > **Important:** Having two copies of the plugin installed at the same time causes a **port conflict** — both try to bind port 1999 on load, the second one fails silently, and Rhino gives no error. The result is that MCP commands either go to the wrong version or fail with `connection refused`, with no obvious indication of why.
 
@@ -1621,7 +1623,7 @@ Requires the plugin backend and Grasshopper to be open in Rhino.
 | `gh_set_point_param` | Set one or more persistent point values on a Point parameter component. Accepts `[[x,y,z], ...]`; 2D points `[x,y]` are extended to `[x,y,0]`. |
 | `gh_get_output` | Read computed output data from a component after a solution. Specify `output_name` to get a single output, or omit to get all outputs. |
 | `gh_get_errors` | Get runtime error and warning messages. Optionally filter to a single component by instance GUID. |
-| `gh_add_script_component` | Add a C# or Python script component to the canvas. Specify `language` (`python` or `csharp`), `code`, input/output parameter names, and canvas position. **Requires Rhino 8.** |
+| `gh_add_script_component` | Add a C# or Python script component to the canvas. Specify `language` (`python` or `csharp`), `code`, `inputs`, `outputs`, and canvas position. The component's variable ports are reshaped to the requested names; the result returns the final `inputs` and `outputs`, since ports the component refuses to remove are kept. Returns an explicit error if the component cannot be reshaped or `code` cannot be injected. **Requires Rhino 8.** |
 | `gh_set_script_code` | Replace the source code in an existing script component and trigger a re-solve. **Requires Rhino 8.** |
 
 ---
@@ -1916,7 +1918,7 @@ Ladybug handles climate visualisation (weather data, sun, wind, radiation). Hone
 | `assign_pbr_material_to_objects` | Assign a named PBR material to one or more objects by GUID. |
 | `get_pbr_material_info` | Return the PBR properties and texture paths of a named material. |
 | `list_pbr_materials` | List all PBR materials in the document. |
-| `set_environment_map` | Load an HDR or EXR file as the render environment (background, lighting, reflections). |
+| `set_environment_map` | Load an HDR or EXR file as a render environment and assign it for background, skylighting, and reflections per flag, with `rotation` and `intensity`. Returns `environment_id` and a `not_applied` list for anything the render content did not expose (intensity depends on the texture having a multiplier). |
 | `set_render_settings` | Configure background color, transparent background, ground plane on/off and ground plane altitude (altitude applies independently). Renderer choice, samples, shadows and AO have no cross-engine Rhino API and are not offered. Reports `applied` / `not_applied`. |
 | `render_to_image` | Trigger a Rhino render and save/return the result as a file path and optional base-64 PNG. |
 
@@ -2173,7 +2175,7 @@ Requires env vars — see [Studio Pipeline Env Vars](#studio-pipeline-env-vars).
 
 | Tool | Description |
 |---|---|
-| `urban_run_studio_pipeline` | Single-call orchestrator. Runs all 4 steps in sequence: design language → AI renders → solar analysis → PDF export. Design language failure aborts; render/solar/export failures are logged but the pipeline continues. Supports `skip_steps=["renders"]` to reuse existing renders. Returns `PipelineResult` with `report_url`, `renders`, `metrics`, `design_language`, `step_log`, `elapsed_s`, and `errors`. |
+| `urban_run_studio_pipeline` | Single-call orchestrator. Runs all 4 steps in sequence: design language → AI renders → solar analysis → PDF export. Design language failure aborts; render/solar/export failures are logged but the pipeline continues. The solar step uses the layer the massing was baked to, the climate zone parsed from `brief`, and the current FAR. `skip_steps` accepts `design_language`, `renders`, and `solar`; export always runs. Generate massing first. Returns `PipelineResult` with `report_url`, `renders`, `metrics`, `design_language`, `step_log`, `elapsed_s`, and `errors`. |
 | `urban_pipeline_status` | Return the status of the currently running or last completed pipeline: `{running, current_step, steps_done, steps_total}`. |
 | `urban_list_pipeline_runs` | List all pipeline runs this session with their report URLs, step counts, and errors. Allows comparing across scheme iterations. |
 
@@ -2509,6 +2511,9 @@ uv run python -m pytest tests/ \
     --ignore=tests/test_gh_intelligence_integration.py \
     -q
 
+# Verify every tool name referenced by the Agent Skills exists in the code
+uv run python scripts/check_skill_tools.py
+
 # Confirm the current non-integration test count
 uv run python -m pytest tests/ \
     --ignore=tests/test_integration.py \
@@ -2518,7 +2523,7 @@ uv run python -m pytest tests/ \
     --collect-only -q
 ```
 
-The non-integration collection currently includes 512 tests plus five subtests. Integration tests auto-skip cleanly if the plugin socket is not reachable.
+The non-integration collection currently includes 538 tests plus five subtests. Integration tests auto-skip cleanly if the plugin socket is not reachable.
 
 ---
 

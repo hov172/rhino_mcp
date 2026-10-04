@@ -45,4 +45,4 @@ Follow the [0.19.0 upgrade guide](docs/upgrade-0.19.0.md) and [publishing checkl
 
 ## Latest installed verification
 
-On 2026-09-07, installed plugin and MCP server **0.17.1** passed a live ping and an end-to-end read-only document query on Rhino **8.34.26223.11002**. See the [validation record](release/validation-0.17.1.md) for artifact checks and remaining validation limits. Recheck runtime status when needed; this is a dated observation.
+On 2026-10-04, the released **0.19.0** plugin bundle and server were installed locally (Rhino 8 `MacPlugIns` bundle and `/Users/Shared/rhino_mcp/plugin` match the release by content). No live Rhino session was started afterwards, so environment maps, script component port reshaping, and Grasshopper 2 placement remain compile-verified only. The last live ping and read-only round trip were on 2026-09-07 with 0.17.1 on Rhino **8.34.26223.11002**; see the [validation record](release/validation-0.19.0.md) for the 0.19.0 artifact checks. Recheck runtime status when needed; this is a dated observation.
