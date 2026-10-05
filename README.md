@@ -202,11 +202,7 @@ Add this (replace `/path/to/rhino-mcp` with the actual path where you cloned the
       "env": {
         "RHINO_MCP_BACKEND": "plugin",
         "RHINO_MCP_HOST": "127.0.0.1",
-        "RHINO_MCP_PORT": "1999",
-        "ANTHROPIC_API_KEY": "sk-ant-...",
-        "FAL_KEY": "...",
-        "DOCRAPTOR_API_KEY": "",
-        "URBAN_AGENT_S3_BUCKET": ""
+        "RHINO_MCP_PORT": "1999"
       }
     }
   }
@@ -215,7 +211,7 @@ Add this (replace `/path/to/rhino-mcp` with the actual path where you cloned the
 
 The `command` + `args` lines are literally the shell command Claude Desktop runs to start the server. The `env` block sets environment variables for that process — this is how API keys are passed in without touching your system environment.
 
-> **Minimum required:** only `RHINO_MCP_BACKEND`, `RHINO_MCP_HOST`, and `RHINO_MCP_PORT` are needed for basic Rhino tools. Add `ANTHROPIC_API_KEY` for design language generation and `FAL_KEY` for AI renders. Leave others blank or omit them.
+> **That is the whole required configuration.** Every modeling, Grasshopper, rendering, and export tool works with these three variables. Optional vendor keys unlock a handful of extra tools: `ANTHROPIC_API_KEY` for urban design language generation, `FAL_KEY` for the two fal.ai viewport render tools, `DOCRAPTOR_API_KEY` for PDF reports, and the Hyper3D, Hunyuan3D, and Sketchfab keys for AI 3D generation. Add them to the `env` block only when you want those tools; without them the affected tools return a clear "key not set" result and nothing else changes.
 
 #### Step 5 — Start Rhino
 
@@ -276,11 +272,11 @@ docker run -d \
   -e RHINO_MCP_PLUGIN_TLS_CA=/certs/ca.pem \
   -e RHINO_MCP_PLUGIN_SECRET="$RHINO_MCP_PLUGIN_SECRET" \
   -e RHINO_MCP_AUTH_TOKEN="replace-with-a-unique-random-token-at-least-32-chars" \
-  -e ANTHROPIC_API_KEY="sk-ant-..." \
-  -e FAL_KEY="..." \
   --name rhino-mcp \
   rhino-mcp
 ```
+
+Optional vendor keys (`ANTHROPIC_API_KEY`, `FAL_KEY`, `DOCRAPTOR_API_KEY`, and the 3D generation keys) are extra `-e` flags; add them only for the tools that use them.
 
 The container starts the MCP server in HTTP mode and defaults `RHINO_MCP_HOST=host.docker.internal`, which resolves to the Docker host on macOS and Windows automatically.
 
@@ -296,8 +292,6 @@ docker run -d -p 8000:8000 \
   -e RHINO_MCP_PLUGIN_TLS_CA=/certs/ca.pem \
   -e RHINO_MCP_PLUGIN_SECRET="$RHINO_MCP_PLUGIN_SECRET" \
   -e RHINO_MCP_AUTH_TOKEN="replace-with-a-unique-random-token-at-least-32-chars" \
-  -e ANTHROPIC_API_KEY="sk-ant-..." \
-  -e FAL_KEY="..." \
   --name rhino-mcp \
   rhino-mcp
 ```
@@ -460,8 +454,8 @@ urban_run_studio_pipeline(project_name, scheme_name, brief, render_views, includ
 
 | Feature | Requirement |
 |---|---|
-| Design language | `ANTHROPIC_API_KEY` |
-| AI renders | `FAL_KEY` (fal.ai account) |
+| Design language | `ANTHROPIC_API_KEY` (optional — `urban_generate_design_language` reports the missing key) |
+| AI renders | `FAL_KEY` (optional — only `urban_render_views` and `urban_render_style_preview` use fal.ai; they report the missing key and the pipeline skips the render step) |
 | PDF export | `DOCRAPTOR_API_KEY` (optional — falls back to local HTML) |
 | Cloud storage | `URBAN_AGENT_S3_BUCKET` + AWS credentials (optional — falls back to `~/.urbanagent/reports/`) |
 
@@ -501,6 +495,7 @@ Claude: [calls urban_generate_massing + urban_generate_design_language]
 ### Env var setup
 
 ```bash
+# All optional — set only the ones for tools you use.
 export ANTHROPIC_API_KEY=sk-ant-...
 export FAL_KEY=...
 export DOCRAPTOR_API_KEY=...
@@ -687,20 +682,20 @@ uv run python -m rhmcp --help
 
 ### 3. Configure API Keys (Studio Pipeline)
 
-The Studio Pipeline features require API keys for three external services. All are optional — the pipeline degrades gracefully without them — but you need at least `ANTHROPIC_API_KEY` to generate design language.
+The Studio Pipeline can use up to four external services. All are optional and none is needed for ordinary Rhino or Grasshopper work. Without a key, the tool that needs it returns a "key not set" result and the pipeline continues past that step.
 
 | Key | Where to get it | Required for |
 |---|---|---|
-| `ANTHROPIC_API_KEY` | [console.anthropic.com](https://console.anthropic.com/) | Design language generation (`urban_generate_design_language`) |
-| `FAL_KEY` | [fal.ai/dashboard](https://fal.ai/dashboard) | AI viewport renders (`urban_render_views`, `urban_render_style_preview`) |
+| `ANTHROPIC_API_KEY` | [console.anthropic.com](https://console.anthropic.com/) | Design language generation (`urban_generate_design_language`) (optional) |
+| `FAL_KEY` | [fal.ai/dashboard](https://fal.ai/dashboard) | AI viewport renders (`urban_render_views`, `urban_render_style_preview`) (optional) |
 | `DOCRAPTOR_API_KEY` | [docraptor.com](https://docraptor.com/) | PDF report export (optional — falls back to local HTML) |
 | `URBAN_AGENT_S3_BUCKET` + AWS credentials | AWS Console | Cloud storage for report share links (optional — falls back to `~/.urbanagent/reports/`) |
 
 **macOS / Linux — add to `~/.zshrc` or `~/.bashrc` for persistence:**
 
 ```bash
-export ANTHROPIC_API_KEY="sk-ant-..."
-export FAL_KEY="..."
+export ANTHROPIC_API_KEY="sk-ant-..."    # optional
+export FAL_KEY="..."                     # optional
 export DOCRAPTOR_API_KEY="..."          # optional
 export URBAN_AGENT_S3_BUCKET="my-bucket"  # optional
 export AWS_ACCESS_KEY_ID="..."           # optional
@@ -744,15 +739,11 @@ docker run -d \
   -e RHINO_MCP_PLUGIN_TLS_CA=/certs/ca.pem \
   -e RHINO_MCP_PLUGIN_SECRET="$RHINO_MCP_PLUGIN_SECRET" \
   -e RHINO_MCP_AUTH_TOKEN="replace-with-a-unique-random-token-at-least-32-chars" \
-  -e ANTHROPIC_API_KEY="sk-ant-..." \
-  -e FAL_KEY="..." \
-  -e DOCRAPTOR_API_KEY="..." \
-  -e URBAN_AGENT_S3_BUCKET="my-bucket" \
-  -e AWS_ACCESS_KEY_ID="..." \
-  -e AWS_SECRET_ACCESS_KEY="..." \
   --name rhino-mcp \
   rhino-mcp
 ```
+
+To enable the optional studio pipeline services, add their keys as extra `-e` flags: `ANTHROPIC_API_KEY`, `FAL_KEY`, `DOCRAPTOR_API_KEY`, `URBAN_AGENT_S3_BUCKET` with AWS credentials.
 
 The container defaults to `RHINO_MCP_HOST=host.docker.internal`, which on **macOS and Windows** resolves automatically to the Docker host where Rhino is running. **Linux** requires one extra flag:
 
@@ -1232,8 +1223,8 @@ When debugging connection failures, set `RHINO_MCP_BACKEND=plugin` temporarily. 
 | Variable | Default | Description |
 |---|---|---|
 | `RHINO_MCP_BACKEND` | `auto` | Backend mode: `plugin`, `rhinocode`, or `auto` |
-| `ANTHROPIC_API_KEY` | *(unset)* | Required for `urban_generate_design_language` and the studio pipeline design step |
-| `FAL_KEY` | *(unset)* | Required for `urban_render_views` and `urban_render_style_preview` (fal.ai account) |
+| `ANTHROPIC_API_KEY` | *(unset)* | Optional — used only by `urban_generate_design_language` and the studio pipeline design step; the tool reports the missing key |
+| `FAL_KEY` | *(unset)* | Optional — used only by `urban_render_views` and `urban_render_style_preview` (fal.ai account); the tools report the missing key and the pipeline skips renders |
 | `DOCRAPTOR_API_KEY` | *(unset)* | Optional — enables PDF conversion in `urban_export_report`. Falls back to local HTML when unset. |
 | `URBAN_AGENT_S3_BUCKET` | *(unset)* | Optional — S3 bucket name for report uploads. Falls back to `~/.urbanagent/reports/` when unset. |
 | `AWS_ACCESS_KEY_ID` | *(unset)* | Optional — AWS credentials for S3 report uploads. |
@@ -2155,7 +2146,7 @@ Requires env vars — see [Studio Pipeline Env Vars](#studio-pipeline-env-vars).
 | `urban_update_design_language` | Patch a single field of the current design language (e.g. `style_name`, `facade_vocabulary`, `material_palette`). Re-derives the diffusion prompt when style or materials change. |
 | `urban_get_design_language` | Return the current session design language dict, or `{"set": false}` if none generated yet. |
 
-**AI Renders** (`FAL_KEY` required):
+**AI Renders** (optional; these two tools need `FAL_KEY` and report when it is unset):
 
 | Tool | Description |
 |---|---|
@@ -2450,8 +2441,8 @@ Install by copying the folders into `~/.claude/skills/` or `~/.codex/skills/`, o
 ## Studio Pipeline Env Vars
 
 ```bash
-export ANTHROPIC_API_KEY=sk-ant-...          # design language generation
-export FAL_KEY=...                            # AI renders (fal.ai account)
+export ANTHROPIC_API_KEY=sk-ant-...          # design language generation (optional)
+export FAL_KEY=...                            # AI renders via fal.ai (optional)
 export DOCRAPTOR_API_KEY=...                  # PDF export (optional)
 export URBAN_AGENT_S3_BUCKET=my-bucket       # cloud storage (optional)
 export AWS_ACCESS_KEY_ID=...                  # S3 credentials (optional)
