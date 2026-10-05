@@ -11,7 +11,7 @@ This file gives AI coding agents (Claude, Codex, Gemini, etc.) the context neede
 1. **Python MCP server** (`src/rhmcp/`) — FastMCP-based server exposing 358 tools to AI clients
 2. **C# Rhino plugin** (`rhino_plugin/`) — TCP socket server inside Rhino (port 1999) that receives and executes commands
 
-Current version: **0.19.0**
+Current version: **0.20.0**
 
 ---
 

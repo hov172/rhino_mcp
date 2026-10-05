@@ -236,9 +236,11 @@ public static class GHCanvasHandlers
     public static object AddComponent(Dictionary<string, JsonElement> p)
     {
         var compGuidStr = p.String("component_guid");
-        if (string.IsNullOrWhiteSpace(compGuidStr))
-            return new { ok = false, error = "component_guid is required" };
-        if (!Guid.TryParse(compGuidStr, out var compGuid))
+        var typeName    = p.String("type_name") ?? p.String("name");
+        if (string.IsNullOrWhiteSpace(compGuidStr) && string.IsNullOrWhiteSpace(typeName))
+            return new { ok = false, error = "component_guid or type_name is required" };
+        var compGuid = Guid.Empty;
+        if (!string.IsNullOrWhiteSpace(compGuidStr) && !Guid.TryParse(compGuidStr, out compGuid))
             return new { ok = false, error = $"Invalid component_guid: {compGuidStr}" };
 
         var x = (float)p.Double("x", 0);
@@ -250,6 +252,16 @@ public static class GHCanvasHandlers
             try
             {
                 var doc = GHDocumentHandlers.ActiveDoc();
+                if (compGuid == Guid.Empty)
+                {
+                    var proxy = Instances.ComponentServer.FindObjectByName(typeName, true, true);
+                    if (proxy == null)
+                    {
+                        result = new { ok = false, error = $"No component named '{typeName}'. Use gh_search_components to find the name or GUID." };
+                        return;
+                    }
+                    compGuid = proxy.Guid;
+                }
                 var obj = Instances.ComponentServer.EmitObject(compGuid);
                 if (obj == null)
                 {
@@ -403,32 +415,16 @@ public static class GHCanvasHandlers
                 var doc       = GHDocumentHandlers.ActiveDoc();
                 var fromGuid  = ParseGuid(p.String("from_guid"),  "from_guid");
                 var toGuid    = ParseGuid(p.String("to_guid"),    "to_guid");
-                var fromName  = p.String("from_output") ?? throw new ArgumentException("from_output is required");
-                var toName    = p.String("to_input")    ?? throw new ArgumentException("to_input is required");
+                var fromEl    = RequirePort(p, "from_output");
+                var toEl      = RequirePort(p, "to_input");
 
                 var fromObj = doc.FindObject(fromGuid, false)
                     ?? throw new ArgumentException($"Source object {fromGuid} not found");
                 var toObj   = doc.FindObject(toGuid, false)
                     ?? throw new ArgumentException($"Target object {toGuid} not found");
 
-                // Standalone params (panels, sliders, Param_Number, ...) are
-                // valid wire endpoints too — they act as their own output/input.
-                IGH_Param outParam = fromObj switch
-                {
-                    IGH_Component fc => fc.Params.Output.FirstOrDefault(o =>
-                        string.Equals(o.NickName, fromName, StringComparison.OrdinalIgnoreCase))
-                        ?? throw new ArgumentException($"Output '{fromName}' not found on {fromGuid}"),
-                    IGH_Param fp => fp,
-                    _ => throw new ArgumentException($"Source {fromGuid} is not a component or parameter"),
-                };
-                IGH_Param inParam = toObj switch
-                {
-                    IGH_Component tc => tc.Params.Input.FirstOrDefault(i =>
-                        string.Equals(i.NickName, toName, StringComparison.OrdinalIgnoreCase))
-                        ?? throw new ArgumentException($"Input '{toName}' not found on {toGuid}"),
-                    IGH_Param tp => tp,
-                    _ => throw new ArgumentException($"Target {toGuid} is not a component or parameter"),
-                };
+                var outParam = ResolveOutput(fromObj, fromEl, fromGuid);
+                var inParam  = ResolveInput(toObj, toEl, toGuid);
 
                 inParam.AddSource(outParam);
                 inParam.ExpireSolution(false);
@@ -452,26 +448,20 @@ public static class GHCanvasHandlers
                 var doc      = GHDocumentHandlers.ActiveDoc();
                 var fromGuid = ParseGuid(p.String("from_guid"), "from_guid");
                 var toGuid   = ParseGuid(p.String("to_guid"),   "to_guid");
-                var fromName = p.String("from_output") ?? throw new ArgumentException("from_output is required");
-                var toName   = p.String("to_input")    ?? throw new ArgumentException("to_input is required");
+                var fromEl   = RequirePort(p, "from_output");
+                var toEl     = RequirePort(p, "to_input");
 
-                var toObj = doc.FindObject(toGuid, false)
+                var fromObj = doc.FindObject(fromGuid, false)
+                    ?? throw new ArgumentException($"Source object {fromGuid} not found");
+                var toObj   = doc.FindObject(toGuid, false)
                     ?? throw new ArgumentException($"Target object {toGuid} not found");
-                IGH_Param inParam = toObj switch
-                {
-                    IGH_Component tc => tc.Params.Input.FirstOrDefault(i =>
-                        string.Equals(i.NickName, toName, StringComparison.OrdinalIgnoreCase))
-                        ?? throw new ArgumentException($"Input '{toName}' not found on {toGuid}"),
-                    IGH_Param tp => tp,
-                    _ => throw new ArgumentException($"Target {toGuid} is not a component or parameter"),
-                };
+                var outParam = ResolveOutput(fromObj, fromEl, fromGuid);
+                var inParam  = ResolveInput(toObj, toEl, toGuid);
 
-                var src = inParam.Sources.FirstOrDefault(s =>
-                    s.Attributes.GetTopLevel.DocObject.InstanceGuid == fromGuid &&
-                    string.Equals(s.NickName, fromName, StringComparison.OrdinalIgnoreCase));
+                var src = inParam.Sources.FirstOrDefault(s => s.InstanceGuid == outParam.InstanceGuid);
                 if (src == null)
                 {
-                    result = new { ok = false, error = $"Wire from '{fromName}' on {fromGuid} to '{toName}' on {toGuid} not found" };
+                    result = new { ok = false, error = $"Wire from '{fromEl}' on {fromGuid} to '{toEl}' on {toGuid} not found" };
                     return;
                 }
                 inParam.RemoveSource(src);
@@ -522,6 +512,50 @@ public static class GHCanvasHandlers
     // -----------------------------------------------------------------------
     // Private helpers
     // -----------------------------------------------------------------------
+
+    private static JsonElement RequirePort(Dictionary<string, JsonElement> p, string key)
+    {
+        if (!p.TryGetValue(key, out var el) || el.ValueKind == JsonValueKind.Null)
+            throw new ArgumentException($"{key} is required");
+        return el;
+    }
+
+    /// <summary>
+    /// Port reference: JSON number = 0-based index, string = nickname or name (case-insensitive),
+    /// numeric string = index. Same contract as the GH2 handlers.
+    /// </summary>
+    private static IGH_Param FindPort(IList<IGH_Param> ports, JsonElement el, string kind, Guid owner)
+    {
+        if (el.ValueKind == JsonValueKind.Number && el.TryGetInt32(out var idx))
+            return idx >= 0 && idx < ports.Count
+                ? ports[idx]
+                : throw new ArgumentException($"{kind} index {idx} is out of range on {owner} ({ports.Count} ports)");
+
+        var text = el.ValueKind == JsonValueKind.String ? el.GetString() ?? "" : el.ToString();
+        var byName = ports.FirstOrDefault(prm =>
+            string.Equals(prm.NickName, text, StringComparison.OrdinalIgnoreCase)
+            || string.Equals(prm.Name, text, StringComparison.OrdinalIgnoreCase));
+        if (byName != null) return byName;
+        if (int.TryParse(text, out var strIdx) && strIdx >= 0 && strIdx < ports.Count)
+            return ports[strIdx];
+        throw new ArgumentException($"{kind} '{text}' not found on {owner}");
+    }
+
+    // Standalone params (panels, sliders, Param_Number, ...) are valid wire
+    // endpoints too — they act as their own output/input.
+    private static IGH_Param ResolveOutput(IGH_DocumentObject obj, JsonElement port, Guid owner) => obj switch
+    {
+        IGH_Component c => FindPort(c.Params.Output, port, "Output", owner),
+        IGH_Param prm   => prm,
+        _ => throw new ArgumentException($"Source {owner} is not a component or parameter"),
+    };
+
+    private static IGH_Param ResolveInput(IGH_DocumentObject obj, JsonElement port, Guid owner) => obj switch
+    {
+        IGH_Component c => FindPort(c.Params.Input, port, "Input", owner),
+        IGH_Param prm   => prm,
+        _ => throw new ArgumentException($"Target {owner} is not a component or parameter"),
+    };
 
     private static Guid ParseGuid(string? s, string paramName)
     {

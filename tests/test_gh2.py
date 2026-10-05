@@ -245,6 +245,7 @@ class TestGH2ApplyGraph(unittest.TestCase):
         _, params = mock_pr.call_args[0]
         self.assertEqual(params["components"], components)
         self.assertEqual(params["wires"], wires)
+        self.assertIs(params["solve"], True)
 
     def test_omits_wires_when_none(self) -> None:
         """gh2_apply_graph must omit the wires key when wires is None."""
@@ -268,7 +269,47 @@ class TestGH2ApplyGraph(unittest.TestCase):
             fn(components=components, wires=wires)
         cmd, params = mock_pr.call_args[0]
         self.assertEqual(cmd, "gh2_apply_graph")
-        self.assertEqual(params, {"components": components, "wires": wires})
+        self.assertEqual(params, {"components": components, "wires": wires, "solve": True})
+
+
+# ---------------------------------------------------------------------------
+# solve flag — write tools re-solve by default and return the solve summary
+# ---------------------------------------------------------------------------
+
+class TestGH2SolveFlag(unittest.TestCase):
+
+    @classmethod
+    def setUpClass(cls) -> None:
+        with patch("rhmcp.tools_helpers.backend.plugin_result", return_value=_PLUGIN_OK):
+            cls.tools = _register_gh2()
+
+    def _params(self, tool: str, **kwargs) -> dict:
+        with patch("rhmcp.tools_helpers.backend.plugin_result", return_value=_PLUGIN_OK) as mock_pr:
+            self.tools[tool](**kwargs)
+        return mock_pr.call_args[0][1]
+
+    def test_place_component_solves_by_default(self) -> None:
+        self.assertIs(self._params("gh2_place_component", type_name="Circle")["solve"], True)
+
+    def test_place_component_solve_false_forwarded(self) -> None:
+        self.assertIs(self._params("gh2_place_component", type_name="Circle", solve=False)["solve"], False)
+
+    def test_place_slider_solve_forwarded(self) -> None:
+        self.assertIs(self._params("gh2_place_slider", solve=False)["solve"], False)
+
+    def test_apply_graph_solve_false_forwarded(self) -> None:
+        self.assertIs(self._params("gh2_apply_graph", components=[], solve=False)["solve"], False)
+
+    def test_solve_summary_passes_through(self) -> None:
+        """The plugin's solve summary is returned to the agent untouched."""
+        summary = {"solved": False, "error_count": 1, "warning_count": 0,
+                   "errors": ["Circle: Radius too small"],
+                   "diagnostics": [{"instance_guid": "g", "name": "Circle", "level": "error", "message": "Radius too small"}]}
+        plugin = {"ok": True, "instance_guid": "g", "solve": summary}
+        with patch("rhmcp.tools_helpers.backend.plugin_result", return_value=plugin):
+            result = self.tools["gh2_place_component"](type_name="Circle")
+        self.assertTrue(result["ok"])
+        self.assertEqual(result["solve"], summary)
 
 
 # ---------------------------------------------------------------------------
@@ -283,10 +324,10 @@ class TestGH2ConnectPayload(unittest.TestCase):
             cls.tools = _register_gh2()
 
     def test_connect_sends_from_guid_to_guid(self) -> None:
-        """gh2_connect must send from_guid/to_guid (not from_instance/to_instance) to the plugin."""
+        """gh2_connect takes from_guid/to_guid, the same names as gh_connect_params and the plugin."""
         fn = self.tools["gh2_connect"]
         with patch("rhmcp.tools_helpers.backend.plugin_result", return_value=_PLUGIN_OK) as mock_pr:
-            fn(from_instance="aaa", to_instance="bbb", from_output=0, to_input="R")
+            fn(from_guid="aaa", to_guid="bbb", from_output=0, to_input="R")
         cmd, params = mock_pr.call_args[0]
         self.assertEqual(cmd, "gh2_connect")
         self.assertEqual(params, {"from_guid": "aaa", "from_output": 0, "to_guid": "bbb", "to_input": "R"})
@@ -297,7 +338,7 @@ class TestGH2ConnectPayload(unittest.TestCase):
         """Integer port indices must reach the plugin as JSON numbers, not strings."""
         fn = self.tools["gh2_connect"]
         with patch("rhmcp.tools_helpers.backend.plugin_result", return_value=_PLUGIN_OK) as mock_pr:
-            fn(from_instance="aaa", to_instance="bbb", from_output=1, to_input=2)
+            fn(from_guid="aaa", to_guid="bbb", from_output=1, to_input=2)
         _, params = mock_pr.call_args[0]
         self.assertIs(type(params["from_output"]), int)
         self.assertIs(type(params["to_input"]), int)
@@ -352,7 +393,7 @@ class TestGH2OSErrorHandling(unittest.TestCase):
         self._check_oserror("gh2_place_slider")
 
     def test_gh2_connect_oserror(self) -> None:
-        self._check_oserror("gh2_connect", from_instance="a", to_instance="b")
+        self._check_oserror("gh2_connect", from_guid="a", to_guid="b")
 
     def test_gh2_connect_many_oserror(self) -> None:
         self._check_oserror("gh2_connect_many", wires=[])

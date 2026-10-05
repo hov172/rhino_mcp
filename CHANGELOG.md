@@ -5,6 +5,15 @@ Versioning follows [Semantic Versioning](https://semver.org/).
 
 ---
 
+## [0.20.0] — 2026-10-04
+
+### Changed
+- **Grasshopper 1 and 2 share one argument shape.** `gh2_connect` takes `from_guid`, `from_output`, `to_guid`, `to_input` (was `from_instance`/`to_instance`), matching `gh_connect_params`. `gh_add_component` accepts `type_name` as well as `component_guid`, matching `gh2_place_component`. `gh_connect_params` and `gh_disconnect_params` accept a 0-based port index as well as a nickname, matching GH2. `gh2_connect_many` still accepts `from_instance`/`to_instance` as aliases.
+- **GH2 write tools return solve diagnostics.** `gh2_apply_graph`, `gh2_place_component`, and `gh2_place_slider` gain `solve` (default `true`) and return `solve: {solved, error_count, warning_count, errors, diagnostics}`, where each diagnostic is `{instance_guid, name, level, message}`. `gh2_solve_graph` returns the same fields alongside the existing `error_count`/`errors`.
+
+### Fixed
+- `gh_connect_params` with an integer port raised a JSON type error inside the plugin; it now resolves the index.
+
 ## [0.19.0] — 2026-10-04
 
 ### Added

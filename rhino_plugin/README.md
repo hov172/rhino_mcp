@@ -1,6 +1,6 @@
 # RhinoMCPPlugin
 
-Version **0.19.0**. The Rhino-side TCP socket server for the Rhino MCP project. This plugin runs inside Rhino 3D and handles all incoming commands from the Python MCP server.
+Version **0.20.0**. The Rhino-side TCP socket server for the Rhino MCP project. This plugin runs inside Rhino 3D and handles all incoming commands from the Python MCP server.
 
 ---
 
@@ -106,10 +106,10 @@ All GH commands require Grasshopper to be open.
 | `gh_list_components` | List all objects on the active canvas |
 | `gh_get_canvas` | Full canvas snapshot (components, wires, groups) |
 | `gh_get_component_info` | Detailed info for one component |
-| `gh_add_component` | Place a component by GUID |
+| `gh_add_component` | Place a component by `component_guid` or `type_name` |
 | `gh_remove_component` | Remove a component |
 | `gh_move_component` | Move a component to new canvas coordinates |
-| `gh_connect_wire` | Draw a wire between two parameters |
+| `gh_connect_wire` | Draw a wire between two parameters (ports by nickname or index) |
 | `gh_disconnect_wire` | Remove a wire |
 | `gh_add_group` | Create a named group |
 | `gh_set_slider` | Set a number slider value |
@@ -138,8 +138,8 @@ All GH2 commands require **Rhino 9** with Grasshopper 2 loaded. Grasshopper 2 is
 | `gh2_start` | Launch the Grasshopper 2 editor. |
 | `gh2_get_canvas_graph` | Full snapshot of the active GH2 canvas: components, wires, volatile data samples. `sample_size` controls how many data items to return per output. |
 | `gh2_apply_graph` | Place components and wire them in one call; inspect returned errors for incomplete operations. Accepts `components` (list of `{key, type_name, x, y}`) and `wires` (list of `{from_key, from_output, to_key, to_input}`). Returns `{ok, placed: {key: instanceGuid}, wired: N, errors: [...]}`. |
-| `gh2_place_component` | Place a GH2 component by `name` (type name) or `component_guid`. Returns `instance_guid`. |
-| `gh2_place_slider` | Place a GH2 Number Slider with `min`, `max`, `value`, `decimals`, and canvas `x`/`y`. Returns `instance_guid`. |
+| `gh2_place_component` | Place a GH2 component by `type_name` or `component_guid`. `solve` (default true) re-solves and returns `solve: {solved, error_count, warning_count, errors, diagnostics}`. Returns `{ok, instance_guid, solve}`. |
+| `gh2_place_slider` | Place a GH2 Number Slider with `min`, `max`, `value`, `decimals`, and canvas `x`/`y`. `solve` as above. Returns `{ok, instance_guid, solve}`. |
 | `gh2_connect` | Wire a single output to an input. `from_output` and `to_input` can be index (int) or param name (str). |
 | `gh2_connect_many` | Wire multiple connections at once; continues past individual failures. Returns `{ok, wired: N, errors: [...]}`. |
 | `gh2_describe_component` | Get metadata for a component (category, description, input/output param names and types). Accepts `instance_guid` or `name`. |

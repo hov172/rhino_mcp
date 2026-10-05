@@ -17,7 +17,7 @@ NOT_TOOLS = {
     "set_material_", "textures_applied", "far_within_2pct", "recommended_params", "missing_fields",
     "component_guid", "from_guid", "to_guid", "from_output", "to_input", "object_ids", "object_id",
     "rhino_id", "u_count", "v_count", "max_loops", "goal_type", "epw_file_path", "room_name",
-    "user_text", "name_filter", "user_text_key", "rhino_object_id", "image_paths", "not_applied", "file_type", "export_texture_coordinates", "use_for_background", "use_for_lighting", "use_for_reflections", "quality_preset", "allow_partial", "from_instance", "to_instance", "from_key", "to_key", "api_key",
+    "user_text", "name_filter", "user_text_key", "rhino_object_id", "image_paths", "not_applied", "warning_count", "file_type", "export_texture_coordinates", "use_for_background", "use_for_lighting", "use_for_reflections", "quality_preset", "allow_partial", "from_instance", "to_instance", "from_key", "to_key", "api_key",
     "site_origin", "site_width", "site_depth", "analysis_type", "geometry_layer", "climate_zone",
     "epw_path", "analysis_period", "style_hints", "project_name", "scheme_name", "include_solar",
     "render_views", "skip_steps", "version_name", "material_name", "base_color", "asset_type",

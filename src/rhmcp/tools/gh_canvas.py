@@ -66,16 +66,28 @@ def register(mcp: FastMCP) -> None:
 
     @mcp.tool(annotations=ToolAnnotations(title="Add Component to Canvas", destructiveHint=True))
     def gh_add_component(
-        component_guid: str,
-        x: float,
-        y: float,
+        component_guid: str | None = None,
+        type_name: str | None = None,
+        x: float = 0,
+        y: float = 0,
         rhino_id: str | None = None,
     ) -> dict[str, object]:
-        """Place a Grasshopper component on the canvas by its type GUID.
+        """Place a Grasshopper component on the canvas. Same shape as gh2_place_component.
 
         component_guid: The component type GUID from gh_search_components.
-        x, y: Canvas coordinates for placement...."""
-        return _gh("gh_add_component", {"component_guid": component_guid, "x": x, "y": y}, rhino_id=rhino_id)
+        type_name: Component name or nickname (e.g. "Circle") as an alternative to the GUID.
+          Either component_guid or type_name is required; the GUID wins when the name is ambiguous.
+        x, y: Canvas coordinates for placement.
+        Returns {ok, instance_guid, name, inputs, outputs} with the real port nicknames.
+        """
+        if not component_guid and not type_name:
+            return {"ok": False, "error": "Either component_guid or type_name is required."}
+        params: dict[str, object] = {"x": x, "y": y}
+        if component_guid:
+            params["component_guid"] = component_guid
+        if type_name:
+            params["type_name"] = type_name
+        return _gh("gh_add_component", params, rhino_id=rhino_id)
 
     @mcp.tool(annotations=ToolAnnotations(title="Remove Component from Canvas", destructiveHint=True))
     def gh_remove_component(
@@ -135,15 +147,18 @@ def register(mcp: FastMCP) -> None:
     @mcp.tool(annotations=ToolAnnotations(title="Connect Component Parameters", destructiveHint=True))
     def gh_connect_params(
         from_guid: str,
-        from_output: str,
-        to_guid: str,
-        to_input: str,
+        from_output: str | int = 0,
+        to_guid: str = "",
+        to_input: str | int = 0,
         rhino_id: str | None = None,
     ) -> dict[str, object]:
-        """Draw a wire connecting an output parameter to an input parameter.
+        """Draw a wire connecting an output parameter to an input parameter. Same shape as gh2_connect.
 
         from_guid: Instance GUID of the source component.
+        from_output / to_input: param nickname (str) or 0-based index (int).
         from_output: NickName of the output parameter on the source (e.g...."""
+        if not to_guid:
+            return {"ok": False, "error": "to_guid is required."}
         return _gh("gh_connect_wire", {
             "from_guid": from_guid,
             "from_output": from_output,
@@ -154,15 +169,18 @@ def register(mcp: FastMCP) -> None:
     @mcp.tool(annotations=ToolAnnotations(title="Disconnect Component Parameters", destructiveHint=True))
     def gh_disconnect_params(
         from_guid: str,
-        from_output: str,
-        to_guid: str,
-        to_input: str,
+        from_output: str | int = 0,
+        to_guid: str = "",
+        to_input: str | int = 0,
         rhino_id: str | None = None,
     ) -> dict[str, object]:
-        """Remove a wire between an output parameter and an input parameter.
+        """Remove a wire between an output parameter and an input parameter. Same shape as gh2_connect.
 
         from_guid: Instance GUID of the source component.
+        from_output / to_input: param nickname (str) or 0-based index (int).
         from_output: NickName of the output parameter on the..."""
+        if not to_guid:
+            return {"ok": False, "error": "to_guid is required."}
         return _gh("gh_disconnect_wire", {
             "from_guid": from_guid,
             "from_output": from_output,

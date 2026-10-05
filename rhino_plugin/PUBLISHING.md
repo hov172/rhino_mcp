@@ -1,6 +1,6 @@
 # Publishing rhino-mcp
 
-The current source version is **0.18.0**. Local builds and public releases are separate steps; see the [upgrade guide](../docs/upgrade-0.18.0.md) for the prepared artifacts and validation limits.
+The current source version is **0.20.0**. Local builds and public releases are separate steps; see the [upgrade guide](../docs/upgrade-0.20.0.md) for the prepared artifacts and validation limits.
 
 ## Per-release preparation
 
@@ -11,7 +11,7 @@ The current source version is **0.18.0**. Local builds and public releases are s
    ```bash
    bash scripts/package-plugin.sh
    uv build
-   docker build -t rhino-mcp:0.19.0 -t rhino-mcp:latest .
+   docker build -t rhino-mcp:0.20.0 -t rhino-mcp:latest .
    ```
 
 4. Inspect the generated Yak manifest and Python package metadata. Confirm that `rhino_plugin/release/manifest.yml` matches the source version. The package script stages only the current version's Yak package; older files may remain in the output directory, so select exact filenames when publishing.
@@ -22,9 +22,9 @@ The current source version is **0.18.0**. Local builds and public releases are s
 The Yak CLI ships with Rhino 8 at `/Applications/Rhino 8.app/Contents/Resources/bin/yak` on macOS and `C:\Program Files\Rhino 8\System\yak.exe` on Windows. Create a McNeel account and run `yak login` once. With Yak available on your command path:
 
 ```bash
-yak inspect rhino_plugin/release/rhino-mcp-0.19.0-rh8_17-any.yak
+yak inspect rhino_plugin/release/rhino-mcp-0.20.0-rh8_17-any.yak
 # Publishing step: uploads the package to the public package server
-yak push rhino_plugin/release/rhino-mcp-0.19.0-rh8_17-any.yak
+yak push rhino_plugin/release/rhino-mcp-0.20.0-rh8_17-any.yak
 ```
 
 After publication, verify the available version in Rhino's `_PackageManager` and install it on a test workstation.
@@ -47,7 +47,7 @@ Inspect the exact packaged version before publication, then verify MCP initializ
 
 Build the matching Python wheel first, then run `bash scripts/build-installer.sh` on macOS with Rhino 8, .NET 8, uv-managed Python 3.13 runtimes, and Developer ID signing certificates. Set `NOTARY_PROFILE` to the existing notarytool Keychain profile to submit and staple both packages.
 
-The builder stages runtimes and virtual environments in a temporary directory, rewrites their paths for `/Users/Shared/rhino_mcp`, and includes the Rhino plugin dependencies. Building does not overwrite the live shared installation. It outputs `release/rhino-mcp-0.18.0-universal-signed.pkg` and `release/rhino-mcp-0.18.0-universal-uninstaller-signed.pkg`. Verify signatures, stapled tickets, and both bundled Python versions before distribution.
+The builder stages runtimes and virtual environments in a temporary directory, rewrites their paths for `/Users/Shared/rhino_mcp`, and includes the Rhino plugin dependencies. Building does not overwrite the live shared installation. It outputs `release/rhino-mcp-0.20.0-universal-signed.pkg` and `release/rhino-mcp-0.20.0-universal-uninstaller-signed.pkg`. Verify signatures, stapled tickets, and both bundled Python versions before distribution.
 
 ## Published 0.17.1 and documentation updates
 

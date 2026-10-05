@@ -106,7 +106,7 @@ Control Rhino 3D from Claude, Cursor, Codex, and any other MCP-capable AI tool. 
 
 ## Quick Start
 
-**Version 0.19.0:** fixes the Grasshopper 2 wiring and graph contracts, makes script components honour requested ports, implements environment maps, derives the studio pipeline's solar inputs from the baked massing, and removes every parameter that was accepted but never applied. Tools now report `applied` / `not_applied`. Ships a `skills/` folder of Agent Skills. See the [0.19.0 upgrade guide](docs/upgrade-0.19.0.md). The [secure-operation requirements](docs/secure-operation.md) and macOS registration fixes remain in effect.
+**Version 0.20.0:** gives Grasshopper 1 and 2 one argument shape (`gh2_connect` takes `from_guid`/`to_guid`, `gh_add_component` takes `type_name`, GH1 ports accept an index) and makes the GH2 write tools return solve diagnostics. See the [0.20.0 upgrade guide](docs/upgrade-0.20.0.md). The [0.19.0 contract corrections](docs/upgrade-0.19.0.md), The [secure-operation requirements](docs/secure-operation.md) and macOS registration fixes remain in effect.
 
 > **Two separate pieces — both are required:**
 >
@@ -360,14 +360,14 @@ The `.pkg` installer is the fastest way to get up and running on macOS. It requi
 - The `rhino` MCP server entry into Claude Desktop and Claude Code automatically
 
 **Steps:**
-1. Download the [signed and notarized 0.19.0 installer](https://github.com/hov172/rhino_mcp/releases/download/v0.19.0/rhino-mcp-0.19.0-universal-signed.pkg)
+1. Download the [signed and notarized 0.20.0 installer](https://github.com/hov172/rhino_mcp/releases/download/v0.20.0/rhino-mcp-0.20.0-universal-signed.pkg)
 2. Quit Rhino completely, then double-click the `.pkg` and follow the installer prompts
 3. Launch Rhino — the plugin loads automatically
 4. Launch your AI client — the MCP server is already configured
 
 > The installer backs up conflicting legacy copies and repairs cached plugin paths. If no GUI user is logged in during installation, run `/usr/local/bin/rhino-mcp-configure` after login with Rhino closed. See the [upgrade guide](docs/upgrade-0.17.1.md) for backup locations and verification.
 
-The [signed 0.19.0 uninstaller](https://github.com/hov172/rhino_mcp/releases/download/v0.19.0/rhino-mcp-0.19.0-universal-uninstaller-signed.pkg) is available in the same release.
+The [signed 0.20.0 uninstaller](https://github.com/hov172/rhino_mcp/releases/download/v0.20.0/rhino-mcp-0.20.0-universal-uninstaller-signed.pkg) is available in the same release.
 
 ---
 
@@ -549,7 +549,7 @@ A `rhinocode` fallback path (Rhino 8.11+ only) is also available for most non-Gr
 
 ### Upgrading from a Previous Version
 
-> **Upgrading to 0.19.0:** the plugin changed and several tools lost parameters that were never applied. Install the matching plugin, then read the [0.19.0 upgrade guide](docs/upgrade-0.19.0.md) for the table of removed parameters and changed result keys. On macOS the login LaunchAgent re-installs the plugin from `/Users/Shared/rhino_mcp/plugin`, so a hand-copied bundle must also be copied there or it is rolled back.
+> **Upgrading to 0.20.0:** the plugin changed and `gh2_connect` renamed its endpoint arguments. Install the matching plugin, then read the [0.20.0 upgrade guide](docs/upgrade-0.20.0.md). The [0.19.0 guide](docs/upgrade-0.19.0.md) lists the parameters removed in the previous release. On macOS the login LaunchAgent re-installs the plugin from `/Users/Shared/rhino_mcp/plugin`, so a hand-copied bundle must also be copied there or it is rolled back.
 
 > **Important:** Having two copies of the plugin installed at the same time causes a **port conflict** — both try to bind port 1999 on load, the second one fails silently, and Rhino gives no error. The result is that MCP commands either go to the wrong version or fail with `connection refused`, with no obvious indication of why.
 
@@ -1602,12 +1602,12 @@ Requires the plugin backend and Grasshopper to be open in Rhino.
 | `gh_list_components` | List all objects currently on the active Grasshopper canvas with their instance GUIDs and canvas positions. |
 | `gh_get_canvas` | Get a full snapshot of the canvas: all components, wire connections, and groups. |
 | `gh_get_component_info` | Get detailed info about one component: input/output params, lock state, and runtime state. |
-| `gh_add_component` | Place a component on the canvas by its component GUID (use `gh_search_components` to find GUIDs). Returns the new instance GUID. |
+| `gh_add_component` | Place a component on the canvas by `component_guid` (from `gh_search_components`) or `type_name`. Same shape as `gh2_place_component`. Returns `instance_guid` plus the real `inputs`/`outputs` nicknames. |
 | `gh_remove_component` | Remove a component from the canvas by instance GUID. |
 | `gh_move_component` | Move a component to new canvas coordinates. |
 | `gh_rename_component` | Change the display name (NickName) of a component. |
 | `gh_set_component_comment` | Add or update the comment tooltip on a component. |
-| `gh_connect_params` | Draw a wire between two components by specifying source instance GUID + output parameter name, and target instance GUID + input parameter name. |
+| `gh_connect_params` | Draw a wire: `from_guid`, `from_output`, `to_guid`, `to_input`. Ports take a nickname (str) or a 0-based index (int). Same shape as `gh2_connect`. |
 | `gh_disconnect_params` | Remove a wire connection between two parameters. |
 | `gh_add_group` | Create a named group around a set of components. Optional color as `[r, g, b]`. |
 
@@ -1662,10 +1662,10 @@ Every GH2 tool accepts an optional `rhino_id` parameter (from `get_rhino_instanc
 |---|---|
 | `gh2_start` | Launch the Grasshopper 2 editor. |
 | `gh2_get_canvas_graph` | Get a full snapshot of the active GH2 canvas: components, wires, and volatile data samples. `sample_size` (default 3) controls how many data items are returned per output port. |
-| `gh2_apply_graph` | Atomically place components and wire them in one call. `components`: list of `{key, type_name|component_guid, x, y}` or `{key, type="slider", min, max, value, decimals, x, y}`. `wires`: list of `{from_key|from_guid, from_output, to_key|to_guid, to_input}` with ports by nickname or index. Returns `{ok, placed: {key: instanceGuid}, wired: N, errors: [...]}`. |
-| `gh2_place_component` | Place a GH2 component by `type_name` (e.g. `"Point"`, `"Circle"`) or `component_guid`. Returns `instance_guid`. |
-| `gh2_place_slider` | Place a GH2 Number Slider with `min`, `max`, `value`, `decimals`, and canvas `x`/`y`. Returns `instance_guid`. |
-| `gh2_connect` | Wire a single output to an input. `from_output` / `to_input` can be index (int) or param name (str). |
+| `gh2_apply_graph` | Atomically place components and wire them in one call. `components`: list of `{key, type_name|component_guid, x, y}` or `{key, type="slider", min, max, value, decimals, x, y}`. `wires`: list of `{from_key|from_guid, from_output, to_key|to_guid, to_input}` with ports by nickname or index. `solve` (default `true`) re-solves and returns `solve: {solved, error_count, warning_count, errors, diagnostics}`. Returns `{ok, placed: {key: instanceGuid}, wired: N, errors: [...], solve}`. |
+| `gh2_place_component` | Place a GH2 component by `type_name` (e.g. `"Point"`, `"Circle"`) or `component_guid`. Same shape as `gh_add_component`. `solve` (default `true`) returns the solve summary. Returns `{ok, instance_guid, solve}`. |
+| `gh2_place_slider` | Place a GH2 Number Slider with `min`, `max`, `value`, `decimals`, and canvas `x`/`y`. `solve` (default `true`) returns the solve summary. Returns `{ok, instance_guid, solve}`. |
+| `gh2_connect` | Wire a single output to an input: `from_guid`, `from_output`, `to_guid`, `to_input`. Ports take an index (int) or param name (str). Same shape as `gh_connect_params`. |
 | `gh2_connect_many` | Wire multiple connections in one call; continues past individual failures. `wires`: list of `{from_guid, from_output, to_guid, to_input}` (ports by nickname or index). Returns `{ok, connected: N, errors: [...]}`. |
 | `gh2_describe_component` | Get metadata for a component: category, description, input/output param names and types. Accepts `instance_guid` (placed instance) or `name` (component type lookup). |
 | `gh2_search_components` | Search available GH2 components by name, nickname, or description. Optional `category` filter. |

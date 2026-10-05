@@ -32,6 +32,7 @@ def register(mcp: FastMCP) -> None:
     def gh2_apply_graph(
         components: list,
         wires: list | None = None,
+        solve: bool = True,
         rhino_id: str | None = None,
     ) -> dict[str, object]:
         """Atomically place components and wire them in one call.
@@ -44,10 +45,14 @@ def register(mcp: FastMCP) -> None:
           reference keys placed in this call; `from_guid`/`to_guid` may be used instead
           to reference components already on the canvas. `from_output`/`to_input` accept
           a param nickname (str) or a 0-based index (int).
-        Returns {ok, placed: {key: instance_guid}, wired: N, errors: [...]}.
-        ok is False if any placement or wire failed; successful items are kept.
+        solve: re-solve after wiring (default True) and return `solve`:
+          {solved, error_count, warning_count, errors, diagnostics: [{instance_guid, name,
+          level, message}]}. Pass False to batch several calls and solve once at the end.
+        Returns {ok, placed: {key: instance_guid}, wired: N, errors: [...], solve}.
+        ok is False if any placement or wire failed; successful items are kept. A canvas
+        that placed cleanly but fails to solve has ok=True and solve.solved=False.
         """
-        params: dict[str, object] = {"components": components}
+        params: dict[str, object] = {"components": components, "solve": solve}
         if wires:
             params["wires"] = wires
         return _gh2("gh2_apply_graph", params, rhino_id=rhino_id)
@@ -58,17 +63,19 @@ def register(mcp: FastMCP) -> None:
         component_guid: str | None = None,
         x: float = 0,
         y: float = 0,
+        solve: bool = True,
         rhino_id: str | None = None,
     ) -> dict[str, object]:
-        """Place a Grasshopper 2 component on the canvas.
+        """Place a Grasshopper 2 component on the canvas. Same shape as gh_add_component.
         type_name: component name (e.g. "Point", "Circle"). Either type_name or component_guid required.
         component_guid: component type GUID (use when the name is ambiguous).
         x, y: canvas pivot position.
-        Returns {ok, instance_guid}.
+        solve: re-solve after placing and return a `solve` summary (see gh2_apply_graph).
+        Returns {ok, instance_guid, solve}.
         """
         if not type_name and not component_guid:
             return {"ok": False, "error": "Either type_name or component_guid is required."}
-        params: dict[str, object] = {"x": x, "y": y}
+        params: dict[str, object] = {"x": x, "y": y, "solve": solve}
         if type_name:
             params["name"] = type_name  # plugin uses "name" key for component type lookup
         if component_guid:
@@ -83,33 +90,39 @@ def register(mcp: FastMCP) -> None:
         decimals: int = 2,
         x: float = 0,
         y: float = 0,
+        solve: bool = True,
         rhino_id: str | None = None,
     ) -> dict[str, object]:
         """
         Place a GH2 Number Slider on the canvas.
-        Returns instance_guid of the placed slider.
+        solve: re-solve after placing and return a `solve` summary (see gh2_apply_graph).
+        Returns {ok, instance_guid, solve}.
         """
-        return _gh2("gh2_place_slider", {"min": min, "max": max, "value": value, "decimals": decimals, "x": x, "y": y}, rhino_id=rhino_id)
+        return _gh2("gh2_place_slider", {
+            "min": min, "max": max, "value": value, "decimals": decimals, "x": x, "y": y, "solve": solve,
+        }, rhino_id=rhino_id)
 
     @mcp.tool(annotations=ToolAnnotations(title="Connect GH2 Components"))
     def gh2_connect(
-        from_instance: str,
-        to_instance: str,
+        from_guid: str,
         from_output: int | str = 0,
+        to_guid: str = "",
         to_input: int | str = 0,
         rhino_id: str | None = None,
     ) -> dict[str, object]:
-        """Wire a single output to an input in Grasshopper 2.
-        from_instance: source component instance GUID.
+        """Wire a single output to an input in Grasshopper 2. Same shape as gh_connect_params.
+        from_guid: source component instance GUID.
         from_output: output param nickname (str) or 0-based index (int).
-        to_instance: target component instance GUID.
+        to_guid: target component instance GUID.
         to_input: input param nickname (str) or 0-based index (int).
         Returns {ok} or {ok: False, error}.
         """
+        if not to_guid:
+            return {"ok": False, "error": "to_guid is required."}
         return _gh2("gh2_connect", {
-            "from_guid": from_instance,
+            "from_guid": from_guid,
             "from_output": from_output,
-            "to_guid": to_instance,
+            "to_guid": to_guid,
             "to_input": to_input,
         }, rhino_id=rhino_id)
 
@@ -117,9 +130,9 @@ def register(mcp: FastMCP) -> None:
     def gh2_connect_many(wires: list, rhino_id: str | None = None) -> dict[str, object]:
         """
         Wire multiple connections at once. Continues past individual failures.
-        wires: list of {from_instance, from_output, to_instance, to_input}
-          (from_guid/to_guid accepted as aliases). from_output/to_input accept a
-          param nickname (str) or 0-based index (int).
+        wires: list of {from_guid, from_output, to_guid, to_input}
+          (from_instance/to_instance accepted as legacy aliases). from_output/to_input
+          accept a param nickname (str) or 0-based index (int).
         Returns {ok, connected: N, errors: [{wire, errors: [...]}]}
         """
         return _gh2("gh2_connect_many", {"wires": [_normalize_wire(w) for w in wires]}, rhino_id=rhino_id)
@@ -163,7 +176,9 @@ def register(mcp: FastMCP) -> None:
     @mcp.tool(annotations=ToolAnnotations(title="Solve GH2 Graph"))
     def gh2_solve_graph(rhino_id: str | None = None) -> dict[str, object]:
         """
-        Expire and re-solve the active Grasshopper 2 canvas. Returns list of errors.
+        Expire and re-solve the active Grasshopper 2 canvas.
+        Returns {ok, solved, error_count, warning_count, errors, diagnostics} where each
+        diagnostic is {instance_guid, name, level: error|warning|remark, message}.
         """
         return _gh2("gh2_solve_graph", {}, rhino_id=rhino_id)
 

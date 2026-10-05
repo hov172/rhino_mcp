@@ -670,6 +670,38 @@ class TestGHCanvasTools(unittest.TestCase):
             "gh_add_component", {"component_guid": guid, "x": 100.0, "y": 200.0}, rhino_id=None
         )
 
+    def test_add_component_accepts_type_name(self) -> None:
+        """gh_add_component places by type_name, same as gh2_place_component."""
+        fn = self.tools["gh_add_component"]
+        with patch("rhmcp.tools_helpers.backend.plugin_result", return_value={"ok": True}) as mock_plugin:
+            fn(type_name="Circle", x=10.0, y=20.0)
+        mock_plugin.assert_called_once_with(
+            "gh_add_component", {"x": 10.0, "y": 20.0, "type_name": "Circle"}, rhino_id=None
+        )
+
+    def test_add_component_requires_guid_or_name(self) -> None:
+        fn = self.tools["gh_add_component"]
+        with patch("rhmcp.tools_helpers.backend.plugin_result") as mock_plugin:
+            result = fn(x=0, y=0)
+        self.assertFalse(result["ok"])
+        mock_plugin.assert_not_called()
+
+    def test_connect_params_int_port_stays_int(self) -> None:
+        """Port indices reach the plugin as JSON numbers, same as gh2_connect."""
+        fn = self.tools["gh_connect_params"]
+        with patch("rhmcp.tools_helpers.backend.plugin_result", return_value={"ok": True}) as mock_plugin:
+            fn(from_guid="aaa", from_output=0, to_guid="bbb", to_input=1)
+        params = mock_plugin.call_args[0][1]
+        self.assertIs(type(params["from_output"]), int)
+        self.assertIs(type(params["to_input"]), int)
+
+    def test_connect_params_requires_to_guid(self) -> None:
+        fn = self.tools["gh_connect_params"]
+        with patch("rhmcp.tools_helpers.backend.plugin_result") as mock_plugin:
+            result = fn(from_guid="aaa", from_output="R")
+        self.assertFalse(result["ok"])
+        mock_plugin.assert_not_called()
+
     def test_connect_params_sends_wire_fields(self) -> None:
         """gh_connect_params sends all four wire endpoint fields."""
         fn = self.tools["gh_connect_params"]

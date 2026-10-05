@@ -15,9 +15,9 @@ Read `rhino-mcp-basics` first. Third-party plugin helpers: [plugins.md](plugins.
 
 ## GH1 build loop
 1. `gh_search_components(query)` → pick the `guid` (a type GUID).
-2. `gh_add_component(component_guid, x, y)` → `result.instance_guid` plus the real input/output nicknames. Space components about 250 px apart in x.
+2. `gh_add_component(component_guid | type_name, x, y)` → `result.instance_guid` plus the real input/output nicknames. Prefer the GUID when a name could be ambiguous. Space components about 250 px apart in x.
 3. Inputs: `gh_add_component` for a Number Slider or Panel, then `gh_set_slider(instance_guid, value)` (clamped to the slider's existing range, which cannot be changed from MCP), `gh_set_panel(instance_guid, text)`, `gh_set_number_param(instance_guid, values=[...])`, `gh_set_point_param(instance_guid, points=[[x,y,z],...])`.
-4. Wire: `gh_connect_params(from_guid, from_output, to_guid, to_input)` with nicknames from step 2. An error names the missing port.
+4. Wire: `gh_connect_params(from_guid, from_output, to_guid, to_input)` with nicknames or 0-based indices from step 2. An error names the missing port. GH1 and GH2 wiring take the same four arguments.
 5. `gh_run_solution(wait_ms=10000)`. Check `result.error_count` and `timed_out`.
 6. If errors: `gh_get_errors()` lists component nickname, message, and level. Fix before adding more.
 7. `gh_get_output(instance_guid, output_name)` to read values. Values are strings, and stale until a solution has run.
@@ -30,10 +30,10 @@ Read `rhino-mcp-basics` first. Third-party plugin helpers: [plugins.md](plugins.
 
 ## Grasshopper 2 (Rhino 9 WIP only)
 - `gh2_start`. If it says GH2 is not available, run `_Grasshopper2` in Rhino and retry.
-- Build in one call: `gh2_apply_graph(components=[{"key", "type_name"|"component_guid", "x", "y"}, {"key", "type": "slider", "min", "max", "value", "decimals", "x", "y"}], wires=[{"from_key"|"from_guid", "from_output", "to_key"|"to_guid", "to_input"}])` → `{ok, placed: {key: instance_guid}, wired, errors}`. Ports take a nickname or an integer index. Keys resolve against components placed in the same call. Nothing is rolled back on partial failure; read `errors`.
-- Add wires later with `gh2_connect(from_instance, to_instance, from_output, to_input)` or `gh2_connect_many(wires=[{"from_guid", "from_output", "to_guid", "to_input"}])` → `connected`, `errors`.
+- Build in one call: `gh2_apply_graph(components=[{"key", "type_name"|"component_guid", "x", "y"}, {"key", "type": "slider", "min", "max", "value", "decimals", "x", "y"}], wires=[{"from_key"|"from_guid", "from_output", "to_key"|"to_guid", "to_input"}])` → `{ok, placed: {key: instance_guid}, wired, errors, solve}`. Ports take a nickname or an integer index. Keys resolve against components placed in the same call. Nothing is rolled back on partial failure; read `errors`. By default the call re-solves and returns `solve.diagnostics` (`{instance_guid, name, level, message}` per message), so check `solve.solved` before adding more. Pass `solve=False` to batch and solve once.
+- Add wires later with `gh2_connect(from_guid, from_output, to_guid, to_input)` (same shape as `gh_connect_params`) or `gh2_connect_many(wires=[{"from_guid", "from_output", "to_guid", "to_input"}])` → `connected`, `errors`.
 - Port nicknames: `gh2_describe_component(instance_guid=...)` for a placed component, `gh2_describe_component(name=...)` for a library type, or `gh2_get_canvas_graph`.
-- `gh2_solve_graph` returns `error_count` and `errors`. `gh2_clear_canvas(confirm=True)` empties the canvas.
+- `gh2_solve_graph` returns `solved`, `error_count`, `warning_count`, `errors`, and `diagnostics`. `gh2_place_component` and `gh2_place_slider` return the same `solve` summary unless `solve=False`. `gh2_clear_canvas(confirm=True)` empties the canvas.
 - `gh_migrate_to_gh2(confirm=True, allow_partial)` maps the active GH1 canvas to GH2 using the shipped component map. Unmapped components stop the run unless `allow_partial=True`; the result lists them. It does not verify semantic equivalence, so solve and inspect afterwards.
 
 ## Rules

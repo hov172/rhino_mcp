@@ -333,7 +333,8 @@ public static class GH2Handlers
                 }
 
                 errors.AddRange(wireErrors);
-                result = new { ok = errors.Count == 0, placed = placedMap, wired = wiredCount, errors };
+                var solve = p.Bool("solve", true) ? SolveAndSummarize(doc) : null;
+                result = new { ok = errors.Count == 0, placed = placedMap, wired = wiredCount, errors, solve };
             }
             catch (Exception ex)
             {
@@ -359,7 +360,7 @@ public static class GH2Handlers
 
                 var placed = PlaceComponentInternal(doc, p);
                 if (placed is string guid && !guid.StartsWith("ERROR:", StringComparison.Ordinal))
-                    result = new { ok = true, instance_guid = guid };
+                    result = new { ok = true, instance_guid = guid, solve = p.Bool("solve", true) ? SolveAndSummarize(doc) : null };
                 else
                     result = new { ok = false, error = placed?.ToString() ?? "Failed to place component" };
             }
@@ -387,7 +388,7 @@ public static class GH2Handlers
 
                 var placed = PlaceSliderInternal(doc, p);
                 if (placed is string guid && !guid.StartsWith("ERROR:", StringComparison.Ordinal))
-                    result = new { ok = true, instance_guid = guid };
+                    result = new { ok = true, instance_guid = guid, solve = p.Bool("solve", true) ? SolveAndSummarize(doc) : null };
                 else
                     result = new { ok = false, error = placed?.ToString() ?? "Failed to place slider" };
             }
@@ -709,70 +710,21 @@ public static class GH2Handlers
                 if (doc == null)
                     throw new InvalidOperationException("No active GH2 document");
 
-                // Try NewSolution or equivalent
-                var docType = doc.GetType();
-                var newSolutionMethod = docType.GetMethod("NewSolution", new[] { typeof(bool) })
-                                     ?? docType.GetMethod("Solve")
-                                     ?? docType.GetMethod("ExpireSolution");
-
-                if (newSolutionMethod == null)
+                var summary = SolveAndSummarize(doc);
+                if (summary == null)
                 {
                     result = new { ok = false, error = "GH2 solve API not available in this build" };
                     return;
                 }
-
-                try { newSolutionMethod.Invoke(doc, new object[] { false }); }
-                catch { try { newSolutionMethod.Invoke(doc, Array.Empty<object>()); } catch { } }
-
-                // Collect errors
-                var errors = new List<string>();
-                var objectsProp = docType.GetProperty("Objects");
-                if (objectsProp != null)
+                result = new
                 {
-                    var objs = objectsProp.GetValue(doc) as System.Collections.IEnumerable;
-                    if (objs != null)
-                    {
-                        foreach (var obj in objs)
-                        {
-                            var objType   = obj.GetType();
-                            var levelProp = objType.GetProperty("RuntimeMessageLevel");
-                            if (levelProp == null) continue;
-                            var level = levelProp.GetValue(obj);
-                            if (level?.ToString()?.Contains("Error") == true)
-                            {
-                                var nameProp = objType.GetProperty("Name");
-                                var name     = nameProp?.GetValue(obj)?.ToString() ?? "unknown";
-
-                                // Try to get actual error message text via reflection
-                                bool addedMessages = false;
-                                try
-                                {
-                                    var messages = objType.GetProperty("RuntimeMessages")?.GetValue(obj)
-                                                ?? objType.GetProperty("Messages")?.GetValue(obj);
-                                    if (messages is System.Collections.IEnumerable msgList)
-                                    {
-                                        foreach (var msg in msgList)
-                                        {
-                                            var msgText = msg?.GetType().GetProperty("Message")?.GetValue(msg)?.ToString()
-                                                       ?? msg?.ToString();
-                                            if (!string.IsNullOrEmpty(msgText))
-                                            {
-                                                errors.Add($"{name}: {msgText}");
-                                                addedMessages = true;
-                                            }
-                                        }
-                                    }
-                                }
-                                catch { /* reflection failed — fall through to generic message */ }
-
-                                if (!addedMessages)
-                                    errors.Add($"Component '{name}' has runtime errors");
-                            }
-                        }
-                    }
-                }
-
-                result = new { ok = true, error_count = errors.Count, errors };
+                    ok            = true,
+                    solved        = summary.solved,
+                    error_count   = summary.error_count,
+                    warning_count = summary.warning_count,
+                    errors        = summary.errors,
+                    diagnostics   = summary.diagnostics,
+                };
             }
             catch (Exception ex)
             {
@@ -780,6 +732,79 @@ public static class GH2Handlers
             }
         }));
         return result;
+    }
+
+    /// <summary>Solve summary returned by gh2_solve_graph and by the GH2 write tools when solve=true.</summary>
+    private sealed class Gh2SolveSummary
+    {
+        public bool solved { get; set; }
+        public int error_count { get; set; }
+        public int warning_count { get; set; }
+        public List<string> errors { get; set; } = new();
+        public List<object> diagnostics { get; set; } = new();
+    }
+
+    /// <summary>
+    /// Triggers a new GH2 solution and reads back every component's runtime messages
+    /// as {instance_guid, name, level, message}. Returns null when this GH2 build exposes no solve API.
+    /// </summary>
+    private static Gh2SolveSummary? SolveAndSummarize(object doc)
+    {
+        var docType = doc.GetType();
+        var newSolutionMethod = docType.GetMethod("NewSolution", new[] { typeof(bool) })
+                             ?? docType.GetMethod("Solve")
+                             ?? docType.GetMethod("ExpireSolution");
+        if (newSolutionMethod == null) return null;
+
+        try { newSolutionMethod.Invoke(doc, new object[] { false }); }
+        catch { try { newSolutionMethod.Invoke(doc, Array.Empty<object>()); } catch { } }
+
+        var summary = new Gh2SolveSummary();
+        if (docType.GetProperty("Objects")?.GetValue(doc) is not System.Collections.IEnumerable objs)
+        {
+            summary.solved = true;
+            return summary;
+        }
+
+        foreach (var obj in objs)
+        {
+            var objType   = obj.GetType();
+            var levelText = objType.GetProperty("RuntimeMessageLevel")?.GetValue(obj)?.ToString() ?? "";
+            string level  = levelText.Contains("Error")   ? "error"
+                          : levelText.Contains("Warning") ? "warning"
+                          : levelText.Contains("Remark")  ? "remark"
+                          : "";
+            if (level.Length == 0) continue;
+
+            var name = objType.GetProperty("Name")?.GetValue(obj)?.ToString() ?? "unknown";
+            var guid = objType.GetProperty("InstanceGuid")?.GetValue(obj)?.ToString() ?? "";
+            var texts = new List<string>();
+            try
+            {
+                var messages = objType.GetProperty("RuntimeMessages")?.GetValue(obj)
+                            ?? objType.GetProperty("Messages")?.GetValue(obj);
+                if (messages is System.Collections.IEnumerable msgList)
+                {
+                    foreach (var msg in msgList)
+                    {
+                        var text = msg?.GetType().GetProperty("Message")?.GetValue(msg)?.ToString() ?? msg?.ToString();
+                        if (!string.IsNullOrEmpty(text)) texts.Add(text);
+                    }
+                }
+            }
+            catch { /* reflection failed — fall through to the generic message */ }
+            if (texts.Count == 0) texts.Add($"Component '{name}' reported a {level}");
+
+            foreach (var text in texts)
+            {
+                summary.diagnostics.Add(new { instance_guid = guid, name, level, message = text });
+                if (level == "error") summary.errors.Add($"{name}: {text}");
+                else if (level == "warning") summary.warning_count++;
+            }
+        }
+        summary.error_count = summary.errors.Count;
+        summary.solved      = summary.error_count == 0;
+        return summary;
     }
 
     /// <summary>gh2_clear_canvas — removes all objects from the active GH2 document. Requires confirm:true.</summary>
